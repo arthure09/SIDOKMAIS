@@ -21,3 +21,6 @@ npm-debug.log*
 # OS
 .DS_Store
 **/.DS_Store
+
+# Local prompt/dev journal notes — not for the repo
+docs/prompts/
