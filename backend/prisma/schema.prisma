@@ -1,0 +1,210 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  DOKTER
+  ADMIN
+}
+
+enum JenisKelamin {
+  L
+  P
+}
+
+enum RuanganJenis {
+  POLI
+  OK
+  RAWAT_INAP
+}
+
+enum AssignmentStatus {
+  ACTIVE
+  COMPLETED
+}
+
+enum StatusKunjungan {
+  SCHEDULED
+  ONGOING
+  COMPLETED
+  CANCELLED
+}
+
+enum NotifikasiTipe {
+  PASIEN_BARU
+  REMINDER_OPERASI
+  PERUBAHAN_JADWAL
+}
+
+enum OperasiStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Dokter {
+  id           String   @id @default(uuid())
+  nip          String   @unique
+  nama         String
+  spesialisasi String?
+  sip          String?
+  statusAktif  Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  penggunaAkun Pengguna?
+  assignments  DokterPasienAssignment[]
+  kunjungan    Kunjungan[]
+  notifikasi   Notifikasi[]
+}
+
+model Pasien {
+  id            String       @id @default(uuid())
+  norm          String       @unique
+  nama          String
+  jenisKelamin  JenisKelamin
+  tanggalLahir  DateTime?
+  tempatLahir   String?
+  alamat        String?
+  golonganDarah String?
+  // PENDING: format final No. RM (relasi dengan `norm`) belum diputuskan bersama
+  // supervisor — lihat catatan "format data klinis (ICD-10, No. RM)" di CLAUDE.md.
+  noRekamMedis  String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  assignments DokterPasienAssignment[]
+  kunjungan   Kunjungan[]
+}
+
+model Ruangan {
+  id     String       @id @default(uuid())
+  nama   String
+  jenis  RuanganJenis
+  lantai Int?
+
+  kunjungan Kunjungan[]
+  operasi   Operasi[]
+}
+
+model DokterPasienAssignment {
+  id            String           @id @default(uuid())
+  dokterId      String
+  pasienId      String
+  tanggalAssign DateTime         @default(now())
+  status        AssignmentStatus @default(ACTIVE)
+
+  dokter Dokter @relation(fields: [dokterId], references: [id], onDelete: Cascade)
+  pasien Pasien @relation(fields: [pasienId], references: [id], onDelete: Cascade)
+
+  @@index([dokterId])
+  @@index([pasienId])
+}
+
+model Kunjungan {
+  id              String          @id @default(uuid())
+  pasienId        String
+  dokterId        String
+  ruanganId       String
+  tanggalMasuk    DateTime
+  tanggalKeluar   DateTime?
+  diagnosa        String?
+  statusKunjungan StatusKunjungan @default(SCHEDULED)
+  isPasienBaru    Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  pasien  Pasien  @relation(fields: [pasienId], references: [id], onDelete: Restrict)
+  dokter  Dokter  @relation(fields: [dokterId], references: [id], onDelete: Restrict)
+  ruangan Ruangan @relation(fields: [ruanganId], references: [id], onDelete: Restrict)
+
+  operasi Operasi[]
+}
+
+model Pengguna {
+  id           String   @id @default(uuid())
+  username     String   @unique
+  passwordHash String
+  dokterId     String?  @unique
+  role         Role
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  dokter Dokter? @relation(fields: [dokterId], references: [id], onDelete: SetNull)
+}
+
+model Notifikasi {
+  id        String         @id @default(uuid())
+  dokterId  String
+  tipe      NotifikasiTipe
+  pesan     String
+  isRead    Boolean        @default(false)
+  createdAt DateTime       @default(now())
+
+  dokter Dokter @relation(fields: [dokterId], references: [id], onDelete: Cascade)
+}
+
+// PENDING: struktur real belum tersedia dari RS — kolom di bawah disederhanakan
+// dari referensi format export SIMRS, isi & relasi lanjutan bisa berubah.
+model Operasi {
+  id             String        @id @default(uuid())
+  kunjunganId    String
+  ruanganId      String
+  tanggalOperasi DateTime
+  jenisTindakan  String
+  tim            String[]
+  status         OperasiStatus @default(SCHEDULED)
+  catatanPreOp   String?
+  catatanPostOp  String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  kunjungan Kunjungan @relation(fields: [kunjunganId], references: [id], onDelete: Restrict)
+  ruangan   Ruangan   @relation(fields: [ruanganId], references: [id], onDelete: Restrict)
+
+  pendapatan Pendapatan[]
+}
+
+// PENDING: struktur real belum tersedia dari RS
+model Penjamin {
+  id   String @id @default(uuid())
+  nama String
+  tipe String
+
+  pendapatan Pendapatan[]
+}
+
+// PENDING: struktur real belum tersedia dari RS — kalkulasi rasio pembagian
+// (mis. BPJS 20% dari yang diterima RS, dst) menyusul keputusan bersama supervisor.
+// isDummy wajib true & UI wajib watermark "CONTOH DATA DUMMY" (lihat CLAUDE.md aturan #3).
+model Pendapatan {
+  id                   String   @id @default(uuid())
+  operasiId            String
+  penjaminId           String
+  tarifTotal           Decimal  @db.Decimal(14, 2)
+  jumlahDiterimaDokter Decimal  @db.Decimal(14, 2)
+  isDummy              Boolean  @default(true)
+  createdAt            DateTime @default(now())
+
+  operasi  Operasi  @relation(fields: [operasiId], references: [id], onDelete: Restrict)
+  penjamin Penjamin @relation(fields: [penjaminId], references: [id], onDelete: Restrict)
+}
+
+// Audit generik wajib untuk semua write action manual/chatbot (CLAUDE.md aturan #4).
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String?
+  actorRole  String?
+  action     String
+  entityType String
+  entityId   String
+  beforeData Json?
+  afterData  Json?
+  createdAt  DateTime @default(now())
+}
