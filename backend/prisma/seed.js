@@ -276,14 +276,15 @@ async function seedNotifikasi(dokterList) {
 }
 
 async function seedPengguna(dokterList) {
-  const passwordHash = await bcrypt.hash("Sidokmais#2026", 10);
+  const passwordHashDefault = await bcrypt.hash("Sidokmais#2026", 10);
+  const passwordHashAdmin = await bcrypt.hash("admin123", 10);
   const pengguna = [];
 
   pengguna.push(
     await prisma.pengguna.create({
       data: {
         username: "admin",
-        passwordHash,
+        passwordHash: passwordHashAdmin,
         role: "ADMIN",
       },
     })
@@ -302,7 +303,7 @@ async function seedPengguna(dokterList) {
       await prisma.pengguna.create({
         data: {
           username,
-          passwordHash,
+          passwordHash: passwordHashDefault,
           role: "DOKTER",
           dokterId: dokter.id,
         },
