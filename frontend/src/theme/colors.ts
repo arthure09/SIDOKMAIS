@@ -14,6 +14,8 @@ export const colors = {
   surfaceBright: '#effbff',
   surfaceSoft: '#EAF6F5',
   surfaceContainerLowest: '#ffffff',
+  surfaceContainer: '#d6f3fb',
+  surfaceContainerHigh: '#d0edf5',
   surfaceVariant: '#cae8ef',
   onSurface: '#011f25',
   onSurfaceVariant: '#3c4948',
@@ -22,6 +24,10 @@ export const colors = {
   error: '#ba1a1a',
   errorContainer: '#ffdad6',
   onErrorContainer: '#93000a',
+  deepTealDark: '#0D3D3B',
+  tertiaryContainer: '#a3a900',
+  onTertiaryContainer: '#393b00',
+  tertiary: '#5f6200',
 };
 
 export const spacing = {

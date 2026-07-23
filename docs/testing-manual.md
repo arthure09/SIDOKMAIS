@@ -58,11 +58,45 @@ isi kalau sudah ada endpoint semacam itu (mis. endpoint khusus ADMIN):
 - [ ] Detail view pasien lengkap
 - [ ] ADMIN — cek scope-nya (lihat semua pasien, atau tetap dibatasi?)
 
-## Modul: Data Operasi (Hari 10-11) — isi setelah dibangun
-- [ ] Dokter READ-ONLY (sesuai CLAUDE.md aturan #1) — coba PATCH/POST/DELETE
-      dari akun DOKTER, harus ditolak (403) meskipun endpoint-nya ada
-- [ ] Filter status (scheduled/in-progress/completed/cancelled) benar
-- [ ] Data pre-op vs post-op tampil sesuai status
+## Modul: Data Operasi (Hari 10-11)
+
+Endpoint: `GET/POST/PATCH/DELETE /api/operasi`. RBAC per-method — GET boleh
+DOKTER+ADMIN, POST/PATCH/DELETE ADMIN only. Dites manual pakai curl + token
+JWT signed langsung (2 akun DOKTER berbeda + 1 ADMIN) terhadap data seed asli,
+tanggal 23 Jul 2026.
+
+- [x] DOKTER cuma lihat operasi miliknya sendiri — dokter A (1 operasi) &
+      dokter B (2 operasi) masing-masing cuma dapat listnya sendiri, tidak
+      ketuker. Buka detail operasi milik dokter lain → 403.
+- [x] DOKTER kena 403 kalau coba POST/PATCH/DELETE — ketiganya dicoba,
+      semua 403 "Akses ditolak untuk role ini".
+- [x] ADMIN bisa CRUD penuh, lintas dokter — POST operasi baru untuk
+      kunjungan milik dokter B (dibuat oleh ADMIN, bukan dokter B), PATCH
+      status-nya, dan operasi itu langsung muncul di list dokter B setelahnya.
+- [x] Semua aksi tulis (POST/PATCH/DELETE) tercatat rapi di `AuditLog` —
+      dicek row-nya per `entityId`: `CREATE` (`beforeData: null`), `UPDATE`
+      (`beforeData`/`afterData` lengkap sebelum→sesudah), `DELETE`
+      (`beforeData` = record yang dihapus, `afterData: null`). Kegagalan
+      tulis audit log didesain tidak menggagalkan response utama (catch +
+      `console.error` di `utils/auditLog.js`), tapi belum ada skenario nyata
+      yang bikin insert `AuditLog` gagal untuk dites.
+- [x] Delete operasi yang ada pendapatan-nya → gagal rapi, bukan 500 —
+      Prisma `PrismaClientKnownRequestError` code `P2003` (FK restrict dari
+      `Pendapatan → Operasi`) ditangkap, balikin `409` dengan pesan
+      "tidak bisa dihapus, ada data pendapatan terkait". Operasi tetap utuh
+      setelah percobaan gagal (dicek ulang ke DB).
+- [x] Gak ada satupun tempat yang nerima `dokterId` dari body/query/param
+      untuk DOKTER — satu-satunya tempat `dokterId` dibaca dari `req.query`
+      adalah filter opsional khusus role ADMIN di `GET /api/operasi`
+      (`?dokterId=`), dan itu bukan celah karena ADMIN memang legitimately
+      punya akses ke semua data. DOKTER selalu difilter lewat
+      `req.user.dokterId` dari JWT, tidak pernah dari input request
+      (dicek manual lewat `grep dokterId` di `operasi.routes.js`).
+
+**Belum dites (opsional/bonus, lihat `docs/prompts/hari-10-challenge.md` Level 7):**
+- [ ] Validasi `ruanganId` harus tipe `OK` — belum diimplementasikan, by design (keputusan produk yang sengaja ditunda)
+- [ ] Cek bentrok jadwal (ruangan + waktu overlap) — belum diimplementasikan, dicatat sebagai utang teknis untuk Hari 17 (validation layer chatbot)
+- [ ] Validasi transisi status (mis. `COMPLETED` tidak boleh balik ke `SCHEDULED`) — skip untuk MVP, cuma divalidasi value-nya termasuk salah satu dari 4 enum
 
 ## Modul: Notifikasi (Hari 12-13) — isi setelah dibangun
 - [ ] Push notification masuk ke device (Expo Go) untuk: pasien baru,
@@ -101,4 +135,10 @@ Copy baris ini tiap sesi testing manual:
 
 | Tanggal | Modul | Skenario | Expected | Actual | Status (PASS/FAIL) | Catatan |
 |---------|-------|----------|----------|--------|---------------------|---------|
+| 2026-07-23 | Data Operasi | DOKTER GET list | Cuma operasi milik sendiri | Sesuai | PASS | 2 akun dokter beda, tidak ketuker |
+| 2026-07-23 | Data Operasi | DOKTER GET detail milik dokter lain | 403 | 403 | PASS | |
+| 2026-07-23 | Data Operasi | DOKTER POST/PATCH/DELETE | 403 semua | 403 semua | PASS | |
+| 2026-07-23 | Data Operasi | ADMIN CRUD lintas dokter | Berhasil, muncul di list dokter terkait | Sesuai | PASS | |
+| 2026-07-23 | Data Operasi | AuditLog untuk POST/PATCH/DELETE | 1 row per aksi, before/afterData sesuai | Sesuai | PASS | |
+| 2026-07-23 | Data Operasi | DELETE operasi ber-Pendapatan | 409 rapi | 409 rapi | PASS | Prisma P2003 ditangkap |
 | | | | | | | |

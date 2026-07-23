@@ -5,6 +5,7 @@ const cors = require("cors");
 const morgan = require("morgan");
 const authRoutes = require("./routes/auth.routes");
 const pasienRoutes = require("./routes/pasien.routes");
+const operasiRoutes = require("./routes/operasi.routes");
 const authenticate = require("./middleware/auth.middleware");
 const authorize = require("./middleware/rbac.middleware");
 
@@ -20,6 +21,7 @@ app.get("/health", (req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/pasien", authenticate, authorize("DOKTER"), pasienRoutes);
+app.use("/api/operasi", authenticate, authorize("DOKTER", "ADMIN"), operasiRoutes);
 
 // Endpoint uji coba RBAC (bukan endpoint produksi) — echo req.user apa
 // adanya untuk verifikasi visual bahwa authenticate + authorize sudah benar.

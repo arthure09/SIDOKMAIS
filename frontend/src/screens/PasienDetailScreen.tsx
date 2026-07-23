@@ -9,9 +9,9 @@ import { useAuthStore } from '../store/authStore';
 import { colors, radius, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
 import type { AssignmentStatus, PasienDetail, StatusKunjungan } from '../api/types';
-import type { RootStackParamList } from '../navigation/types';
+import type { PasienStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'PasienDetail'>;
+type Props = NativeStackScreenProps<PasienStackParamList, 'PasienDetail'>;
 type IconName = React.ComponentProps<typeof MaterialIcons>['name'];
 
 const ASSIGNMENT_BADGE: Record<AssignmentStatus, { label: string; bg: string; fg: string }> = {

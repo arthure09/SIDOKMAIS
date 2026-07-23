@@ -10,9 +10,11 @@ import { colors, radius, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
 import { TextInput } from '../components/TextInput';
 import type { AssignmentStatus, PasienListItem } from '../api/types';
-import type { RootStackParamList } from '../navigation/types';
+import { useTabBarClearance } from '../navigation/tabBarMetrics';
+import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
+import type { PasienStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'PasienList'>;
+type Props = NativeStackScreenProps<PasienStackParamList, 'PasienList'>;
 
 const STATUS_FILTERS: { label: string; value: AssignmentStatus | undefined }[] = [
   { label: 'Semua', value: undefined },
@@ -44,8 +46,9 @@ function initials(nama: string) {
 
 export function PasienListScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const tabBarClearance = useTabBarClearance();
+  const { onScroll, scrollEventThrottle } = useTabBarDockOnScroll();
   const token = useAuthStore((s) => s.token);
-  const logout = useAuthStore((s) => s.logout);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<AssignmentStatus | undefined>(undefined);
@@ -84,9 +87,9 @@ export function PasienListScreen({ navigation }: Props) {
           style={styles.headerLogo}
           resizeMode="contain"
         />
-        <Pressable onPress={logout} hitSlop={8} style={styles.headerLogoutButton}>
-          <MaterialIcons name="logout" size={22} color={colors.onSurfaceVariant} />
-        </Pressable>
+        <View style={styles.headerSearchButton}>
+          <MaterialIcons name="search" size={22} color={colors.primary} />
+        </View>
       </View>
 
       <View style={styles.searchWrapper}>
@@ -133,7 +136,9 @@ export function PasienListScreen({ navigation }: Props) {
         <FlatList
           data={items}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
+          onScroll={onScroll}
+          scrollEventThrottle={scrollEventThrottle}
           renderItem={({ item }) => {
             const badge = STATUS_BADGE[item.status];
             return (
@@ -210,13 +215,12 @@ const styles = StyleSheet.create({
     width: 132,
     height: 45,
   },
-  headerLogoutButton: {
+  headerSearchButton: {
     width: 40,
     height: 40,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: colors.surfaceSoft,
   },
 
   searchWrapper: {
@@ -271,7 +275,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.backgroundWhite,
-    borderRadius: radius.sm,
+    borderRadius: 24,
     padding: spacing.cardPadding,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 8 },
