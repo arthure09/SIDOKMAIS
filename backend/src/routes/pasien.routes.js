@@ -9,7 +9,10 @@ const MAX_LIMIT = 100;
 
 // Parsing & validasi query params list pasien. Return { errors, values } —
 // errors non-kosong berarti request tidak valid (caller balikin 400).
-function parseListQuery(query) {
+// `dokterId` cuma diterima kalau role ADMIN (dipakai buat filter lintas
+// dokter) — DOKTER tidak pernah boleh nge-override filter kepemilikannya
+// sendiri lewat query, sama seperti operasi.routes.js.
+function parseListQuery(query, role) {
   const errors = [];
 
   const search = typeof query.search === "string" ? query.search.trim() : "";
@@ -39,7 +42,12 @@ function parseListQuery(query) {
     }
   }
 
-  return { errors, values: { search, status, page, limit } };
+  let dokterId;
+  if (role === "ADMIN" && typeof query.dokterId === "string" && query.dokterId.trim() !== "") {
+    dokterId = query.dokterId.trim();
+  }
+
+  return { errors, values: { search, status, page, limit, dokterId } };
 }
 
 // Untuk daftar pasienId, ambil kunjungan terakhir (tanggalMasuk <= now, paling
@@ -81,21 +89,24 @@ async function getKunjunganTerdekat(pasienIds) {
 }
 
 router.get("/", async (req, res) => {
-  const { dokterId } = req.user;
+  const { role, dokterId: ownDokterId } = req.user;
 
-  if (!dokterId) {
+  if (role === "DOKTER" && !ownDokterId) {
     return res.status(403).json({ message: "Akun ini tidak terhubung ke data dokter" });
   }
 
-  const { errors, values } = parseListQuery(req.query);
+  const { errors, values } = parseListQuery(req.query, role);
   if (errors.length > 0) {
     return res.status(400).json({ message: "Query params tidak valid", errors });
   }
 
-  const { search, status, page, limit } = values;
+  const { search, status, page, limit, dokterId } = values;
+  // DOKTER selalu dipaksa ke assignment miliknya sendiri. ADMIN melihat semua
+  // pasien lintas dokter, kecuali secara eksplisit filter lewat ?dokterId=.
+  const assignmentDokterId = role === "DOKTER" ? ownDokterId : dokterId;
 
   const where = {
-    dokterId,
+    ...(assignmentDokterId && { dokterId: assignmentDokterId }),
     ...(status && { status }),
     ...(search && {
       pasien: {
@@ -148,15 +159,19 @@ router.get("/", async (req, res) => {
 });
 
 router.get("/:id", async (req, res) => {
-  const { dokterId } = req.user;
+  const { role, dokterId: ownDokterId } = req.user;
   const { id } = req.params;
 
-  if (!dokterId) {
+  if (role === "DOKTER" && !ownDokterId) {
     return res.status(403).json({ message: "Akun ini tidak terhubung ke data dokter" });
   }
 
+  // DOKTER cuma boleh lihat pasien yang di-assign ke dirinya. ADMIN boleh
+  // lihat pasien manapun — assignment yang dipakai buat field `assignment`
+  // di response diambil dari assignment terbaru pasien ini, dokter manapun.
   const assignment = await prisma.dokterPasienAssignment.findFirst({
-    where: { dokterId, pasienId: id },
+    where: role === "DOKTER" ? { dokterId: ownDokterId, pasienId: id } : { pasienId: id },
+    orderBy: { tanggalAssign: "desc" },
   });
 
   if (!assignment) {

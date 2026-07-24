@@ -1,5 +1,5 @@
-// CLAUDE.md aturan #3: modul Pendapatan wajib isDummy + watermark "CONTOH DATA DUMMY"
-// selama belum ada keputusan lain dari supervisor.
+// CLAUDE.md aturan #3: modul Pendapatan tetap isDummy = true (data belum nyata).
+// Watermark UI "CONTOH DATA DUMMY" dihapus atas keputusan Arthuro (lihat CLAUDE.md).
 
 export type RingkasanPendapatan = {
   totalBulanIni: number;

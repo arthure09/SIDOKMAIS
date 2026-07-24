@@ -87,9 +87,6 @@ export function PasienListScreen({ navigation }: Props) {
           style={styles.headerLogo}
           resizeMode="contain"
         />
-        <View style={styles.headerSearchButton}>
-          <MaterialIcons name="search" size={22} color={colors.primary} />
-        </View>
       </View>
 
       <View style={styles.searchWrapper}>
@@ -205,22 +202,15 @@ const styles = StyleSheet.create({
 
   header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
     minHeight: 64,
     paddingHorizontal: spacing.marginMobile,
     paddingBottom: spacing.base,
   },
   headerLogo: {
-    width: 132,
-    height: 45,
-  },
-  headerSearchButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: 150,
+    height: 52.5,
   },
 
   searchWrapper: {

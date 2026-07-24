@@ -13,6 +13,14 @@ import type { OperasiStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<OperasiStackParamList, 'JadwalOperasiKonsul'>;
 
+function formatHariIni() {
+  return new Date().toLocaleDateString('id-ID', {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+}
+
 const STATUS_META: Record<
   OperasiStatusMock,
   { label: string; icon: string; bg: string; fg: string }
@@ -30,11 +38,8 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   const [tab, setTab] = useState<'OPERASI' | 'KONSUL'>('OPERASI');
 
   function handleCardPress(item: (typeof operasiJadwalList)[number]) {
-    if (item.status === 'CANCELLED') {
-      navigation.navigate('DetailPembatalanOperasi', { operasiId: item.id });
-    } else {
-      navigation.navigate('DetailJadwalOperasi', { operasiId: item.id });
-    }
+    if (item.status === 'CANCELLED') return;
+    navigation.navigate('DetailJadwalOperasi', { operasiId: item.id });
   }
 
   return (
@@ -63,7 +68,7 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
         </View>
         <View style={styles.dateFilter}>
           <MaterialIcons name="calendar-month" size={20} color={colors.primary} />
-          <Text style={styles.dateFilterText}>Hari Ini, 24 Okt</Text>
+          <Text style={styles.dateFilterText}>Hari Ini, {formatHariIni()}</Text>
         </View>
       </View>
 
@@ -88,6 +93,7 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
             return (
               <Pressable
                 key={item.id}
+                disabled={cancelled}
                 onPress={() => handleCardPress(item)}
                 style={({ pressed }) => [
                   styles.card,

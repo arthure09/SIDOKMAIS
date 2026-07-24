@@ -29,15 +29,7 @@ export function NotifikasiScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + spacing.marginMobile, paddingBottom: tabBarClearance },
-        ]}
-        showsVerticalScrollIndicator={false}
-        onScroll={onScroll}
-        scrollEventThrottle={scrollEventThrottle}
-      >
+      <View style={[styles.header, { paddingTop: insets.top + ms(6) }]}>
         <View>
           <Text style={styles.title}>Notifikasi</Text>
           <Text style={styles.subtitle}>Pembaruan klinis dan jadwal Anda.</Text>
@@ -59,7 +51,14 @@ export function NotifikasiScreen({ navigation }: Props) {
             );
           })}
         </View>
+      </View>
 
+      <ScrollView
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
+        showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={scrollEventThrottle}
+      >
         <View style={{ gap: spacing.gutter }}>
           {items.map((item) => (
             <Pressable
@@ -111,14 +110,21 @@ export function NotifikasiScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  header: {
+    paddingHorizontal: spacing.marginMobile,
+    paddingBottom: ms(10),
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: `${colors.outlineVariant}1A`,
+  },
   content: { padding: spacing.marginMobile, gap: spacing.gutter, paddingBottom: ms(32) },
-  title: { fontSize: ms(24), fontWeight: '800', color: colors.onBackground },
-  subtitle: { fontSize: ms(14), color: colors.outline, marginTop: ms(4) },
+  title: { fontSize: ms(20), fontWeight: '800', color: colors.onBackground },
+  subtitle: { fontSize: ms(12), color: colors.outline, marginTop: ms(2) },
 
-  filterRow: { flexDirection: 'row', gap: ms(12), flexWrap: 'wrap' },
+  filterRow: { flexDirection: 'row', gap: ms(8), flexWrap: 'wrap', marginTop: ms(10) },
   filterChip: {
-    paddingHorizontal: ms(16),
-    paddingVertical: ms(8),
+    paddingHorizontal: ms(14),
+    paddingVertical: ms(6),
     borderRadius: radius.full,
     backgroundColor: colors.surfaceSoft,
     borderWidth: 1,

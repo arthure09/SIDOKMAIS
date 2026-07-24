@@ -56,11 +56,6 @@ export function HomeScreen({ navigation }: Props) {
           <Text style={styles.subtitle}>Semoga harimu menyenangkan.</Text>
         </View>
 
-        <View style={styles.searchBar}>
-          <MaterialIcons name="search" size={22} color={colors.primary} />
-          <Text style={styles.searchPlaceholder}>Cari Pasien, Jadwal, atau Dokumen...</Text>
-        </View>
-
         <View style={styles.grid}>
           {navigasiCards.map((card) => {
             const targetTab = CARD_TARGET_TAB[card.id];
@@ -162,17 +157,6 @@ const styles = StyleSheet.create({
   content: { padding: spacing.marginMobile, paddingTop: 12, gap: 24, paddingBottom: 32 },
   greeting: { fontSize: 24, fontWeight: '800', color: colors.deepTealDark },
   subtitle: { fontSize: 14, color: colors.onSurfaceVariant, marginTop: 4 },
-
-  searchBar: {
-    height: 56,
-    backgroundColor: colors.surfaceSoft,
-    borderRadius: radius.full,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-  },
-  searchPlaceholder: { fontSize: 16, color: colors.outlineVariant },
 
   grid: {
     flexDirection: 'row',

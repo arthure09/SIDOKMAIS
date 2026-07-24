@@ -1,12 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius } from '../theme/colors';
-import { useTabBarStore } from '../store/tabBarStore';
-import { TAB_BAR_FLOAT_GAP, TAB_BAR_FLOAT_SIDE_MARGIN, TAB_BAR_HEIGHT } from './tabBarMetrics';
+import { TAB_BAR_HEIGHT } from './tabBarMetrics';
 import type { MainTabParamList } from './types';
 
 const TAB_ICON: Record<keyof MainTabParamList, React.ComponentProps<typeof MaterialIcons>['name']> = {
@@ -92,8 +90,6 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const [barWidth, setBarWidth] = useState(0);
   const translateX = useRef(new Animated.Value(0)).current;
-  const dockAnim = useRef(new Animated.Value(0)).current;
-  const docked = useTabBarStore((s) => s.docked);
   const itemWidth = barWidth / state.routes.length;
   const indicatorWidth = Math.max(itemWidth - INDICATOR_INSET * 2, 0);
 
@@ -107,99 +103,62 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
     }).start();
   }, [state.index, itemWidth, translateX]);
 
-  // Ganti tab lain = layar baru, mulai lagi dari floating.
-  useEffect(() => {
-    useTabBarStore.getState().setDocked(false);
-  }, [state.index]);
-
-  useEffect(() => {
-    Animated.timing(dockAnim, {
-      toValue: docked ? 1 : 0,
-      duration: 280,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
-  }, [docked, dockAnim]);
-
   const onLayout = (e: LayoutChangeEvent) => setBarWidth(e.nativeEvent.layout.width);
 
-  const animatedSide = dockAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [TAB_BAR_FLOAT_SIDE_MARGIN, 0],
-  });
-  const animatedBottom = dockAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [insets.bottom + TAB_BAR_FLOAT_GAP, insets.bottom],
-  });
-  const animatedBottomRadius = dockAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [radius.lg, 0],
-  });
-
   return (
-    <Animated.View
-      style={[styles.wrapper, { left: animatedSide, right: animatedSide, bottom: animatedBottom }]}
-      pointerEvents="box-none"
-    >
-      <Animated.View
-        style={[
-          styles.bar,
-          {
-            borderBottomLeftRadius: animatedBottomRadius,
-            borderBottomRightRadius: animatedBottomRadius,
-          },
-        ]}
-        onLayout={onLayout}
-      >
-        <BlurView intensity={55} tint="light" style={StyleSheet.absoluteFillObject} />
-        {barWidth > 0 && (
-          <Animated.View
-            style={[styles.indicator, { width: indicatorWidth, transform: [{ translateX }] }]}
-          />
-        )}
-        {state.routes.map((route, index) => {
-          const isFocused = state.index === index;
-          const onPress = () => {
-            const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
-          return (
-            <TabButton
-              key={route.key}
-              routeName={route.name as keyof MainTabParamList}
-              isFocused={isFocused}
-              itemWidth={itemWidth || 1}
-              onPress={onPress}
+    <View style={styles.wrapper} pointerEvents="box-none">
+      <View style={[styles.surface, { paddingBottom: insets.bottom }]}>
+        <View style={styles.bar} onLayout={onLayout}>
+          {barWidth > 0 && (
+            <Animated.View
+              style={[styles.indicator, { width: indicatorWidth, transform: [{ translateX }] }]}
             />
-          );
-        })}
-      </Animated.View>
-    </Animated.View>
+          )}
+          {state.routes.map((route, index) => {
+            const isFocused = state.index === index;
+            const onPress = () => {
+              const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+              if (!isFocused && !event.defaultPrevented) {
+                navigation.navigate(route.name);
+              }
+            };
+            return (
+              <TabButton
+                key={route.key}
+                routeName={route.name as keyof MainTabParamList}
+                isFocused={isFocused}
+                itemWidth={itemWidth || 1}
+                onPress={onPress}
+              />
+            );
+          })}
+        </View>
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   wrapper: {
     position: 'absolute',
-    alignItems: 'center',
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  surface: {
+    backgroundColor: colors.surfaceContainerLowest,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    elevation: 8,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
   },
   bar: {
     flexDirection: 'row',
     width: '100%',
     height: TAB_BAR_HEIGHT,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.45)',
-    elevation: 8,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
-    overflow: 'hidden',
   },
   indicator: {
     position: 'absolute',
@@ -207,7 +166,7 @@ const styles = StyleSheet.create({
     bottom: INDICATOR_INSET,
     left: 0,
     borderRadius: radius.full,
-    backgroundColor: 'rgba(255,255,255,0.55)',
+    backgroundColor: colors.surfaceSoft,
   },
   tabButton: {
     height: '100%',

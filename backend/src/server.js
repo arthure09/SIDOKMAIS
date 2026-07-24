@@ -20,7 +20,7 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
-app.use("/api/pasien", authenticate, authorize("DOKTER"), pasienRoutes);
+app.use("/api/pasien", authenticate, authorize("DOKTER", "ADMIN"), pasienRoutes);
 app.use("/api/operasi", authenticate, authorize("DOKTER", "ADMIN"), operasiRoutes);
 
 // Endpoint uji coba RBAC (bukan endpoint produksi) — echo req.user apa

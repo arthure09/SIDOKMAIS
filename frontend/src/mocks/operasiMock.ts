@@ -24,13 +24,6 @@ export type OperasiJadwalItem = {
   status: OperasiStatusMock;
   ruangan: string | null;
   dokterUtama: string | null;
-  // Hanya dipakai kalau status === 'CANCELLED'
-  pembatalan?: {
-    alasan: string;
-    dibatalkanOleh: string;
-    waktuPembatalan: string;
-    instruksiTindakLanjut: string;
-  };
 };
 
 // Tim medis & catatan pra-operasi dari desain "Detail Jadwal Operasi" bersifat
@@ -104,12 +97,5 @@ export const operasiJadwalList: OperasiJadwalItem[] = [
     status: 'CANCELLED',
     ruangan: null,
     dokterUtama: null,
-    pembatalan: {
-      alasan: 'Tekanan darah pasien tidak stabil (Hipertensi urgensi) saat pemeriksaan pre-op.',
-      dibatalkanOleh: 'Tim Anestesi (dr. Budi, Sp.An)',
-      waktuPembatalan: '12 Okt 2023, 09:45 WIB',
-      instruksiTindakLanjut:
-        'Pasien dikembalikan ke bangsal untuk stabilisasi tekanan darah. Jadwalkan ulang setelah kondisi optimal.',
-    },
   },
 ];

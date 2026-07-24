@@ -1,4 +1,5 @@
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { colors, radius, spacing } from '../theme/colors';
@@ -14,6 +15,7 @@ type Props = NativeStackScreenProps<NotifikasiStackParamList, 'DetailLaporanLab'
 export function DetailLaporanLabScreen(_props: Props) {
   const tabBarClearance = useTabBarClearance();
   const { onScroll, scrollEventThrottle } = useTabBarDockOnScroll();
+  const [sudahDibaca, setSudahDibaca] = useState(false);
 
   return (
     <View style={styles.container}>
@@ -78,10 +80,17 @@ export function DetailLaporanLabScreen(_props: Props) {
           ))}
         </View>
 
-        <View style={styles.validateButton}>
-          <MaterialIcons name="check-circle" size={20} color={colors.onPrimary} />
-          <Text style={styles.validateButtonText}>Validasi & Tandai Dibaca</Text>
-        </View>
+        {sudahDibaca ? (
+          <View style={styles.validateButtonDone}>
+            <MaterialIcons name="check-circle" size={20} color={colors.onSurfaceVariant} />
+            <Text style={styles.validateButtonDoneText}>Sudah Dibaca</Text>
+          </View>
+        ) : (
+          <Pressable style={styles.validateButton} onPress={() => setSudahDibaca(true)}>
+            <MaterialIcons name="check-circle" size={20} color={colors.onPrimary} />
+            <Text style={styles.validateButtonText}>Validasi & Tandai Dibaca</Text>
+          </Pressable>
+        )}
       </ScrollView>
     </View>
   );
@@ -146,4 +155,15 @@ const styles = StyleSheet.create({
     marginTop: ms(8),
   },
   validateButtonText: { fontSize: ms(16), fontWeight: '700', color: colors.onPrimary },
+  validateButtonDone: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: ms(8),
+    backgroundColor: colors.surfaceContainer,
+    paddingVertical: ms(16),
+    borderRadius: radius.sm,
+    marginTop: ms(8),
+  },
+  validateButtonDoneText: { fontSize: ms(16), fontWeight: '700', color: colors.onSurfaceVariant },
 });

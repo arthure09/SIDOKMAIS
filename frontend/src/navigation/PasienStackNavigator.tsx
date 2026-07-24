@@ -18,7 +18,7 @@ export function PasienStackNavigator() {
       <Stack.Screen
         name="PasienDetail"
         component={PasienDetailScreen}
-        options={({ route }) => ({ title: route.params.nama })}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

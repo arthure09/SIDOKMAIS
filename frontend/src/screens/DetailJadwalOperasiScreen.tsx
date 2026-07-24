@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,11 +6,10 @@ import { colors, radius, spacing } from '../theme/colors';
 import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
 import { catatanPraOpDefault, operasiJadwalList, timMedisDefault } from '../mocks/operasiMock';
+import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import type { OperasiStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<OperasiStackParamList, 'DetailJadwalOperasi'>;
-
-const ACTION_BAR_SPACE = ms(120);
 
 const STATUS_LABEL: Record<string, string> = {
   IN_PROGRESS: 'Berlangsung',
@@ -18,8 +17,9 @@ const STATUS_LABEL: Record<string, string> = {
   COMPLETED: 'Selesai',
 };
 
-export function DetailJadwalOperasiScreen({ route }: Props) {
+export function DetailJadwalOperasiScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
+  const tabBarClearance = useTabBarClearance();
   const item = operasiJadwalList.find((o) => o.id === route.params.operasiId);
 
   if (!item) {
@@ -32,18 +32,23 @@ export function DetailJadwalOperasiScreen({ route }: Props) {
 
   return (
     <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+          <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
+        </Pressable>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {item.tindakan}
+        </Text>
+        <View style={styles.statusPill}>
+          <View style={styles.statusDot} />
+          <Text style={styles.statusPillText}>{STATUS_LABEL[item.status] ?? item.status}</Text>
+        </View>
+      </View>
+
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: ACTION_BAR_SPACE + insets.bottom }]}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.statusRow}>
-          <Text style={styles.titleTindakan}>{item.tindakan}</Text>
-          <View style={styles.statusPill}>
-            <View style={styles.statusDot} />
-            <Text style={styles.statusPillText}>{STATUS_LABEL[item.status] ?? item.status}</Text>
-          </View>
-        </View>
-
         <View style={styles.card}>
           <View style={styles.patientRow}>
             <View style={styles.patientAvatar}>
@@ -118,16 +123,6 @@ export function DetailJadwalOperasiScreen({ route }: Props) {
           ))}
         </View>
       </ScrollView>
-
-      <View style={[styles.actionBar, { paddingBottom: spacing.marginMobile + insets.bottom }]}>
-        <View style={styles.actionSecondary}>
-          <Text style={styles.actionSecondaryText}>Ubah Jadwal</Text>
-        </View>
-        <View style={styles.actionPrimary}>
-          <Text style={styles.actionPrimaryText}>Mulai Operasi</Text>
-          <MaterialIcons name="play-arrow" size={18} color={colors.onPrimary} />
-        </View>
-      </View>
     </View>
   );
 }
@@ -159,12 +154,32 @@ function InfoRow({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: ms(12),
+    paddingHorizontal: spacing.marginMobile,
+    paddingBottom: spacing.base,
+    borderBottomWidth: 1,
+    borderBottomColor: `${colors.outlineVariant}1A`,
+  },
+  backButton: {
+    width: ms(40),
+    height: ms(40),
+    borderRadius: ms(20),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: ms(18),
+    fontWeight: '600',
+    color: colors.onBackground,
+  },
   content: { padding: spacing.marginMobile, gap: spacing.gutter },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: ms(24) },
   errorText: { color: colors.error },
 
-  statusRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  titleTindakan: { flex: 1, fontSize: ms(24), fontWeight: '800', color: colors.onSurface },
   statusPill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -176,7 +191,7 @@ const styles = StyleSheet.create({
     paddingVertical: ms(8),
     borderRadius: radius.full,
   },
-  statusDot: { width: ms(8), height: ms(8), borderRadius: ms(4), backgroundColor: colors.primary },
+  statusDot: { width: ms(6), height: ms(6), borderRadius: ms(3), backgroundColor: colors.primary },
   statusPillText: {
     fontSize: ms(12),
     fontWeight: '600',
@@ -270,39 +285,4 @@ const styles = StyleSheet.create({
   notesItem: { flexDirection: 'row', gap: ms(8), paddingLeft: ms(4) },
   notesBullet: { fontSize: ms(13), color: colors.onSurfaceVariant },
   notesText: { flex: 1, fontSize: ms(13), color: colors.onSurfaceVariant },
-
-  actionBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.surfaceContainerLowest,
-    borderTopWidth: 1,
-    borderTopColor: `${colors.outlineVariant}33`,
-    paddingHorizontal: spacing.marginMobile,
-    paddingTop: ms(16),
-    flexDirection: 'row',
-    gap: ms(12),
-  },
-  actionSecondary: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderRadius: ms(12),
-    paddingVertical: ms(14),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionSecondaryText: { fontSize: ms(14), fontWeight: '700', color: colors.primary },
-  actionPrimary: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: ms(8),
-    backgroundColor: colors.primary,
-    borderRadius: ms(12),
-    paddingVertical: ms(14),
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  actionPrimaryText: { fontSize: ms(14), fontWeight: '700', color: colors.onPrimary },
 });

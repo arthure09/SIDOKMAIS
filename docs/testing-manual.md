@@ -104,6 +104,35 @@ tanggal 23 Jul 2026.
 - [ ] In-app notification list cuma nampilin punya dokter yang login
 - [ ] Notifikasi pasien lain TIDAK bocor ke dokter yang salah
 
+## Modul: Home, Profil Dokter, Data Pendapatan (frontend, UI-only)
+- [ ] Greeting Home & nama di Profil Dokter nunjukkin nama dokter yang beneran
+      login (dari `authStore`), bukan teks statis "User"
+- [ ] Kartu navigasi di Home (Pasien/Operasi/Notifikasi) mendarat ke tab yang
+      benar
+- [ ] Data Pendapatan TIDAK menampilkan watermark "CONTOH DATA DUMMY" (dihapus,
+      keputusan Arthuro 2026-07-24 — dianggap redundan karena seluruh aplikasi
+      masih fase dummy data; field `isDummy` tetap `true` di DB)
+- [ ] Logout dari Profil Dokter beneran balik ke Login screen dan token
+      ke-clear (coba buka ulang app, harus diminta login lagi)
+- [ ] Menu "Data Pendapatan" di Profil Dokter navigasinya benar
+
+## Modul: Notifikasi + Detail Laporan Lab (frontend, UI-only)
+- [ ] Filter kategori (Semua/Hasil Lab/Jadwal/Sistem) di List Notifikasi jalan
+- [ ] Tap notifikasi kategori Lab → buka Detail Laporan Lab, kategori lain gak
+      bisa ditap (sesuai `bukaLaporanLab` flag)
+- [ ] Tombol "Validasi & Tandai Dibaca" berubah jadi "Sudah Dibaca" setelah
+      ditekan (lihat item 3)
+
+## Modul: Jadwal Operasi + Detail Jadwal (frontend, UI-only)
+- [ ] Toggle Operasi/Konsul — tab Konsul nampilin state "segera hadir", BUKAN
+      data palsu
+- [ ] Kartu jadwal berstatus CANCELLED di list bersifat non-tappable
+      (`disabled`) — tidak ada navigasi ke screen detail terpisah
+      (`DetailPembatalanOperasiScreen` dihapus total, keputusan Arthuro
+      2026-07-24 — dokter read-only untuk Operasi, lihat CLAUDE.md aturan #1)
+- [ ] **Pastikan tombol "Ubah Jadwal"/"Mulai Operasi" di Detail Jadwal SUDAH
+      TIDAK ADA** — ini verifikasi langsung dari perbaikan item 1 & 2
+
 ---
 
 ## Chatbot (Minggu 3) — in-scope vs out-of-scope

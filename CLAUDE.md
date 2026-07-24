@@ -25,7 +25,9 @@ Kode (variable/function) tetap camelCase Inggris.
 2. **dokterId selalu diambil dari JWT di server**, tidak pernah dari request
    body/query/params. Prinsip keamanan inti, akan direuse oleh chatbot nanti.
 3. **Modul Pendapatan** sensitif — field `isDummy` wajib `true` sampai ada
-   keputusan lain; UI harus tampilkan watermark "CONTOH DATA DUMMY".
+   keputusan lain. Watermark UI "CONTOH DATA DUMMY" pada `DataPendapatanScreen`
+   dihapus (keputusan Arthuro, 2026-07-24) — dianggap redundan karena seluruh
+   aplikasi masih fase dummy data. Field `isDummy` di DB tetap dipertahankan.
 4. **Audit log generik**: semua write action (manual/chatbot) dicatat ke
    AuditLog dengan entityType/entityId/beforeData/afterData JSON.
 5. **Chatbot (future)**: arsitektur propose→validate→confirm→audit. LLM tidak
@@ -48,9 +50,9 @@ Sumber: rencana-pengembangan-aplikasi-dokter.pdf (rencana awal magang). Mulai 14
 - Hari 7 (Sen 20 Jul): RBAC skeleton (JWT auth, middleware) + review Minggu 1 — selesai
 
 ### Minggu 2 — Modul Inti & Notifikasi (21-27 Jul)
-- Hari 8 (Sel 21 Jul): Backend — endpoint list pasien (GET, filter, search)
-- Hari 9 (Rab 22 Jul): Frontend — screen list pasien + detail view
-- Hari 10 (Kam 23 Jul): Backend — endpoint data operasi (CRUD jadwal, status)
+- Hari 8 (Sel 21 Jul): Backend — endpoint list pasien (GET, filter, search) — **selesai**
+- Hari 9 (Rab 22 Jul): Frontend — screen list pasien + detail view — **selesai**
+- Hari 10 (Kam 23 Jul): Backend — endpoint data operasi (CRUD jadwal, status) — **selesai**
 - Hari 11 (Jum 24 Jul): Frontend — screen data operasi (list, detail, update status)
 - Hari 12 (Sab 25 Jul): Setup Expo push notification + tabel notifications
 - Hari 13 (Min 26 Jul): Integrasi notifikasi (pasien baru, reminder H-1/H-2)
@@ -82,3 +84,15 @@ nice-to-have yang dipangkas, atau tugas lain dari supervisor.
   berlaku sampai ada instruksi lain — belum di-merge resmi ke dokumen rencana.
 - Pertanyaan terbuka ke supervisor: format data klinis (ICD-10, No. RM),
   kebijakan data ke LLM pihak ketiga, handover pasca-magang.
+- `DetailLaporanLabScreen` (screen Notifikasi → Detail Laporan Lab) dibangun
+  sebagai UI dekoratif hasil eksplorasi desain Figma, di luar 4 modul resmi
+  rencana awal. Entity "Laporan Lab" belum ada modelnya di `schema.prisma`.
+  Dipertahankan sebagai bagian aplikasi (keputusan Arthuro), tapi belum jadi
+  modul resmi — kalau mau jadi fitur beneran, perlu masuk ERD + jadwal dulu.
+- `DetailPembatalanOperasiScreen` (screen bonus Figma di luar 6 screen batch
+  ini) dihapus total (keputusan Arthuro, 2026-07-24) — dokter tidak punya
+  wewenang mengatur/menindaklanjuti jadwal operasi (aplikasi ini SIMRS info
+  system, read-only untuk Operasi sesuai aturan #1), jadi detail pembatalan
+  tidak perlu screen terpisah. Kartu jadwal berstatus CANCELLED di
+  `JadwalOperasiKonsulScreen` sekarang non-tappable (`disabled`), cukup
+  ditampilkan inline di list.

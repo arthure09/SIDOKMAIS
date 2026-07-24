@@ -38,11 +38,10 @@ export function ProfilDokterScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
+      <View style={[styles.header, { height: insets.top }]} />
+
       <ScrollView
-        contentContainerStyle={[
-          styles.content,
-          { paddingTop: insets.top + 16, paddingBottom: tabBarClearance },
-        ]}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={scrollEventThrottle}
@@ -105,6 +104,7 @@ export function ProfilDokterScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  header: { backgroundColor: colors.background },
   content: { padding: spacing.marginMobile, gap: spacing.gutter, paddingBottom: 32 },
 
   heroCard: {

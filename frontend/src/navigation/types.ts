@@ -1,4 +1,5 @@
 export type RootStackParamList = {
+  Welcome: undefined;
   Login: undefined;
   Main: undefined;
 };
@@ -19,7 +20,6 @@ export type PasienStackParamList = {
 export type OperasiStackParamList = {
   JadwalOperasiKonsul: undefined;
   DetailJadwalOperasi: { operasiId: string };
-  DetailPembatalanOperasi: { operasiId: string };
 };
 
 export type NotifikasiStackParamList = {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { useAuthStore } from '../store/authStore';
 import { colors, radius, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
 import type { AssignmentStatus, PasienDetail, StatusKunjungan } from '../api/types';
+import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import type { PasienStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<PasienStackParamList, 'PasienDetail'>;
@@ -55,10 +56,11 @@ function calcUmur(tanggalLahir: string | null): number | null {
   return umur;
 }
 
-export function PasienDetailScreen({ route }: Props) {
-  const { pasienId } = route.params;
+export function PasienDetailScreen({ route, navigation }: Props) {
+  const { pasienId, nama } = route.params;
   const token = useAuthStore((s) => s.token);
   const insets = useSafeAreaInsets();
+  const tabBarClearance = useTabBarClearance();
   const [detail, setDetail] = useState<PasienDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -88,18 +90,36 @@ export function PasienDetailScreen({ route }: Props) {
     };
   }, [token, pasienId]);
 
+  const header = (
+    <View style={[styles.header, { paddingTop: insets.top }]}>
+      <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+        <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
+      </Pressable>
+      <Text style={styles.headerTitle} numberOfLines={1}>
+        {detail?.nama ?? nama}
+      </Text>
+      <View style={styles.backButton} />
+    </View>
+  );
+
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator color={colors.primary} />
+      <View style={styles.container}>
+        {header}
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
       </View>
     );
   }
 
   if (error || !detail) {
     return (
-      <View style={styles.center}>
-        <Text style={styles.errorText}>{error ?? 'Data pasien tidak ditemukan'}</Text>
+      <View style={styles.container}>
+        {header}
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{error ?? 'Data pasien tidak ditemukan'}</Text>
+        </View>
       </View>
     );
   }
@@ -109,8 +129,9 @@ export function PasienDetailScreen({ route }: Props) {
 
   return (
     <View style={styles.container}>
+      {header}
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: 96 + insets.bottom }]}
+        contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
       >
         {/* Hero: info pasien */}
         <View style={styles.heroCard}>
@@ -209,14 +230,6 @@ export function PasienDetailScreen({ route }: Props) {
           )}
         </View>
       </ScrollView>
-
-      {/* Aksi tetap di bawah — belum tersambung ke endpoint tulis */}
-      <View style={[styles.actionBar, { paddingBottom: spacing.marginMobile + insets.bottom }]}>
-        <View style={styles.actionButton}>
-          <MaterialIcons name="check-circle" size={20} color={colors.outline} />
-          <Text style={styles.actionButtonText}>Tandai Selesai</Text>
-        </View>
-      </View>
     </View>
   );
 }
@@ -227,6 +240,30 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   errorText: { color: colors.error, textAlign: 'center' },
   emptyText: { color: colors.onSurfaceVariant },
+
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: spacing.marginMobile,
+    paddingBottom: spacing.base,
+    borderBottomWidth: 1,
+    borderBottomColor: `${colors.outlineVariant}1A`,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.onBackground,
+    textAlign: 'center',
+  },
 
   heroCard: {
     backgroundColor: colors.surfaceContainerLowest,
@@ -393,38 +430,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '300',
     color: colors.onSurfaceVariant,
-  },
-
-  actionBar: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.surfaceContainerLowest,
-    paddingHorizontal: spacing.marginMobile,
-    paddingTop: spacing.marginMobile,
-    borderTopLeftRadius: radius.sm,
-    borderTopRightRadius: radius.sm,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    elevation: 6,
-  },
-  actionButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    borderWidth: 2,
-    borderColor: colors.outlineVariant,
-    borderRadius: radius.full,
-    paddingVertical: 14,
-  },
-  actionButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    color: colors.outline,
   },
 });

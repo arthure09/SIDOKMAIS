@@ -22,7 +22,7 @@ export function ProfilStackNavigator() {
       <Stack.Screen
         name="DataPendapatan"
         component={DataPendapatanScreen}
-        options={{ title: 'Data Pendapatan' }}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );
