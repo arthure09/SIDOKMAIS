@@ -52,6 +52,87 @@ export type PasienDetail = {
   riwayatKunjungan: RiwayatKunjungan[];
 };
 
+export type OperasiStatus = 'SCHEDULED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+
+export type OperasiListItem = {
+  id: string;
+  tanggalOperasi: string;
+  jenisTindakan: string;
+  status: OperasiStatus;
+  ruangan: { nama: string; jenis: string };
+  kunjungan: {
+    dokterId: string;
+    dokter: { nama: string };
+    pasien: { nama: string; norm: string };
+  };
+};
+
+export type OperasiListResponse = {
+  data: OperasiListItem[];
+  pagination: Pagination;
+};
+
+export type OperasiDetail = {
+  id: string;
+  kunjunganId: string;
+  ruanganId: string;
+  tanggalOperasi: string;
+  jenisTindakan: string;
+  tim: string[];
+  status: OperasiStatus;
+  catatanPreOp: string | null;
+  catatanPostOp: string | null;
+  kunjungan: {
+    id: string;
+    diagnosa: string | null;
+    pasien: {
+      id: string;
+      nama: string;
+      norm: string;
+      jenisKelamin: 'L' | 'P';
+      tanggalLahir: string | null;
+    };
+    dokter: { id: string; nama: string };
+  };
+  ruangan: { id: string; nama: string; jenis: string; lantai: number | null };
+};
+
+export type KunjunganListItem = {
+  id: string;
+  tanggalMasuk: string;
+  tanggalKeluar: string | null;
+  diagnosa: string | null;
+  statusKunjungan: StatusKunjungan;
+  isPasienBaru: boolean;
+  ruangan: { nama: string; jenis: string };
+  pasien: { id: string; nama: string; norm: string };
+  dokter: { id: string; nama: string };
+};
+
+export type KunjunganListResponse = {
+  data: KunjunganListItem[];
+  pagination: Pagination;
+};
+
+export type KunjunganDetail = {
+  id: string;
+  diagnosa: string | null;
+  statusKunjungan: StatusKunjungan;
+  isPasienBaru: boolean;
+  tanggalMasuk: string;
+  tanggalKeluar: string | null;
+  pasien: {
+    id: string;
+    nama: string;
+    norm: string;
+    jenisKelamin: 'L' | 'P';
+    tanggalLahir: string | null;
+  };
+  dokter: { id: string; nama: string; spesialisasi: string | null };
+  ruangan: { id: string; nama: string; jenis: string; lantai: number | null };
+  operasi: { id: string; status: OperasiStatus; tanggalOperasi: string }[];
+};
+
 export type NotifikasiTipe = 'PASIEN_BARU' | 'REMINDER_OPERASI' | 'PERUBAHAN_JADWAL';
 
 export type NotifikasiItemApi = {

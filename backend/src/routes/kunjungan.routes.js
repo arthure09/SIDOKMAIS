@@ -1,0 +1,130 @@
+const express = require("express");
+const prisma = require("../lib/prisma");
+
+const router = express.Router();
+
+// Modul Konsul: read-only untuk kedua role (Kunjungan mensimulasikan sync
+// dari SIMRS, sama seperti Operasi — lihat CLAUDE.md Aturan #1). Belum ada
+// endpoint write di sini karena belum ada kebutuhan admin buat input manual;
+// data selalu datang dari seed/simulasi sync.
+const STATUS_KUNJUNGAN = ["SCHEDULED", "ONGOING", "COMPLETED", "CANCELLED"];
+const DEFAULT_LIMIT = 10;
+const MAX_LIMIT = 100;
+
+// Sama seperti operasi.routes.js: `dokterId` cuma diterima kalau role ADMIN.
+// DOKTER tidak pernah boleh nge-override filter kepemilikannya sendiri lewat
+// query — dokterId dipaksa dari req.user (JWT) di handler.
+function parseListQuery(query, role) {
+  const errors = [];
+
+  let status;
+  if (query.status !== undefined) {
+    if (!STATUS_KUNJUNGAN.includes(query.status)) {
+      errors.push(`status harus salah satu dari: ${STATUS_KUNJUNGAN.join(", ")}`);
+    } else {
+      status = query.status;
+    }
+  }
+
+  let page = 1;
+  if (query.page !== undefined) {
+    page = Number(query.page);
+    if (!Number.isInteger(page) || page < 1) {
+      errors.push("page harus bilangan bulat >= 1");
+    }
+  }
+
+  let limit = DEFAULT_LIMIT;
+  if (query.limit !== undefined) {
+    limit = Number(query.limit);
+    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
+      errors.push(`limit harus bilangan bulat antara 1 dan ${MAX_LIMIT}`);
+    }
+  }
+
+  let dokterId;
+  if (role === "ADMIN" && typeof query.dokterId === "string" && query.dokterId.trim() !== "") {
+    dokterId = query.dokterId.trim();
+  }
+
+  return { errors, values: { status, page, limit, dokterId } };
+}
+
+router.get("/", async (req, res) => {
+  const { role, dokterId: ownDokterId } = req.user;
+
+  if (role === "DOKTER" && !ownDokterId) {
+    return res.status(403).json({ message: "Akun ini tidak terhubung ke data dokter" });
+  }
+
+  const { errors, values } = parseListQuery(req.query, role);
+  if (errors.length > 0) {
+    return res.status(400).json({ message: "Query params tidak valid", errors });
+  }
+
+  const { status, page, limit, dokterId } = values;
+  const effectiveDokterId = role === "DOKTER" ? ownDokterId : dokterId;
+
+  const where = {
+    ...(status && { statusKunjungan: status }),
+    ...(effectiveDokterId && { dokterId: effectiveDokterId }),
+  };
+
+  const [total, kunjungan] = await Promise.all([
+    prisma.kunjungan.count({ where }),
+    prisma.kunjungan.findMany({
+      where,
+      select: {
+        id: true,
+        tanggalMasuk: true,
+        tanggalKeluar: true,
+        diagnosa: true,
+        statusKunjungan: true,
+        isPasienBaru: true,
+        ruangan: { select: { nama: true, jenis: true } },
+        pasien: { select: { id: true, nama: true, norm: true } },
+        dokter: { select: { id: true, nama: true } },
+      },
+      orderBy: { tanggalMasuk: "asc" },
+      skip: (page - 1) * limit,
+      take: limit,
+    }),
+  ]);
+
+  res.json({
+    data: kunjungan,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+    },
+  });
+});
+
+router.get("/:id", async (req, res) => {
+  const { role, dokterId: ownDokterId } = req.user;
+  const { id } = req.params;
+
+  const kunjungan = await prisma.kunjungan.findUnique({
+    where: { id },
+    include: {
+      pasien: true,
+      dokter: { select: { id: true, nama: true, spesialisasi: true } },
+      ruangan: true,
+      operasi: { select: { id: true, status: true, tanggalOperasi: true } },
+    },
+  });
+
+  if (!kunjungan) {
+    return res.status(404).json({ message: "Kunjungan tidak ditemukan" });
+  }
+
+  if (role === "DOKTER" && kunjungan.dokterId !== ownDokterId) {
+    return res.status(403).json({ message: "Anda tidak memiliki akses ke data kunjungan ini" });
+  }
+
+  res.json(kunjungan);
+});
+
+module.exports = router;

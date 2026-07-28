@@ -6,6 +6,7 @@ const morgan = require("morgan");
 const authRoutes = require("./routes/auth.routes");
 const pasienRoutes = require("./routes/pasien.routes");
 const operasiRoutes = require("./routes/operasi.routes");
+const kunjunganRoutes = require("./routes/kunjungan.routes");
 const notifikasiRoutes = require("./routes/notifikasi.routes");
 const authenticate = require("./middleware/auth.middleware");
 const authorize = require("./middleware/rbac.middleware");
@@ -23,6 +24,7 @@ app.get("/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/pasien", authenticate, authorize("DOKTER", "ADMIN"), pasienRoutes);
 app.use("/api/operasi", authenticate, authorize("DOKTER", "ADMIN"), operasiRoutes);
+app.use("/api/kunjungan", authenticate, authorize("DOKTER", "ADMIN"), kunjunganRoutes);
 // Notifikasi murni milik dokter — ADMIN tidak butuh akses ke sini.
 app.use("/api/notifikasi", authenticate, authorize("DOKTER"), notifikasiRoutes);
 

@@ -20,6 +20,7 @@ export type PasienStackParamList = {
 export type OperasiStackParamList = {
   JadwalOperasiKonsul: undefined;
   DetailJadwalOperasi: { operasiId: string };
+  DetailKonsul: { kunjunganId: string };
 };
 
 export type NotifikasiStackParamList = {

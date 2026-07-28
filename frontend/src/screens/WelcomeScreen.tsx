@@ -8,7 +8,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'Welcome'>;
 
 const ZOOM_FROM = 1.6;
 const ZOOM_DURATION = 900;
-const HOLD_BEFORE_NAVIGATE = 700;
+const HOLD_BEFORE_NAVIGATE = 600;
 const LOGO_ASPECT_RATIO = 1920 / 1080;
 
 export function WelcomeScreen({ navigation }: Props) {

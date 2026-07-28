@@ -7,17 +7,17 @@ import { colors, radius, spacing } from '../theme/colors';
 import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
 import { ApiError } from '../api/client';
-import { fetchOperasiDetail } from '../api/operasi';
+import { fetchKunjunganDetail } from '../api/kunjungan';
 import { useAuthStore } from '../store/authStore';
-import type { OperasiDetail } from '../api/types';
+import type { KunjunganDetail } from '../api/types';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import type { OperasiStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<OperasiStackParamList, 'DetailJadwalOperasi'>;
+type Props = NativeStackScreenProps<OperasiStackParamList, 'DetailKonsul'>;
 
 const STATUS_LABEL: Record<string, string> = {
-  IN_PROGRESS: 'Berlangsung',
   SCHEDULED: 'Terjadwal',
+  ONGOING: 'Berlangsung',
   COMPLETED: 'Selesai',
   CANCELLED: 'Dibatalkan',
 };
@@ -47,20 +47,12 @@ function calcUmur(tanggalLahir: string | null): number | null {
   return umur;
 }
 
-function initialsFromName(nama: string) {
-  const parts = nama.trim().split(/\s+/);
-  return parts
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase() ?? '')
-    .join('');
-}
-
-export function DetailJadwalOperasiScreen({ route, navigation }: Props) {
-  const { operasiId } = route.params;
+export function DetailKonsulScreen({ route, navigation }: Props) {
+  const { kunjunganId } = route.params;
   const token = useAuthStore((s) => s.token);
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
-  const [item, setItem] = useState<OperasiDetail | null>(null);
+  const [item, setItem] = useState<KunjunganDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -72,11 +64,11 @@ export function DetailJadwalOperasiScreen({ route, navigation }: Props) {
       setLoading(true);
       setError(null);
       try {
-        const result = await fetchOperasiDetail(token as string, operasiId);
+        const result = await fetchKunjunganDetail(token as string, kunjunganId);
         if (!cancelled) setItem(result);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : 'Gagal memuat detail jadwal operasi');
+          setError(err instanceof ApiError ? err.message : 'Gagal memuat detail konsul');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -87,7 +79,7 @@ export function DetailJadwalOperasiScreen({ route, navigation }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [token, operasiId]);
+  }, [token, kunjunganId]);
 
   const header = (
     <View style={[styles.header, { paddingTop: insets.top }]}>
@@ -95,12 +87,14 @@ export function DetailJadwalOperasiScreen({ route, navigation }: Props) {
         <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
       </Pressable>
       <Text style={styles.headerTitle} numberOfLines={1}>
-        {item?.jenisTindakan ?? 'Detail Operasi'}
+        {item?.diagnosa ?? 'Detail Konsul'}
       </Text>
       {item && (
         <View style={styles.statusPill}>
           <View style={styles.statusDot} />
-          <Text style={styles.statusPillText}>{STATUS_LABEL[item.status] ?? item.status}</Text>
+          <Text style={styles.statusPillText}>
+            {STATUS_LABEL[item.statusKunjungan] ?? item.statusKunjungan}
+          </Text>
         </View>
       )}
     </View>
@@ -122,15 +116,14 @@ export function DetailJadwalOperasiScreen({ route, navigation }: Props) {
       <View style={styles.container}>
         {header}
         <View style={styles.center}>
-          <Text style={styles.errorText}>{error ?? 'Data jadwal tidak ditemukan.'}</Text>
+          <Text style={styles.errorText}>{error ?? 'Data konsul tidak ditemukan.'}</Text>
         </View>
       </View>
     );
   }
 
-  const pasien = item.kunjungan.pasien;
-  const umur = calcUmur(pasien.tanggalLahir);
-  const jenisKelamin = pasien.jenisKelamin === 'L' ? 'Laki-laki' : 'Perempuan';
+  const umur = calcUmur(item.pasien.tanggalLahir);
+  const jenisKelamin = item.pasien.jenisKelamin === 'L' ? 'Laki-laki' : 'Perempuan';
 
   return (
     <View style={styles.container}>
@@ -146,70 +139,69 @@ export function DetailJadwalOperasiScreen({ route, navigation }: Props) {
               <MaterialIcons name="person" size={28} color={colors.primary} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.patientName}>{pasien.nama}</Text>
+              <Text style={styles.patientName}>{item.pasien.nama}</Text>
               <View style={styles.patientMetaRow}>
-                <Text style={styles.patientMetaText}>RM: {pasien.norm}</Text>
+                <Text style={styles.patientMetaText}>RM: {item.pasien.norm}</Text>
                 {umur !== null && <Text style={styles.patientMetaText}>{umur} Tahun</Text>}
                 <Text style={styles.patientMetaText}>{jenisKelamin}</Text>
               </View>
             </View>
+            {item.isPasienBaru && (
+              <View style={styles.baruPill}>
+                <Text style={styles.baruPillText}>Pasien Baru</Text>
+              </View>
+            )}
           </View>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>Informasi Jadwal</Text>
-          <InfoRow icon="medical-services" label="Tindakan" value={item.jenisTindakan} />
+          <Text style={styles.cardLabel}>Informasi Kunjungan</Text>
+          <InfoRow icon="description" label="Diagnosa" value={item.diagnosa ?? 'Belum ada diagnosa'} />
           <View style={styles.infoDivider} />
           <InfoRow
             icon="event"
             label="Waktu"
-            value={formatTanggal(item.tanggalOperasi)}
-            secondary={`${formatJam(item.tanggalOperasi)} WIB`}
+            value={formatTanggal(item.tanggalMasuk)}
+            secondary={`${formatJam(item.tanggalMasuk)} WIB`}
           />
           <View style={styles.infoDivider} />
           <InfoRow icon="location-on" label="Lokasi" value={item.ruangan.nama} />
-          {item.kunjungan.diagnosa && (
-            <>
-              <View style={styles.infoDivider} />
-              <InfoRow icon="description" label="Diagnosa" value={item.kunjungan.diagnosa} />
-            </>
-          )}
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>Tim Medis</Text>
-          <View style={{ gap: 8 }}>
-            {item.tim.map((nama) => (
-              <View key={nama} style={styles.timRow}>
-                <View style={styles.timAvatar}>
-                  <Text style={styles.timAvatarText}>{initialsFromName(nama)}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.timNama}>{nama}</Text>
-                </View>
-              </View>
-            ))}
+          <Text style={styles.cardLabel}>Dokter Penanggung Jawab</Text>
+          <View style={styles.timRow}>
+            <View style={styles.timAvatar}>
+              <Text style={styles.timAvatarText}>
+                {item.dokter.nama
+                  .replace(/^dr\.\s*/i, '')
+                  .slice(0, 2)
+                  .toUpperCase()}
+              </Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.timNama}>{item.dokter.nama}</Text>
+              {item.dokter.spesialisasi && <Text style={styles.timPeran}>{item.dokter.spesialisasi}</Text>}
+            </View>
           </View>
         </View>
 
-        {(item.catatanPreOp || item.catatanPostOp) && (
-          <View style={styles.notesCard}>
-            <View style={styles.notesHeader}>
-              <MaterialIcons name="info" size={18} color="#5f6200" />
-              <Text style={styles.notesTitle}>Catatan Tindakan</Text>
-            </View>
-            {item.catatanPreOp && (
-              <View style={styles.notesItem}>
-                <Text style={styles.notesBullet}>{'•'}</Text>
-                <Text style={styles.notesText}>Pra-operasi: {item.catatanPreOp}</Text>
-              </View>
-            )}
-            {item.catatanPostOp && (
-              <View style={styles.notesItem}>
-                <Text style={styles.notesBullet}>{'•'}</Text>
-                <Text style={styles.notesText}>Pasca-operasi: {item.catatanPostOp}</Text>
-              </View>
-            )}
+        {item.operasi.length > 0 && (
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>Tindak Lanjut Operasi</Text>
+            {item.operasi.map((op) => (
+              <Pressable
+                key={op.id}
+                onPress={() => navigation.navigate('DetailJadwalOperasi', { operasiId: op.id })}
+                style={styles.operasiRow}
+              >
+                <MaterialIcons name="medical-services" size={20} color={colors.primary} />
+                <Text style={styles.operasiRowText}>
+                  {formatTanggal(op.tanggalOperasi)} — {STATUS_LABEL[op.status] ?? op.status}
+                </Text>
+                <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
+              </Pressable>
+            ))}
           </View>
         )}
       </ScrollView>
@@ -321,6 +313,13 @@ const styles = StyleSheet.create({
   patientName: { fontSize: ms(18), fontWeight: '700', color: colors.onSurface, marginBottom: ms(6) },
   patientMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: ms(12) },
   patientMetaText: { fontSize: ms(13), color: colors.onSurfaceVariant },
+  baruPill: {
+    backgroundColor: `${colors.primaryContainer}80`,
+    paddingHorizontal: ms(10),
+    paddingVertical: ms(6),
+    borderRadius: radius.full,
+  },
+  baruPillText: { fontSize: ms(11), fontWeight: '700', color: colors.onPrimaryContainer },
 
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: ms(16) },
   infoIconCircle: {
@@ -347,24 +346,13 @@ const styles = StyleSheet.create({
   },
   timAvatarText: { fontSize: ms(12), fontWeight: '700', color: colors.onPrimary },
   timNama: { fontSize: ms(14), fontWeight: '600', color: colors.onSurface },
+  timPeran: { fontSize: ms(12), color: colors.onSurfaceVariant },
 
-  notesCard: {
-    backgroundColor: '#F5F6D9',
-    borderRadius: radius.sm,
-    padding: spacing.cardPadding,
-    borderWidth: 1,
-    borderColor: '#e4eb4180',
-    gap: ms(10),
+  operasiRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: ms(12),
+    paddingVertical: ms(10),
   },
-  notesHeader: { flexDirection: 'row', alignItems: 'center', gap: ms(8) },
-  notesTitle: {
-    fontSize: ms(12),
-    fontWeight: '700',
-    letterSpacing: 0.5,
-    color: '#5f6200',
-    textTransform: 'uppercase',
-  },
-  notesItem: { flexDirection: 'row', gap: ms(8), paddingLeft: ms(4) },
-  notesBullet: { fontSize: ms(13), color: colors.onSurfaceVariant },
-  notesText: { flex: 1, fontSize: ms(13), color: colors.onSurfaceVariant },
+  operasiRowText: { flex: 1, fontSize: ms(14), color: colors.onSurface },
 });
