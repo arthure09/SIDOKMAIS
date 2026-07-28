@@ -201,6 +201,24 @@ function validatePatchBody(body) {
   return { errors, data };
 }
 
+// Bangun pesan notifikasi PERUBAHAN_JADWAL kalau `status` atau
+// `tanggalOperasi` benar-benar berubah nilainya (bukan cuma dikirim di body
+// dengan nilai yang sama). Return null kalau tidak ada perubahan yang relevan
+// buat notifikasi dokter (mis. PATCH cuma ubah catatanPreOp).
+function buildPerubahanJadwalPesan(before, after) {
+  const bagian = [];
+
+  if (after.status !== before.status) {
+    bagian.push(`status diubah dari ${before.status} menjadi ${after.status}`);
+  }
+  if (after.tanggalOperasi.getTime() !== before.tanggalOperasi.getTime()) {
+    bagian.push(`tanggal operasi diubah menjadi ${after.tanggalOperasi.toLocaleString("id-ID")}`);
+  }
+
+  if (bagian.length === 0) return null;
+  return `Jadwal operasi Anda berubah: ${bagian.join("; ")}.`;
+}
+
 router.post("/", authorize("ADMIN"), async (req, res) => {
   const { errors, tanggalOperasi } = validateCreateBody(req.body);
   if (errors.length > 0) {
@@ -279,6 +297,34 @@ router.patch("/:id", authorize("ADMIN"), async (req, res) => {
     beforeData: before,
     afterData: after,
   });
+
+  // Trigger notifikasi PERUBAHAN_JADWAL (Prioritas 2, catch-up Hari 12-13 —
+  // docs/prompts/hari-12-13-notifikasi.md). Ditujukan ke dokter pemilik
+  // kunjungan, BUKAN ke req.user — PATCH ini bisa dikerjakan ADMIN atas nama
+  // dokter lain, jadi dokterId notifikasi selalu diambil dari relasi
+  // kunjungan, tidak pernah dari identitas yang sedang PATCH. Kegagalan bikin
+  // notifikasi tidak boleh menggagalkan response utama PATCH ini, sama
+  // seperti pola fault-tolerant di utils/auditLog.js.
+  const pesanPerubahan = buildPerubahanJadwalPesan(before, after);
+  if (pesanPerubahan) {
+    try {
+      const kunjungan = await prisma.kunjungan.findUnique({
+        where: { id: before.kunjunganId },
+        select: { dokterId: true },
+      });
+      if (kunjungan) {
+        await prisma.notifikasi.create({
+          data: {
+            dokterId: kunjungan.dokterId,
+            tipe: "PERUBAHAN_JADWAL",
+            pesan: pesanPerubahan,
+          },
+        });
+      }
+    } catch (err) {
+      console.error("Gagal membuat Notifikasi PERUBAHAN_JADWAL:", err);
+    }
+  }
 
   res.json(after);
 });

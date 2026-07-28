@@ -52,6 +52,22 @@ export type PasienDetail = {
   riwayatKunjungan: RiwayatKunjungan[];
 };
 
+export type NotifikasiTipe = 'PASIEN_BARU' | 'REMINDER_OPERASI' | 'PERUBAHAN_JADWAL';
+
+export type NotifikasiItemApi = {
+  id: string;
+  dokterId: string;
+  tipe: NotifikasiTipe;
+  pesan: string;
+  isRead: boolean;
+  createdAt: string;
+};
+
+export type NotifikasiListResponse = {
+  data: NotifikasiItemApi[];
+  pagination: Pagination;
+};
+
 export type LoginResponse = {
   token: string;
   pengguna: {

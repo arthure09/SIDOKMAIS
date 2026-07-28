@@ -6,6 +6,7 @@ const morgan = require("morgan");
 const authRoutes = require("./routes/auth.routes");
 const pasienRoutes = require("./routes/pasien.routes");
 const operasiRoutes = require("./routes/operasi.routes");
+const notifikasiRoutes = require("./routes/notifikasi.routes");
 const authenticate = require("./middleware/auth.middleware");
 const authorize = require("./middleware/rbac.middleware");
 
@@ -22,6 +23,8 @@ app.get("/health", (req, res) => {
 app.use("/api/auth", authRoutes);
 app.use("/api/pasien", authenticate, authorize("DOKTER", "ADMIN"), pasienRoutes);
 app.use("/api/operasi", authenticate, authorize("DOKTER", "ADMIN"), operasiRoutes);
+// Notifikasi murni milik dokter — ADMIN tidak butuh akses ke sini.
+app.use("/api/notifikasi", authenticate, authorize("DOKTER"), notifikasiRoutes);
 
 // Endpoint uji coba RBAC (bukan endpoint produksi) — echo req.user apa
 // adanya untuk verifikasi visual bahwa authenticate + authorize sudah benar.

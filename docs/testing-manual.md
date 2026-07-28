@@ -98,11 +98,45 @@ tanggal 23 Jul 2026.
 - [ ] Cek bentrok jadwal (ruangan + waktu overlap) — belum diimplementasikan, dicatat sebagai utang teknis untuk Hari 17 (validation layer chatbot)
 - [ ] Validasi transisi status (mis. `COMPLETED` tidak boleh balik ke `SCHEDULED`) — skip untuk MVP, cuma divalidasi value-nya termasuk salah satu dari 4 enum
 
-## Modul: Notifikasi (Hari 12-13) — isi setelah dibangun
+## Modul: Notifikasi (Hari 12-13)
+
+Endpoint: `GET/PATCH /api/notifikasi`. RBAC per-route — DOKTER only, ADMIN
+sengaja tidak diberi akses (notifikasi murni milik dokter). Dites manual pakai
+curl + token JWT dari login asli (1 akun DOKTER dari seed + 1 ADMIN) terhadap
+data seed asli, tanggal 28 Jul 2026 (catch-up `docs/prompts/hari-12-13-notifikasi.md`,
+Prioritas 1 & 2).
+
+- [x] `GET /api/notifikasi` cuma nampilin punya dokter yang login — dicek
+      manual terhadap DB, `dokterId` di tiap row cocok sama dokter yang login,
+      gak ada yang nyempil dari dokter lain
+- [x] Filter `?isRead=false` jalan — semua row hasilnya `isRead: false`
+- [x] ADMIN akses `/api/notifikasi` → 403 "Akses ditolak untuk role ini"
+      (by design, lihat `server.js`)
+- [x] `PATCH /api/notifikasi/:id/read` atas notifikasi milik sendiri → 200,
+      `isRead` jadi `true`, tercatat 1 row `AuditLog` (`entityType: "Notifikasi"`,
+      before/afterData lengkap) — keputusan buat tetap audit mark-as-read
+      didokumentasikan di komentar `notifikasi.routes.js`
+- [x] `PATCH` notifikasi milik dokter lain → 404 (bukan 403 — sengaja, biar
+      gak bocorin bahwa ID itu valid tapi punya orang lain)
+- [x] `PATCH` dengan id yang gak eksis sama sekali → 404 juga (konsisten
+      sama skenario di atas)
+- [x] Trigger `PERUBAHAN_JADWAL` (Prioritas 2) — `PATCH /api/operasi/:id`
+      ubah `catatanPreOp` doang → TIDAK bikin notifikasi baru; ubah
+      `tanggalOperasi` (nilai beneran berubah) → bikin 1 row `Notifikasi`
+      baru `tipe: PERUBAHAN_JADWAL` dengan `dokterId` dari kunjungan operasi
+      itu, BUKAN dari ADMIN yang PATCH
 - [ ] Push notification masuk ke device (Expo Go) untuk: pasien baru,
-      reminder H-1/H-2, perubahan jadwal
-- [ ] In-app notification list cuma nampilin punya dokter yang login
-- [ ] Notifikasi pasien lain TIDAK bocor ke dokter yang salah
+      reminder H-1/H-2, perubahan jadwal — **belum dikerjakan (Prioritas 3,
+      sengaja ditunda)**: butuh migration `expoPushToken` di `Pengguna`,
+      `expo-server-sdk`, dan desain scheduled job buat reminder H-1/H-2
+- [ ] Trigger `PASIEN_BARU` — belum ada hook nyata (belum ada endpoint yang
+      bikin `DokterPasienAssignment` baru di luar seed), dicatat sebagai utang
+      teknis, bukan bug
+
+**Belum dites:** Expo Go / HP fisik untuk `NotifikasiScreen` (frontend) —
+verifikasi backend di atas semuanya via curl langsung ke API, ditambah
+`npx tsc --noEmit` bersih di frontend, tapi belum ada smoke test di device
+beneran.
 
 ## Modul: Home, Profil Dokter, Data Pendapatan (frontend, UI-only)
 - [ ] Greeting Home & nama di Profil Dokter nunjukkin nama dokter yang beneran
@@ -116,12 +150,25 @@ tanggal 23 Jul 2026.
       ke-clear (coba buka ulang app, harus diminta login lagi)
 - [ ] Menu "Data Pendapatan" di Profil Dokter navigasinya benar
 
-## Modul: Notifikasi + Detail Laporan Lab (frontend, UI-only)
-- [ ] Filter kategori (Semua/Hasil Lab/Jadwal/Sistem) di List Notifikasi jalan
-- [ ] Tap notifikasi kategori Lab → buka Detail Laporan Lab, kategori lain gak
-      bisa ditap (sesuai `bukaLaporanLab` flag)
-- [ ] Tombol "Validasi & Tandai Dibaca" berubah jadi "Sudah Dibaca" setelah
-      ditekan (lihat item 3)
+## Modul: Notifikasi + Detail Laporan Lab (frontend)
+`NotifikasiScreen` sejak 28 Jul 2026 sudah manggil `/api/notifikasi` asli
+(bukan mock lagi) — checklist di bawah update dari versi UI-only sebelumnya.
+`DetailLaporanLabScreen` TETAP murni dekoratif (entity Laporan Lab belum ada
+modelnya), entry point-nya di List Notifikasi sekarang 1 item statis terpisah
+dari hasil fetch API.
+- [ ] Filter kategori (Semua/Hasil Lab/Pasien Baru/Jadwal) di List Notifikasi
+      jalan — chip "Sistem" versi lama di-drop karena gak ada `tipe` enum yang
+      merepresentasikannya
+- [ ] List notifikasi asli (Pasien Baru/Jadwal) muncul sesuai data dokter yang
+      login, loading/error/empty state jalan (belum dites HP fisik, baru
+      verifikasi kode + curl backend)
+- [ ] Tap notifikasi unread (Pasien Baru/Jadwal) → `isRead` jadi true
+      (optimistic update), tetap true setelah reload screen
+- [ ] Tap item "Hasil Lab" (statis/demo) → buka Detail Laporan Lab, kategori
+      lain gak bisa ditap kalau sudah `isRead: true`
+- [ ] Tombol "Validasi & Tandai Dibaca" di Detail Laporan Lab berubah jadi
+      "Sudah Dibaca" setelah ditekan (lihat item 3, item ini state lokal
+      layar itu sendiri, tidak terkait `/api/notifikasi`)
 
 ## Modul: Jadwal Operasi + Detail Jadwal (frontend, UI-only)
 - [ ] Toggle Operasi/Konsul — tab Konsul nampilin state "segera hadir", BUKAN
@@ -170,4 +217,12 @@ Copy baris ini tiap sesi testing manual:
 | 2026-07-23 | Data Operasi | ADMIN CRUD lintas dokter | Berhasil, muncul di list dokter terkait | Sesuai | PASS | |
 | 2026-07-23 | Data Operasi | AuditLog untuk POST/PATCH/DELETE | 1 row per aksi, before/afterData sesuai | Sesuai | PASS | |
 | 2026-07-23 | Data Operasi | DELETE operasi ber-Pendapatan | 409 rapi | 409 rapi | PASS | Prisma P2003 ditangkap |
+| 2026-07-28 | Notifikasi | DOKTER GET list | Cuma punya sendiri | Sesuai | PASS | |
+| 2026-07-28 | Notifikasi | GET filter `?isRead=false` | Semua row `isRead:false` | Sesuai | PASS | |
+| 2026-07-28 | Notifikasi | ADMIN GET list | 403 | 403 | PASS | By design, ADMIN gak butuh akses |
+| 2026-07-28 | Notifikasi | PATCH read milik sendiri | 200 + AuditLog row | Sesuai | PASS | |
+| 2026-07-28 | Notifikasi | PATCH read milik dokter lain | 404 | 404 | PASS | Sengaja 404, bukan 403 |
+| 2026-07-28 | Notifikasi | PATCH read id tidak eksis | 404 | 404 | PASS | |
+| 2026-07-28 | Data Operasi | PATCH catatanPreOp doang | Tidak bikin Notifikasi | Sesuai | PASS | Trigger PERUBAHAN_JADWAL |
+| 2026-07-28 | Data Operasi | PATCH tanggalOperasi (beneran berubah) | 1 row Notifikasi PERUBAHAN_JADWAL, dokterId dari kunjungan | Sesuai | PASS | Data uji di-revert setelah tes |
 | | | | | | | |

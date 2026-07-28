@@ -1,31 +1,143 @@
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../theme/colors';
 import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
-import { notifikasiList, type NotifikasiKategori } from '../mocks/notifikasiMock';
+import { ApiError } from '../api/client';
+import { fetchNotifikasiList, markNotifikasiRead } from '../api/notifikasi';
+import { useAuthStore } from '../store/authStore';
+import type { NotifikasiItemApi, NotifikasiTipe } from '../api/types';
+import { notifikasiList as notifikasiMockList } from '../mocks/notifikasiMock';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import type { NotifikasiStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<NotifikasiStackParamList, 'NotifikasiList'>;
 
-const FILTERS: { label: string; value: NotifikasiKategori | 'Semua' }[] = [
+type DisplayKategori = 'Lab' | 'Pasien Baru' | 'Jadwal';
+
+type DisplayItem = {
+  id: string;
+  kategori: DisplayKategori;
+  judul: string;
+  pesan: string;
+  waktu: string;
+  isRead: boolean;
+  icon: string;
+  bukaLaporanLab?: boolean;
+  /** Item demo statis (entity Laporan Lab belum ada modelnya) — tidak pernah manggil API. */
+  isDemo?: boolean;
+};
+
+// entity "Laporan Lab" belum ada modelnya (lihat CLAUDE.md) — DetailLaporanLabScreen
+// tetap murni UI dekoratif, jadi entry point-nya di sini tetap statis dari mock,
+// bukan hasil fetch ke /api/notifikasi (beda entity, jangan disambungin).
+const LAB_DEMO_ITEM: DisplayItem | undefined = (() => {
+  const mock = notifikasiMockList.find((n) => n.bukaLaporanLab);
+  if (!mock) return undefined;
+  return {
+    id: mock.id,
+    kategori: 'Lab',
+    judul: mock.judul,
+    pesan: mock.pesan,
+    waktu: mock.waktu,
+    isRead: mock.isRead,
+    icon: mock.icon,
+    bukaLaporanLab: true,
+    isDemo: true,
+  };
+})();
+
+const TIPE_META: Record<NotifikasiTipe, { kategori: DisplayKategori; judul: string; icon: string }> = {
+  PASIEN_BARU: { kategori: 'Pasien Baru', judul: 'Pasien Baru Ditugaskan', icon: 'person-add' },
+  REMINDER_OPERASI: { kategori: 'Jadwal', judul: 'Pengingat Operasi', icon: 'event' },
+  PERUBAHAN_JADWAL: { kategori: 'Jadwal', judul: 'Perubahan Jadwal', icon: 'event-busy' },
+};
+
+const FILTERS: { label: string; value: DisplayKategori | 'Semua' }[] = [
   { label: 'Semua', value: 'Semua' },
   { label: 'Hasil Lab', value: 'Lab' },
+  { label: 'Pasien Baru', value: 'Pasien Baru' },
   { label: 'Jadwal', value: 'Jadwal' },
-  { label: 'Sistem', value: 'Sistem' },
 ];
+
+function formatWaktu(iso: string) {
+  const date = new Date(iso);
+  const diffMin = Math.floor((Date.now() - date.getTime()) / 60000);
+
+  if (diffMin < 1) return 'Baru saja';
+  if (diffMin < 60) return `${diffMin} menit lalu`;
+  const diffHour = Math.floor(diffMin / 60);
+  if (diffHour < 24) return `${diffHour} jam lalu`;
+  const diffDay = Math.floor(diffHour / 24);
+  if (diffDay === 1) {
+    return `Kemarin, ${date.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`;
+  }
+  return `${diffDay} hari lalu`;
+}
+
+function toDisplayItem(item: NotifikasiItemApi): DisplayItem {
+  const meta = TIPE_META[item.tipe];
+  return {
+    id: item.id,
+    kategori: meta.kategori,
+    judul: meta.judul,
+    pesan: item.pesan,
+    waktu: formatWaktu(item.createdAt),
+    isRead: item.isRead,
+    icon: meta.icon,
+  };
+}
 
 export function NotifikasiScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
   const { onScroll, scrollEventThrottle } = useTabBarDockOnScroll();
-  const [filter, setFilter] = useState<NotifikasiKategori | 'Semua'>('Semua');
-  const items = notifikasiList.filter((n) => filter === 'Semua' || n.kategori === filter);
+  const token = useAuthStore((s) => s.token);
+  const [filter, setFilter] = useState<DisplayKategori | 'Semua'>('Semua');
+  const [apiItems, setApiItems] = useState<NotifikasiItemApi[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    if (!token) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const result = await fetchNotifikasiList(token, { page: 1, limit: 50 });
+      setApiItems(result.data);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Gagal memuat notifikasi');
+    } finally {
+      setLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const items = [...(LAB_DEMO_ITEM ? [LAB_DEMO_ITEM] : []), ...apiItems.map(toDisplayItem)].filter(
+    (n) => filter === 'Semua' || n.kategori === filter
+  );
+
+  async function handlePress(item: DisplayItem) {
+    if (item.bukaLaporanLab) {
+      navigation.navigate('DetailLaporanLab');
+      return;
+    }
+    if (item.isDemo || item.isRead || !token) return;
+
+    setApiItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)));
+    try {
+      await markNotifikasiRead(token, item.id);
+    } catch {
+      setApiItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, isRead: false } : n)));
+    }
+  }
 
   return (
     <View style={styles.container}>
@@ -53,63 +165,80 @@ export function NotifikasiScreen({ navigation }: Props) {
         </View>
       </View>
 
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
-        showsVerticalScrollIndicator={false}
-        onScroll={onScroll}
-        scrollEventThrottle={scrollEventThrottle}
-      >
-        <View style={{ gap: spacing.gutter }}>
-          {items.map((item) => (
-            <Pressable
-              key={item.id}
-              disabled={!item.bukaLaporanLab}
-              onPress={() => item.bukaLaporanLab && navigation.navigate('DetailLaporanLab')}
-              style={({ pressed }) => [
-                styles.card,
-                !item.isRead && styles.cardUnread,
-                item.isRead && styles.cardRead,
-                pressed && styles.cardPressed,
-              ]}
-            >
-              {!item.isRead && <View style={styles.unreadDot} />}
-              <View
-                style={[
-                  styles.iconCircle,
-                  item.isRead && styles.iconCircleRead,
-                  item.kategori === 'Jadwal' && !item.isRead && styles.iconCircleJadwal,
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.primary} />
+        </View>
+      ) : error ? (
+        <View style={styles.center}>
+          <Text style={styles.errorText}>{error}</Text>
+        </View>
+      ) : items.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={styles.emptyText}>Tidak ada notifikasi.</Text>
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
+          showsVerticalScrollIndicator={false}
+          onScroll={onScroll}
+          scrollEventThrottle={scrollEventThrottle}
+        >
+          <View style={{ gap: spacing.gutter }}>
+            {items.map((item) => (
+              <Pressable
+                key={item.id}
+                disabled={item.isDemo ? false : item.isRead}
+                onPress={() => handlePress(item)}
+                style={({ pressed }) => [
+                  styles.card,
+                  !item.isRead && styles.cardUnread,
+                  item.isRead && styles.cardRead,
+                  pressed && styles.cardPressed,
                 ]}
               >
-                <MaterialIcons
-                  name={item.icon as never}
-                  size={22}
-                  color={item.isRead ? colors.outline : colors.primary}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <View style={styles.cardTopRow}>
-                  <View style={styles.kategoriPill}>
-                    <Text style={styles.kategoriPillText}>{item.kategori}</Text>
-                  </View>
-                  <Text style={styles.waktuText}>{item.waktu}</Text>
+                {!item.isRead && <View style={styles.unreadDot} />}
+                <View
+                  style={[
+                    styles.iconCircle,
+                    item.isRead && styles.iconCircleRead,
+                    item.kategori === 'Jadwal' && !item.isRead && styles.iconCircleJadwal,
+                  ]}
+                >
+                  <MaterialIcons
+                    name={item.icon as never}
+                    size={22}
+                    color={item.isRead ? colors.outline : colors.primary}
+                  />
                 </View>
-                <Text style={styles.judul} numberOfLines={2}>
-                  {item.judul}
-                </Text>
-                <Text style={styles.pesan} numberOfLines={2}>
-                  {item.pesan}
-                </Text>
-              </View>
-            </Pressable>
-          ))}
-        </View>
-      </ScrollView>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.cardTopRow}>
+                    <View style={styles.kategoriPill}>
+                      <Text style={styles.kategoriPillText}>{item.kategori}</Text>
+                    </View>
+                    <Text style={styles.waktuText}>{item.waktu}</Text>
+                  </View>
+                  <Text style={styles.judul} numberOfLines={2}>
+                    {item.judul}
+                  </Text>
+                  <Text style={styles.pesan} numberOfLines={2}>
+                    {item.pesan}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        </ScrollView>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  errorText: { color: colors.error, textAlign: 'center' },
+  emptyText: { color: colors.onSurfaceVariant, textAlign: 'center' },
   header: {
     paddingHorizontal: spacing.marginMobile,
     paddingBottom: ms(10),
