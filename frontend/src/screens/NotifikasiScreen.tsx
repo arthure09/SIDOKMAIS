@@ -30,6 +30,8 @@ type DisplayItem = {
   bukaLaporanLab?: boolean;
   /** Item demo statis (entity Laporan Lab belum ada modelnya) — tidak pernah manggil API. */
   isDemo?: boolean;
+  /** Cuma diisi dari respons API — dipakai buat tampilan ADMIN (lintas dokter). */
+  dokterNama?: string;
 };
 
 // entity "Laporan Lab" belum ada modelnya (lihat CLAUDE.md) — DetailLaporanLabScreen
@@ -89,6 +91,7 @@ function toDisplayItem(item: NotifikasiItemApi): DisplayItem {
     waktu: formatWaktu(item.createdAt),
     isRead: item.isRead,
     icon: meta.icon,
+    dokterNama: item.dokter.nama,
   };
 }
 
@@ -97,6 +100,8 @@ export function NotifikasiScreen({ navigation }: Props) {
   const tabBarClearance = useTabBarClearance();
   const { onScroll, scrollEventThrottle } = useTabBarDockOnScroll();
   const token = useAuthStore((s) => s.token);
+  const role = useAuthStore((s) => s.pengguna?.role);
+  const isAdmin = role === 'ADMIN';
   const [filter, setFilter] = useState<DisplayKategori | 'Semua'>('Semua');
   const [apiItems, setApiItems] = useState<NotifikasiItemApi[]>([]);
   const [loading, setLoading] = useState(true);
@@ -124,19 +129,31 @@ export function NotifikasiScreen({ navigation }: Props) {
     (n) => filter === 'Semua' || n.kategori === filter
   );
 
-  async function handlePress(item: DisplayItem) {
+  function handlePress(item: DisplayItem) {
     if (item.bukaLaporanLab) {
       navigation.navigate('DetailLaporanLab');
       return;
     }
-    if (item.isDemo || item.isRead || !token) return;
 
-    setApiItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)));
-    try {
-      await markNotifikasiRead(token, item.id);
-    } catch {
-      setApiItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, isRead: false } : n)));
+    // ADMIN cuma boleh lihat notifikasi dokter lain — mark-as-read tetap
+    // hak milik dokter yang bersangkutan, jadi jangan dicoba dari sini.
+    const willMarkRead = !item.isDemo && !item.isRead && !!token && role === 'DOKTER';
+    if (willMarkRead) {
+      setApiItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)));
+      markNotifikasiRead(token as string, item.id).catch(() => {
+        setApiItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, isRead: false } : n)));
+      });
     }
+
+    navigation.navigate('DetailNotifikasi', {
+      kategori: item.kategori as 'Pasien Baru' | 'Jadwal',
+      judul: item.judul,
+      pesan: item.pesan,
+      waktu: item.waktu,
+      icon: item.icon,
+      isRead: item.isRead || willMarkRead,
+      dokterNama: isAdmin ? item.dokterNama : undefined,
+    });
   }
 
   return (
@@ -147,7 +164,12 @@ export function NotifikasiScreen({ navigation }: Props) {
           <Text style={styles.subtitle}>Pembaruan klinis dan jadwal Anda.</Text>
         </View>
 
-        <View style={styles.filterRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.filterScroll}
+          contentContainerStyle={styles.filterRow}
+        >
           {FILTERS.map((f) => {
             const active = filter === f.value;
             return (
@@ -162,7 +184,7 @@ export function NotifikasiScreen({ navigation }: Props) {
               </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
       </View>
 
       {loading ? (
@@ -188,12 +210,10 @@ export function NotifikasiScreen({ navigation }: Props) {
             {items.map((item) => (
               <Pressable
                 key={item.id}
-                disabled={item.isDemo ? false : item.isRead}
                 onPress={() => handlePress(item)}
                 style={({ pressed }) => [
                   styles.card,
                   !item.isRead && styles.cardUnread,
-                  item.isRead && styles.cardRead,
                   pressed && styles.cardPressed,
                 ]}
               >
@@ -218,6 +238,11 @@ export function NotifikasiScreen({ navigation }: Props) {
                     </View>
                     <Text style={styles.waktuText}>{item.waktu}</Text>
                   </View>
+                  {isAdmin && item.dokterNama && (
+                    <Text style={styles.dokterNamaText} numberOfLines={1}>
+                      {item.dokterNama}
+                    </Text>
+                  )}
                   <Text style={styles.judul} numberOfLines={2}>
                     {item.judul}
                   </Text>
@@ -250,7 +275,8 @@ const styles = StyleSheet.create({
   title: { fontSize: ms(20), fontWeight: '800', color: colors.onBackground },
   subtitle: { fontSize: ms(12), color: colors.outline, marginTop: ms(2) },
 
-  filterRow: { flexDirection: 'row', gap: ms(8), flexWrap: 'wrap', marginTop: ms(10) },
+  filterScroll: { marginHorizontal: -spacing.marginMobile, marginTop: ms(10) },
+  filterRow: { flexDirection: 'row', gap: ms(8), paddingHorizontal: spacing.marginMobile },
   filterChip: {
     paddingHorizontal: ms(14),
     paddingVertical: ms(6),
@@ -280,7 +306,6 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 2,
   },
-  cardRead: { opacity: 0.75 },
   cardPressed: { opacity: 0.9 },
   unreadDot: {
     position: 'absolute',
@@ -316,6 +341,7 @@ const styles = StyleSheet.create({
   },
   kategoriPillText: { fontSize: ms(10), fontWeight: '700', color: colors.primary },
   waktuText: { fontSize: ms(11), color: colors.outline },
+  dokterNamaText: { fontSize: ms(12), fontWeight: '600', color: colors.primary, marginBottom: ms(2) },
   judul: { fontSize: ms(16), fontWeight: '700', color: colors.onBackground, marginBottom: ms(4) },
   pesan: { fontSize: ms(13), color: colors.onSurfaceVariant },
 });

@@ -18,13 +18,12 @@ const TAB_ICON: Record<keyof MainTabParamList, React.ComponentProps<typeof Mater
 const TAB_LABEL: Record<keyof MainTabParamList, string> = {
   HomeTab: 'Home',
   PasienTab: 'Pasien',
-  OperasiTab: 'Operasi',
+  OperasiTab: 'Jadwal',
   NotifikasiTab: 'Notifikasi',
   ProfilTab: 'Profil',
 };
 
 const INDICATOR_INSET = 9;
-const RIPPLE_SIZE = 78;
 const ICON_SIZE = 33;
 
 function TabButton({
@@ -38,14 +37,9 @@ function TabButton({
   itemWidth: number;
   onPress: () => void;
 }) {
-  const ripple = useRef(new Animated.Value(0)).current;
   const scale = useRef(new Animated.Value(1)).current;
 
   const handlePress = () => {
-    ripple.setValue(0);
-    Animated.timing(ripple, { toValue: 1, duration: 380, useNativeDriver: true }).start(() => {
-      ripple.setValue(0);
-    });
     Animated.sequence([
       Animated.timing(scale, { toValue: 0.88, duration: 70, useNativeDriver: true }),
       Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 4, tension: 80 }),
@@ -53,24 +47,10 @@ function TabButton({
     onPress();
   };
 
-  const rippleScale = ripple.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1.8] });
-  const rippleOpacity = ripple.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.28, 0.14, 0] });
   const color = isFocused ? colors.primary : colors.outline;
 
   return (
     <Pressable onPress={handlePress} style={[styles.tabButton, { width: itemWidth }]} hitSlop={8}>
-      <View style={styles.rippleContainer} pointerEvents="none">
-        <Animated.View
-          style={[
-            styles.ripple,
-            {
-              backgroundColor: colors.primaryContainer,
-              opacity: rippleOpacity,
-              transform: [{ scale: rippleScale }],
-            },
-          ]}
-        />
-      </View>
       <Animated.View style={{ alignItems: 'center', transform: [{ scale }] }}>
         <MaterialIcons name={TAB_ICON[routeName]} size={ICON_SIZE} color={color} />
         <Text
@@ -172,17 +152,6 @@ const styles = StyleSheet.create({
     height: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  rippleContainer: {
-    ...StyleSheet.absoluteFillObject,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  ripple: {
-    width: RIPPLE_SIZE,
-    height: RIPPLE_SIZE,
-    borderRadius: RIPPLE_SIZE / 2,
   },
   label: {
     marginTop: 3,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -81,15 +81,7 @@ export function PasienListScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top }]}>
-        <Image
-          source={require('../../assets/Logo sidokmais.png')}
-          style={styles.headerLogo}
-          resizeMode="contain"
-        />
-      </View>
-
-      <View style={styles.searchWrapper}>
+      <View style={[styles.searchWrapper, { marginTop: insets.top + spacing.base }]}>
         <MaterialIcons name="search" size={20} color={colors.primary} />
         <TextInput
           value={searchInput}
@@ -134,6 +126,7 @@ export function PasienListScreen({ navigation }: Props) {
           data={items}
           keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
+          showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={scrollEventThrottle}
           renderItem={({ item }) => {
@@ -199,19 +192,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   errorText: { color: colors.error, textAlign: 'center' },
   emptyText: { color: colors.onSurfaceVariant, textAlign: 'center' },
-
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: 64,
-    paddingHorizontal: spacing.marginMobile,
-    paddingBottom: spacing.base,
-  },
-  headerLogo: {
-    width: 150,
-    height: 52.5,
-  },
 
   searchWrapper: {
     flexDirection: 'row',

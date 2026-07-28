@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -5,10 +6,25 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/authStore';
 import { colors, radius, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
-import { navigasiCards, pasienPrioritas, ringkasanAktivitas, statistikMingguan } from '../mocks/homeMock';
+import { navigasiCards, pasienPrioritas, statistikMingguan } from '../mocks/homeMock';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import type { MainTabParamList } from '../navigation/types';
+import { fetchPasienList } from '../api/pasien';
+import { fetchOperasiList } from '../api/operasi';
+import { fetchKunjunganList } from '../api/kunjungan';
+
+const RINGKASAN_FETCH_LIMIT = 100;
+
+function isHariIni(value: string) {
+  const d = new Date(value);
+  const now = new Date();
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  );
+}
 
 type Props = BottomTabScreenProps<MainTabParamList, 'HomeTab'>;
 
@@ -20,7 +36,7 @@ const RINGKASAN_ROWS = [
     icon: 'local-hospital',
     tint: colors.tertiaryContainer,
   },
-  { key: 'konsulHariIni' as const, label: 'Konsul Hari Ini', icon: 'chat-bubble', tint: colors.primary },
+  { key: 'konsulHariIni' as const, label: 'Konsultasi Hari Ini', icon: 'chat-bubble', tint: colors.primary },
 ];
 
 const CARD_TARGET_TAB: Partial<Record<string, keyof MainTabParamList>> = {
@@ -34,6 +50,35 @@ export function HomeScreen({ navigation }: Props) {
   const tabBarClearance = useTabBarClearance();
   const { onScroll, scrollEventThrottle } = useTabBarDockOnScroll();
   const dokterNama = useAuthStore((s) => s.pengguna?.dokter?.nama);
+  const token = useAuthStore((s) => s.token);
+
+  const [ringkasan, setRingkasan] = useState({ pasienAktif: 0, operasiHariIni: 0, konsulHariIni: 0 });
+  const [ringkasanLoading, setRingkasanLoading] = useState(true);
+
+  const loadRingkasan = useCallback(async () => {
+    if (!token) return;
+    setRingkasanLoading(true);
+    try {
+      const [pasienRes, operasiRes, kunjunganRes] = await Promise.all([
+        fetchPasienList(token, { status: 'ACTIVE', limit: 1 }),
+        fetchOperasiList(token, { limit: RINGKASAN_FETCH_LIMIT }),
+        fetchKunjunganList(token, { limit: RINGKASAN_FETCH_LIMIT }),
+      ]);
+      setRingkasan({
+        pasienAktif: pasienRes.pagination.total,
+        operasiHariIni: operasiRes.data.filter((o) => isHariIni(o.tanggalOperasi)).length,
+        konsulHariIni: kunjunganRes.data.filter((k) => isHariIni(k.tanggalMasuk)).length,
+      });
+    } catch {
+      // Ringkasan bukan bagian kritikal halaman ini — biarkan nilai lama kalau gagal.
+    } finally {
+      setRingkasanLoading(false);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    loadRingkasan();
+  }, [loadRingkasan]);
 
   return (
     <View style={styles.container}>
@@ -88,7 +133,7 @@ export function HomeScreen({ navigation }: Props) {
                   <Text style={styles.statLabel}>{row.label}</Text>
                 </View>
                 <Text style={[styles.statValue, { color: row.tint }]}>
-                  {ringkasanAktivitas[row.key]}
+                  {ringkasanLoading ? '–' : ringkasan[row.key]}
                 </Text>
               </View>
             ))}
@@ -150,7 +195,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: 64,
-    paddingHorizontal: spacing.marginMobile,
+    paddingLeft: 4,
+    paddingRight: spacing.marginMobile,
   },
   headerLogo: { width: 132, height: 45 },
 

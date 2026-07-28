@@ -7,10 +7,11 @@ const router = express.Router();
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;
 
-// Parsing & validasi query params list notifikasi. Tidak ada filter dokterId
-// di sini sama sekali (beda dari pasien/operasi routes) — notifikasi ini
-// murni milik dokter yang login, tidak ada mode lintas-dokter untuk ADMIN.
-function parseListQuery(query) {
+// Parsing & validasi query params list notifikasi. `dokterId` cuma diterima
+// kalau role ADMIN (dipakai buat filter lintas dokter) — sama seperti pola
+// di pasien/operasi/kunjungan routes. DOKTER tidak pernah boleh nge-override
+// filter kepemilikannya sendiri lewat query.
+function parseListQuery(query, role) {
   const errors = [];
 
   let isRead;
@@ -38,25 +39,33 @@ function parseListQuery(query) {
     }
   }
 
-  return { errors, values: { isRead, page, limit } };
+  let dokterId;
+  if (role === "ADMIN" && typeof query.dokterId === "string" && query.dokterId.trim() !== "") {
+    dokterId = query.dokterId.trim();
+  }
+
+  return { errors, values: { isRead, page, limit, dokterId } };
 }
 
 router.get("/", async (req, res) => {
-  const { dokterId: ownDokterId } = req.user;
+  const { role, dokterId: ownDokterId } = req.user;
 
-  if (!ownDokterId) {
+  if (role === "DOKTER" && !ownDokterId) {
     return res.status(403).json({ message: "Akun ini tidak terhubung ke data dokter" });
   }
 
-  const { errors, values } = parseListQuery(req.query);
+  const { errors, values } = parseListQuery(req.query, role);
   if (errors.length > 0) {
     return res.status(400).json({ message: "Query params tidak valid", errors });
   }
 
-  const { isRead, page, limit } = values;
+  const { isRead, page, limit, dokterId } = values;
+  // DOKTER selalu dipaksa ke notifikasi miliknya sendiri. ADMIN melihat
+  // notifikasi semua dokter, kecuali secara eksplisit filter lewat ?dokterId=.
+  const effectiveDokterId = role === "DOKTER" ? ownDokterId : dokterId;
 
   const where = {
-    dokterId: ownDokterId,
+    ...(effectiveDokterId && { dokterId: effectiveDokterId }),
     ...(isRead !== undefined && { isRead }),
   };
 
@@ -64,6 +73,7 @@ router.get("/", async (req, res) => {
     prisma.notifikasi.count({ where }),
     prisma.notifikasi.findMany({
       where,
+      include: { dokter: { select: { id: true, nama: true } } },
       orderBy: { createdAt: "desc" },
       skip: (page - 1) * limit,
       take: limit,

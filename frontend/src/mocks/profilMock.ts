@@ -1,10 +1,8 @@
 export type StatsProfil = {
-  pasienAktif: number;
   tahunPengalaman: number;
 };
 
 export const statsProfil: StatsProfil = {
-  pasienAktif: 42,
   tahunPengalaman: 15,
 };
 

@@ -83,7 +83,7 @@ export function LoginScreen() {
     setLoading(true);
     try {
       const result = await login(username.trim(), password);
-      setAuth(result);
+      setAuth(result, rememberMe);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Gagal terhubung ke server');
     } finally {

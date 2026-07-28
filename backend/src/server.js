@@ -25,8 +25,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/pasien", authenticate, authorize("DOKTER", "ADMIN"), pasienRoutes);
 app.use("/api/operasi", authenticate, authorize("DOKTER", "ADMIN"), operasiRoutes);
 app.use("/api/kunjungan", authenticate, authorize("DOKTER", "ADMIN"), kunjunganRoutes);
-// Notifikasi murni milik dokter — ADMIN tidak butuh akses ke sini.
-app.use("/api/notifikasi", authenticate, authorize("DOKTER"), notifikasiRoutes);
+app.use("/api/notifikasi", authenticate, authorize("DOKTER", "ADMIN"), notifikasiRoutes);
 
 // Endpoint uji coba RBAC (bukan endpoint produksi) — echo req.user apa
 // adanya untuk verifikasi visual bahwa authenticate + authorize sudah benar.

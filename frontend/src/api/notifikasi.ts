@@ -5,6 +5,8 @@ type ListParams = {
   isRead?: boolean;
   page?: number;
   limit?: number;
+  /** Cuma dipakai server-side kalau role ADMIN — diabaikan untuk DOKTER. */
+  dokterId?: string;
 };
 
 export function fetchNotifikasiList(token: string, params: ListParams = {}) {
@@ -12,6 +14,7 @@ export function fetchNotifikasiList(token: string, params: ListParams = {}) {
   if (params.isRead !== undefined) query.set('isRead', String(params.isRead));
   if (params.page) query.set('page', String(params.page));
   if (params.limit) query.set('limit', String(params.limit));
+  if (params.dokterId) query.set('dokterId', params.dokterId);
 
   const qs = query.toString();
   return apiFetch<NotifikasiListResponse>(`/api/notifikasi${qs ? `?${qs}` : ''}`, { token });

@@ -1,6 +1,7 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NotifikasiScreen } from '../screens/NotifikasiScreen';
 import { DetailLaporanLabScreen } from '../screens/DetailLaporanLabScreen';
+import { DetailNotifikasiScreen } from '../screens/DetailNotifikasiScreen';
 import { colors } from '../theme/colors';
 import type { NotifikasiStackParamList } from './types';
 
@@ -22,7 +23,12 @@ export function NotifikasiStackNavigator() {
       <Stack.Screen
         name="DetailLaporanLab"
         component={DetailLaporanLabScreen}
-        options={{ title: 'Detail Lab' }}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="DetailNotifikasi"
+        component={DetailNotifikasiScreen}
+        options={{ headerShown: false }}
       />
     </Stack.Navigator>
   );

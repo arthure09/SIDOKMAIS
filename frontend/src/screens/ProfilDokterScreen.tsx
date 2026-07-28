@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -9,6 +10,7 @@ import { settingsMenu, statsProfil } from '../mocks/profilMock';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import type { ProfilStackParamList } from '../navigation/types';
+import { fetchPasienList } from '../api/pasien';
 
 type Props = NativeStackScreenProps<ProfilStackParamList, 'ProfilDokter'>;
 
@@ -17,9 +19,26 @@ export function ProfilDokterScreen({ navigation }: Props) {
   const tabBarClearance = useTabBarClearance();
   const { onScroll, scrollEventThrottle } = useTabBarDockOnScroll();
   const pengguna = useAuthStore((s) => s.pengguna);
+  const token = useAuthStore((s) => s.token);
   const logout = useAuthStore((s) => s.logout);
   const nama = pengguna?.dokter?.nama ?? 'dr. User';
   const spesialisasi = pengguna?.dokter?.spesialisasi ?? 'Spesialisasi belum diatur';
+
+  const [pasienAktif, setPasienAktif] = useState<number | null>(null);
+
+  const loadPasienAktif = useCallback(async () => {
+    if (!token) return;
+    try {
+      const result = await fetchPasienList(token, { status: 'ACTIVE', limit: 1 });
+      setPasienAktif(result.pagination.total);
+    } catch {
+      // Statistik pendukung — biarkan placeholder kalau gagal, tidak menghalangi halaman.
+    }
+  }, [token]);
+
+  useEffect(() => {
+    loadPasienAktif();
+  }, [loadPasienAktif]);
 
   function handleLogout() {
     Alert.alert('Keluar Akun', 'Yakin ingin keluar dari akun ini?', [
@@ -59,7 +78,7 @@ export function ProfilDokterScreen({ navigation }: Props) {
 
         <View style={styles.statsGrid}>
           <View style={styles.statCard}>
-            <Text style={styles.statValue}>{statsProfil.pasienAktif}</Text>
+            <Text style={styles.statValue}>{pasienAktif ?? '–'}</Text>
             <Text style={styles.statLabel}>Pasien Aktif</Text>
           </View>
           <View style={styles.statCard}>

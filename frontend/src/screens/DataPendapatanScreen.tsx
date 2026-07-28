@@ -28,7 +28,7 @@ const BULAN_OPTIONS = Array.from(
 const JENIS_OPTIONS: { value: JenisTransaksi | 'Semua'; label: string }[] = [
   { value: 'Semua', label: 'Semua' },
   { value: 'OPERASI', label: 'Operasi' },
-  { value: 'KONSUL', label: 'Konsul' },
+  { value: 'KONSUL', label: 'Konsultasi' },
 ];
 const SUMBER_OPTIONS = ['Semua', ...new Set(transaksiPendapatan.map((t) => t.sumber))];
 
@@ -136,7 +136,7 @@ export function DataPendapatanScreen({ navigation }: Props) {
             </View>
             <View style={styles.breakdownDividerVertical} />
             <View style={styles.breakdownCol}>
-              <Text style={styles.summaryLabel}>Konsul</Text>
+              <Text style={styles.summaryLabel}>Konsultasi</Text>
               <Text style={styles.breakdownValue}>
                 {formatRupiah(ringkasanPendapatan.totalKonsul)}
               </Text>

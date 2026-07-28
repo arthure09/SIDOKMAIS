@@ -26,6 +26,16 @@ export type OperasiStackParamList = {
 export type NotifikasiStackParamList = {
   NotifikasiList: undefined;
   DetailLaporanLab: undefined;
+  DetailNotifikasi: {
+    kategori: 'Pasien Baru' | 'Jadwal';
+    judul: string;
+    pesan: string;
+    waktu: string;
+    icon: string;
+    isRead: boolean;
+    /** Cuma diisi kalau yang buka layar ini ADMIN (lintas dokter). */
+    dokterNama?: string;
+  };
 };
 
 export type ProfilStackParamList = {

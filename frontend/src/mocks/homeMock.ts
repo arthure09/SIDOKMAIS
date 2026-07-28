@@ -1,15 +1,3 @@
-export type RingkasanAktivitas = {
-  pasienAktif: number;
-  operasiHariIni: number;
-  konsulHariIni: number;
-};
-
-export const ringkasanAktivitas: RingkasanAktivitas = {
-  pasienAktif: 42,
-  operasiHariIni: 3,
-  konsulHariIni: 12,
-};
-
 export type StatistikHarian = {
   label: string;
   persen: number;

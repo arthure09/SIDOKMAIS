@@ -68,7 +68,7 @@ export function DetailKonsulScreen({ route, navigation }: Props) {
         if (!cancelled) setItem(result);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof ApiError ? err.message : 'Gagal memuat detail konsul');
+          setError(err instanceof ApiError ? err.message : 'Gagal memuat detail konsultasi');
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -87,7 +87,7 @@ export function DetailKonsulScreen({ route, navigation }: Props) {
         <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
       </Pressable>
       <Text style={styles.headerTitle} numberOfLines={1}>
-        {item?.diagnosa ?? 'Detail Konsul'}
+        {item?.diagnosa ?? 'Detail Konsultasi'}
       </Text>
       {item && (
         <View style={styles.statusPill}>
@@ -116,7 +116,7 @@ export function DetailKonsulScreen({ route, navigation }: Props) {
       <View style={styles.container}>
         {header}
         <View style={styles.center}>
-          <Text style={styles.errorText}>{error ?? 'Data konsul tidak ditemukan.'}</Text>
+          <Text style={styles.errorText}>{error ?? 'Data konsultasi tidak ditemukan.'}</Text>
         </View>
       </View>
     );

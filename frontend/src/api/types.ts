@@ -142,6 +142,7 @@ export type NotifikasiItemApi = {
   pesan: string;
   isRead: boolean;
   createdAt: string;
+  dokter: { id: string; nama: string };
 };
 
 export type NotifikasiListResponse = {

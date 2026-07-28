@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../theme/colors';
 import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
@@ -12,13 +13,23 @@ import type { NotifikasiStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<NotifikasiStackParamList, 'DetailLaporanLab'>;
 
-export function DetailLaporanLabScreen(_props: Props) {
+export function DetailLaporanLabScreen({ navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
   const { onScroll, scrollEventThrottle } = useTabBarDockOnScroll();
   const [sudahDibaca, setSudahDibaca] = useState(false);
 
   return (
     <View style={styles.container}>
+      <View style={[styles.header, { paddingTop: insets.top }]}>
+        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+          <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
+        </Pressable>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          Detail Lab
+        </Text>
+      </View>
+
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
         showsVerticalScrollIndicator={false}
@@ -98,6 +109,28 @@ export function DetailLaporanLabScreen(_props: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: ms(12),
+    paddingHorizontal: spacing.marginMobile,
+    paddingBottom: spacing.base,
+    borderBottomWidth: 1,
+    borderBottomColor: `${colors.outlineVariant}1A`,
+  },
+  backButton: {
+    width: ms(40),
+    height: ms(40),
+    borderRadius: ms(20),
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: ms(18),
+    fontWeight: '600',
+    color: colors.onBackground,
+  },
   content: { padding: spacing.marginMobile, gap: spacing.gutter, paddingBottom: ms(32) },
 
   card: {
