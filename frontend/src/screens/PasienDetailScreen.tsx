@@ -6,10 +6,11 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '../api/client';
 import { fetchPasienDetail } from '../api/pasien';
 import { useAuthStore } from '../store/authStore';
-import { colors, radius, spacing } from '../theme/colors';
+import { colors, radius, shadows, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
 import type { AssignmentStatus, PasienDetail, StatusKunjungan } from '../api/types';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
+import { useHeaderScrollShadow } from '../hooks/useHeaderScrollShadow';
 import type { PasienStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<PasienStackParamList, 'PasienDetail'>;
@@ -61,6 +62,7 @@ export function PasienDetailScreen({ route, navigation }: Props) {
   const token = useAuthStore((s) => s.token);
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
+  const { onScroll, scrollEventThrottle, scrolled } = useHeaderScrollShadow();
   const [detail, setDetail] = useState<PasienDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +93,7 @@ export function PasienDetailScreen({ route, navigation }: Props) {
   }, [token, pasienId]);
 
   const header = (
-    <View style={[styles.header, { paddingTop: insets.top }]}>
+    <View style={[styles.header, { paddingTop: insets.top }, scrolled && shadows.header]}>
       <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
         <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
       </Pressable>
@@ -132,6 +134,8 @@ export function PasienDetailScreen({ route, navigation }: Props) {
       {header}
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
+        onScroll={onScroll}
+        scrollEventThrottle={scrollEventThrottle}
       >
         {/* Hero: info pasien */}
         <View style={styles.heroCard}>

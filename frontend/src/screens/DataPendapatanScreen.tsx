@@ -3,7 +3,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } f
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radius, spacing } from '../theme/colors';
+import { colors, radius, shadows, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
 import { ringkasanPendapatan, transaksiPendapatan, type JenisTransaksi } from '../mocks/pendapatanMock';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
@@ -37,7 +37,7 @@ const DROPDOWN_WIDTH = 180;
 export function DataPendapatanScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
-  const { onScroll, scrollEventThrottle } = useTabBarDockOnScroll();
+  const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
   const { width: windowWidth } = useWindowDimensions();
 
   const [bulan, setBulan] = useState(ringkasanPendapatan.labelBulan);
@@ -102,7 +102,7 @@ export function DataPendapatanScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top }]}>
+      <View style={[styles.header, { paddingTop: insets.top }, scrolled && shadows.header]}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
         </Pressable>

@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -6,12 +7,14 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '../api/client';
 import { fetchPasienList } from '../api/pasien';
 import { useAuthStore } from '../store/authStore';
-import { colors, radius, spacing } from '../theme/colors';
+import { colors, radius, shadows, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
 import { TextInput } from '../components/TextInput';
+import { ScrollToTopButton } from '../components/ScrollToTopButton';
 import type { AssignmentStatus, PasienListItem } from '../api/types';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
+import { useScrollToTopButton } from '../hooks/useScrollToTopButton';
 import type { PasienStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<PasienStackParamList, 'PasienList'>;
@@ -47,7 +50,9 @@ function initials(nama: string) {
 export function PasienListScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
-  const { onScroll, scrollEventThrottle } = useTabBarDockOnScroll();
+  const { onScroll: onDockScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
+  const { onScroll: onTopButtonScroll, visible: showScrollTop } = useScrollToTopButton();
+  const listRef = useRef<FlatList<PasienListItem>>(null);
   const token = useAuthStore((s) => s.token);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -60,6 +65,14 @@ export function PasienListScreen({ navigation }: Props) {
     const timer = setTimeout(() => setSearch(searchInput.trim()), 400);
     return () => clearTimeout(timer);
   }, [searchInput]);
+
+  const handleScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      onDockScroll(e);
+      onTopButtonScroll(e);
+    },
+    [onDockScroll, onTopButtonScroll],
+  );
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -81,32 +94,39 @@ export function PasienListScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.searchWrapper, { marginTop: insets.top + spacing.base }]}>
-        <MaterialIcons name="search" size={20} color={colors.primary} />
-        <TextInput
-          value={searchInput}
-          onChangeText={setSearchInput}
-          placeholder="Cari Nama atau No. RM..."
-          placeholderTextColor={colors.outlineVariant}
-          style={styles.searchInput}
-        />
-      </View>
-
-      <View style={styles.filterRow}>
-        {STATUS_FILTERS.map((f) => {
-          const active = status === f.value;
-          return (
-            <Pressable
-              key={f.label}
-              onPress={() => setStatus(f.value)}
-              style={[styles.filterChip, active && styles.filterChipActive]}
-            >
-              <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                {f.label}
-              </Text>
+      <View style={[{ paddingTop: insets.top }, scrolled && shadows.header]}>
+        <View style={[styles.searchWrapper, { marginTop: spacing.base }]}>
+          <MaterialIcons name="search" size={20} color={colors.primary} />
+          <TextInput
+            value={searchInput}
+            onChangeText={setSearchInput}
+            placeholder="Cari Nama atau No. RM..."
+            placeholderTextColor={colors.outline}
+            style={styles.searchInput}
+          />
+          {searchInput.length > 0 && (
+            <Pressable onPress={() => setSearchInput('')} hitSlop={8}>
+              <MaterialIcons name="close" size={18} color={colors.onSurfaceVariant} />
             </Pressable>
-          );
-        })}
+          )}
+        </View>
+
+        <View style={styles.filterRow}>
+          {STATUS_FILTERS.map((f) => {
+            const active = status === f.value;
+            return (
+              <Pressable
+                key={f.label}
+                onPress={() => setStatus(f.value)}
+                style={[styles.filterChip, active && styles.filterChipActive]}
+              >
+                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                  {f.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       {loading ? (
@@ -123,11 +143,12 @@ export function PasienListScreen({ navigation }: Props) {
         </View>
       ) : (
         <FlatList
+          ref={listRef}
           data={items}
           keyExtractor={(item) => item.id}
           contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
           showsVerticalScrollIndicator={false}
-          onScroll={onScroll}
+          onScroll={handleScroll}
           scrollEventThrottle={scrollEventThrottle}
           renderItem={({ item }) => {
             const badge = STATUS_BADGE[item.status];
@@ -183,6 +204,12 @@ export function PasienListScreen({ navigation }: Props) {
           }}
         />
       )}
+
+      <ScrollToTopButton
+        visible={showScrollTop}
+        onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}
+        bottom={tabBarClearance}
+      />
     </View>
   );
 }
@@ -199,7 +226,7 @@ const styles = StyleSheet.create({
     gap: 12,
     marginHorizontal: spacing.marginMobile,
     marginTop: spacing.base,
-    backgroundColor: colors.surfaceSoft,
+    backgroundColor: colors.surfaceVariant,
     borderRadius: radius.full,
     paddingHorizontal: 16,
     paddingVertical: 12,

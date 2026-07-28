@@ -3,6 +3,8 @@ import {
   ActivityIndicator,
   Animated,
   LayoutChangeEvent,
+  NativeScrollEvent,
+  NativeSyntheticEvent,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,9 +13,10 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radius, spacing } from '../theme/colors';
+import { colors, radius, shadows, spacing } from '../theme/colors';
 import { ms, wp } from '../theme/responsive';
 import { Text } from '../components/Text';
+import { ScrollToTopButton } from '../components/ScrollToTopButton';
 import { ApiError } from '../api/client';
 import { fetchOperasiList } from '../api/operasi';
 import { fetchKunjunganList } from '../api/kunjungan';
@@ -21,6 +24,7 @@ import { useAuthStore } from '../store/authStore';
 import type { KunjunganListItem, OperasiListItem, OperasiStatus, StatusKunjungan } from '../api/types';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
+import { useScrollToTopButton } from '../hooks/useScrollToTopButton';
 import type { OperasiStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<OperasiStackParamList, 'JadwalOperasiKonsul'>;
@@ -39,6 +43,31 @@ function formatJam(value: string) {
 
 function formatTanggalSingkat(value: string) {
   return new Date(value).toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'short' });
+}
+
+// Prioritas grup status buat tampilan "Semua": yang lagi berlangsung/terjadwal
+// perlu ditindaklanjuti duluan, baru riwayat selesai, baru yang batal paling bawah.
+const STATUS_SORT_ORDER: Record<string, number> = {
+  IN_PROGRESS: 0,
+  ONGOING: 0,
+  SCHEDULED: 1,
+  COMPLETED: 2,
+  CANCELLED: 3,
+};
+
+function sortByStatusThenNearestDate<T>(
+  items: T[],
+  getStatus: (item: T) => string,
+  getDate: (item: T) => string,
+): T[] {
+  const now = Date.now();
+  return [...items].sort((a, b) => {
+    const statusDiff = (STATUS_SORT_ORDER[getStatus(a)] ?? 99) - (STATUS_SORT_ORDER[getStatus(b)] ?? 99);
+    if (statusDiff !== 0) return statusDiff;
+    const distA = Math.abs(new Date(getDate(a)).getTime() - now);
+    const distB = Math.abs(new Date(getDate(b)).getTime() - now);
+    return distA - distB;
+  });
 }
 
 const OPERASI_STATUS_META: Record<
@@ -75,10 +104,30 @@ const TOGGLE_INSET = ms(4);
 export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
-  const { onScroll, scrollEventThrottle } = useTabBarDockOnScroll();
+  const { onScroll: onDockScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
+  const { onScroll: onTopButtonScroll, visible: showScrollTop, reset: resetScrollTop } = useScrollToTopButton();
+  const konsulScrollRef = useRef<ScrollView>(null);
+  const operasiScrollRef = useRef<ScrollView>(null);
   const token = useAuthStore((s) => s.token);
   const [tab, setTab] = useState<'OPERASI' | 'KONSUL'>('OPERASI');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+
+  useEffect(() => {
+    resetScrollTop();
+  }, [tab, resetScrollTop]);
+
+  const handleScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      onDockScroll(e);
+      onTopButtonScroll(e);
+    },
+    [onDockScroll, onTopButtonScroll],
+  );
+
+  function scrollToTop() {
+    const ref = tab === 'KONSUL' ? konsulScrollRef : operasiScrollRef;
+    ref.current?.scrollTo({ y: 0, animated: true });
+  }
 
   const [toggleWidth, setToggleWidth] = useState(0);
   const toggleIndicatorX = useRef(new Animated.Value(0)).current;
@@ -154,16 +203,28 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
     navigation.navigate('DetailKonsul', { kunjunganId: item.id });
   }
 
-  const filteredOperasiItems =
-    statusFilter === 'ALL' ? operasiItems : operasiItems.filter((item) => item.status === statusFilter);
-  const filteredKunjunganItems =
+  const filteredOperasiItems = sortByStatusThenNearestDate(
+    statusFilter === 'ALL' ? operasiItems : operasiItems.filter((item) => item.status === statusFilter),
+    (item) => item.status,
+    (item) => item.tanggalOperasi,
+  );
+  const filteredKunjunganItems = sortByStatusThenNearestDate(
     statusFilter === 'ALL'
       ? kunjunganItems
-      : kunjunganItems.filter((item) => item.statusKunjungan === statusFilter);
+      : kunjunganItems.filter((item) => item.statusKunjungan === statusFilter),
+    (item) => item.statusKunjungan,
+    (item) => item.tanggalMasuk,
+  );
 
   return (
     <View style={styles.container}>
-      <View style={[styles.headerArea, { paddingTop: insets.top + ms(spacing.marginMobile) }]}>
+      <View
+        style={[
+          styles.headerArea,
+          { paddingTop: insets.top + ms(spacing.marginMobile) },
+          scrolled && shadows.header,
+        ]}
+      >
         <Text style={styles.title}>{tab === 'KONSUL' ? 'Jadwal Konsultasi' : 'Jadwal Operasi'}</Text>
         <View style={styles.toggle} onLayout={onToggleLayout}>
           {toggleItemWidth > 0 && (
@@ -227,9 +288,10 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
           </View>
         ) : (
           <ScrollView
+            ref={konsulScrollRef}
             contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
             showsVerticalScrollIndicator={false}
-            onScroll={onScroll}
+            onScroll={handleScroll}
             scrollEventThrottle={scrollEventThrottle}
           >
             {filteredKunjunganItems.map((item) => {
@@ -291,9 +353,10 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
         </View>
       ) : (
         <ScrollView
+          ref={operasiScrollRef}
           contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
           showsVerticalScrollIndicator={false}
-          onScroll={onScroll}
+          onScroll={handleScroll}
           scrollEventThrottle={scrollEventThrottle}
         >
           {filteredOperasiItems.map((item) => {
@@ -339,6 +402,8 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
           })}
         </ScrollView>
       )}
+
+      <ScrollToTopButton visible={showScrollTop} onPress={scrollToTop} bottom={tabBarClearance} />
     </View>
   );
 }

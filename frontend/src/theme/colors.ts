@@ -43,3 +43,17 @@ export const radius = {
   xl: 48,
   full: 999,
 };
+
+export const shadows = {
+  // Dipasang kondisional (`scrolled && shadows.header`) ke View header fixed
+  // di atas ScrollView/FlatList, biar header keliatan "terangkat" begitu
+  // konten discroll dari posisi paling atas.
+  header: {
+    backgroundColor: colors.background,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+};

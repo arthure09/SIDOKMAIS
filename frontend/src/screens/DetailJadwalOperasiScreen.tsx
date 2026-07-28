@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radius, spacing } from '../theme/colors';
+import { colors, radius, shadows, spacing } from '../theme/colors';
 import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
 import { ApiError } from '../api/client';
@@ -11,6 +11,7 @@ import { fetchOperasiDetail } from '../api/operasi';
 import { useAuthStore } from '../store/authStore';
 import type { OperasiDetail } from '../api/types';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
+import { useHeaderScrollShadow } from '../hooks/useHeaderScrollShadow';
 import type { OperasiStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<OperasiStackParamList, 'DetailJadwalOperasi'>;
@@ -60,6 +61,7 @@ export function DetailJadwalOperasiScreen({ route, navigation }: Props) {
   const token = useAuthStore((s) => s.token);
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
+  const { onScroll, scrollEventThrottle, scrolled } = useHeaderScrollShadow();
   const [item, setItem] = useState<OperasiDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +92,7 @@ export function DetailJadwalOperasiScreen({ route, navigation }: Props) {
   }, [token, operasiId]);
 
   const header = (
-    <View style={[styles.header, { paddingTop: insets.top }]}>
+    <View style={[styles.header, { paddingTop: insets.top }, scrolled && shadows.header]}>
       <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
         <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
       </Pressable>
@@ -139,6 +141,8 @@ export function DetailJadwalOperasiScreen({ route, navigation }: Props) {
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
         showsVerticalScrollIndicator={false}
+        onScroll={onScroll}
+        scrollEventThrottle={scrollEventThrottle}
       >
         <View style={styles.card}>
           <View style={styles.patientRow}>

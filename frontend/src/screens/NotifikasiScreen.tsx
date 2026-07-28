@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'reac
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radius, spacing } from '../theme/colors';
+import { colors, radius, shadows, spacing } from '../theme/colors';
 import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
 import { ApiError } from '../api/client';
@@ -98,7 +98,7 @@ function toDisplayItem(item: NotifikasiItemApi): DisplayItem {
 export function NotifikasiScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
-  const { onScroll, scrollEventThrottle } = useTabBarDockOnScroll();
+  const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
   const token = useAuthStore((s) => s.token);
   const role = useAuthStore((s) => s.pengguna?.role);
   const isAdmin = role === 'ADMIN';
@@ -158,7 +158,7 @@ export function NotifikasiScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + ms(6) }]}>
+      <View style={[styles.header, { paddingTop: insets.top + ms(6) }, scrolled && shadows.header]}>
         <View>
           <Text style={styles.title}>Notifikasi</Text>
           <Text style={styles.subtitle}>Pembaruan klinis dan jadwal Anda.</Text>

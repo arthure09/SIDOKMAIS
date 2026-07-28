@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react';
-import { Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Animated, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -48,12 +48,29 @@ const CARD_TARGET_TAB: Partial<Record<string, keyof MainTabParamList>> = {
 export function HomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
-  const { onScroll, scrollEventThrottle } = useTabBarDockOnScroll();
+  const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
   const dokterNama = useAuthStore((s) => s.pengguna?.dokter?.nama);
   const token = useAuthStore((s) => s.token);
 
   const [ringkasan, setRingkasan] = useState({ pasienAktif: 0, operasiHariIni: 0, konsulHariIni: 0 });
   const [ringkasanLoading, setRingkasanLoading] = useState(true);
+
+  const headerFade = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.timing(headerFade, {
+      toValue: scrolled ? 1 : 0,
+      duration: 200,
+      useNativeDriver: false,
+    }).start();
+  }, [scrolled, headerFade]);
+
+  const headerBackgroundColor = headerFade.interpolate({
+    inputRange: [0, 1],
+    outputRange: [colors.background, colors.backgroundWhite],
+  });
+  const headerShadowOpacity = headerFade.interpolate({ inputRange: [0, 1], outputRange: [0, 0.1] });
+  const headerElevation = headerFade.interpolate({ inputRange: [0, 1], outputRange: [0, 4] });
 
   const loadRingkasan = useCallback(async () => {
     if (!token) return;
@@ -82,13 +99,33 @@ export function HomeScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top }]}>
+      <Animated.View
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top,
+            backgroundColor: headerBackgroundColor,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 8,
+            shadowOpacity: headerShadowOpacity,
+            elevation: headerElevation,
+          },
+        ]}
+      >
         <Image
-          source={require('../../assets/Logo sidokmais.png')}
+          source={require('../../assets/logo sidokmais dan tulisan.png')}
           style={styles.headerLogo}
           resizeMode="contain"
         />
-      </View>
+        <Pressable
+          onPress={() => navigation.navigate('NotifikasiTab')}
+          style={styles.notifButton}
+          hitSlop={8}
+        >
+          <MaterialIcons name="notifications" size={24} color={colors.primary} />
+        </Pressable>
+      </Animated.View>
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
@@ -97,38 +134,18 @@ export function HomeScreen({ navigation }: Props) {
         scrollEventThrottle={scrollEventThrottle}
       >
         <View>
-          <Text style={styles.greeting}>Halo, dr. {dokterNama ?? 'User'}</Text>
+          <Text style={styles.greeting}>Halo, dr. {dokterNama ?? 'Reza Auditore'}</Text>
           <Text style={styles.subtitle}>Semoga harimu menyenangkan.</Text>
         </View>
 
-        <View style={styles.grid}>
-          {navigasiCards.map((card) => {
-            const targetTab = CARD_TARGET_TAB[card.id];
-            return (
-              <Pressable
-                key={card.id}
-                disabled={!targetTab}
-                onPress={() => targetTab && navigation.navigate(targetTab)}
-                style={({ pressed }) => [styles.gridCard, pressed && styles.gridCardPressed]}
-              >
-                {card.id === 'notifikasi' && <View style={styles.gridCardDot} />}
-                <View style={styles.gridIconCircle}>
-                  <MaterialIcons name={card.icon as never} size={26} color={colors.primary} />
-                </View>
-                <Text style={styles.gridLabel}>{card.label}</Text>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <View style={styles.summaryCard}>
+        <View style={styles.quickActionsSection}>
           <Text style={styles.summaryTitle}>Ringkasan Aktivitas Hari Ini</Text>
           <View style={{ gap: spacing.gutter }}>
             {RINGKASAN_ROWS.map((row) => (
               <View key={row.key} style={styles.statRow}>
                 <View style={styles.statRowLeft}>
                   <View style={[styles.statIconCircle, { backgroundColor: `${row.tint}1A` }]}>
-                    <MaterialIcons name={row.icon as never} size={20} color={row.tint} />
+                    <MaterialIcons name={row.icon as never} size={22} color={row.tint} />
                   </View>
                   <Text style={styles.statLabel}>{row.label}</Text>
                 </View>
@@ -139,9 +156,29 @@ export function HomeScreen({ navigation }: Props) {
             ))}
           </View>
 
-          <View style={styles.priorityHeader}>
-            <Text style={styles.summaryTitle}>Pasien Prioritas</Text>
+          <View style={styles.grid}>
+            {navigasiCards.map((card) => {
+              const targetTab = CARD_TARGET_TAB[card.id];
+              return (
+                <Pressable
+                  key={card.id}
+                  disabled={!targetTab}
+                  onPress={() => targetTab && navigation.navigate(targetTab)}
+                  style={({ pressed }) => [styles.gridCard, pressed && styles.gridCardPressed]}
+                >
+                  {card.id === 'notifikasi' && <View style={styles.gridCardDot} />}
+                  <View style={styles.gridIconCircle}>
+                    <MaterialIcons name={card.icon as never} size={28} color={colors.primary} />
+                  </View>
+                  <Text style={styles.gridLabel}>{card.label}</Text>
+                </Pressable>
+              );
+            })}
           </View>
+        </View>
+
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryTitle}>Pasien Prioritas</Text>
           <View style={{ gap: spacing.base }}>
             {pasienPrioritas.map((p) => (
               <View key={p.id} style={styles.priorityCard}>
@@ -194,15 +231,26 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 64,
-    paddingLeft: 4,
+    justifyContent: 'space-between',
+    minHeight: 88,
+    paddingLeft: spacing.marginMobile,
     paddingRight: spacing.marginMobile,
   },
-  headerLogo: { width: 132, height: 45 },
+  headerLogo: { width: 168, height: 48 },
+  notifButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surfaceSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 
   content: { padding: spacing.marginMobile, paddingTop: 12, gap: 24, paddingBottom: 32 },
   greeting: { fontSize: 24, fontWeight: '800', color: colors.deepTealDark },
   subtitle: { fontSize: 14, color: colors.onSurfaceVariant, marginTop: 4 },
+
+  quickActionsSection: { gap: 20 },
 
   grid: {
     flexDirection: 'row',
@@ -213,7 +261,7 @@ const styles = StyleSheet.create({
     width: '47%',
     backgroundColor: colors.backgroundWhite,
     borderRadius: 24,
-    paddingVertical: 20,
+    paddingVertical: 22,
     paddingHorizontal: 16,
     alignItems: 'center',
     gap: 12,
@@ -234,9 +282,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.tertiaryFixed,
   },
   gridIconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
     backgroundColor: colors.surfaceSoft,
     alignItems: 'center',
     justifyContent: 'center',
@@ -254,23 +302,22 @@ const styles = StyleSheet.create({
   statRow: {
     backgroundColor: colors.backgroundWhite,
     borderRadius: radius.sm,
-    padding: 16,
+    padding: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   statRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   statIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statLabel: { fontSize: 16, color: colors.onSurface },
-  statValue: { fontSize: 24, fontWeight: '800' },
+  statLabel: { fontSize: 17, color: colors.onSurface },
+  statValue: { fontSize: 26, fontWeight: '800' },
 
-  priorityHeader: { marginTop: 8 },
   priorityCard: {
     backgroundColor: colors.primaryContainer,
     borderRadius: radius.lg,

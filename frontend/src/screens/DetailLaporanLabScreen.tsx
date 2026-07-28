@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radius, spacing } from '../theme/colors';
+import { colors, radius, shadows, spacing } from '../theme/colors';
 import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
 import { laporanLabDetail } from '../mocks/notifikasiMock';
@@ -16,12 +16,12 @@ type Props = NativeStackScreenProps<NotifikasiStackParamList, 'DetailLaporanLab'
 export function DetailLaporanLabScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
-  const { onScroll, scrollEventThrottle } = useTabBarDockOnScroll();
+  const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
   const [sudahDibaca, setSudahDibaca] = useState(false);
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top }]}>
+      <View style={[styles.header, { paddingTop: insets.top }, scrolled && shadows.header]}>
         <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
         </Pressable>

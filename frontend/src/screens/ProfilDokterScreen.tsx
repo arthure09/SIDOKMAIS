@@ -4,7 +4,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/authStore';
-import { colors, radius, spacing } from '../theme/colors';
+import { colors, radius, shadows, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
 import { settingsMenu, statsProfil } from '../mocks/profilMock';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
@@ -17,12 +17,12 @@ type Props = NativeStackScreenProps<ProfilStackParamList, 'ProfilDokter'>;
 export function ProfilDokterScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
-  const { onScroll, scrollEventThrottle } = useTabBarDockOnScroll();
+  const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
   const pengguna = useAuthStore((s) => s.pengguna);
   const token = useAuthStore((s) => s.token);
   const logout = useAuthStore((s) => s.logout);
-  const nama = pengguna?.dokter?.nama ?? 'dr. User';
-  const spesialisasi = pengguna?.dokter?.spesialisasi ?? 'Spesialisasi belum diatur';
+  const nama = pengguna?.dokter?.nama ?? 'dr. Reza Auditore';
+  const spesialisasi = pengguna?.dokter?.spesialisasi ?? 'Spesialis Kelamin';
 
   const [pasienAktif, setPasienAktif] = useState<number | null>(null);
 
@@ -57,7 +57,7 @@ export function ProfilDokterScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { height: insets.top }]} />
+      <View style={[styles.header, { height: insets.top }, scrolled && shadows.header]} />
 
       <ScrollView
         contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
