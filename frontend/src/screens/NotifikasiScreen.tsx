@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radius, shadows, spacing } from '../theme/colors';
+import { colors, radius, spacing } from '../theme/colors';
 import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
 import { ApiError } from '../api/client';
@@ -13,6 +13,7 @@ import type { NotifikasiItemApi, NotifikasiTipe } from '../api/types';
 import { notifikasiList as notifikasiMockList } from '../mocks/notifikasiMock';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
+import { useAnimatedHeaderFade } from '../hooks/useAnimatedHeaderFade';
 import type { NotifikasiStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<NotifikasiStackParamList, 'NotifikasiList'>;
@@ -99,6 +100,7 @@ export function NotifikasiScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
   const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
+  const { headerBackgroundColor, headerShadowOpacity, headerElevation } = useAnimatedHeaderFade(scrolled);
   const token = useAuthStore((s) => s.token);
   const role = useAuthStore((s) => s.pengguna?.role);
   const isAdmin = role === 'ADMIN';
@@ -106,6 +108,10 @@ export function NotifikasiScreen({ navigation }: Props) {
   const [apiItems, setApiItems] = useState<NotifikasiItemApi[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // LAB_DEMO_ITEM dikecualikan dari markNotifikasiRead (bukan entity asli, lihat
+  // komentar di atas) — status baca-nya dilacak lokal aja biar titik unread-nya
+  // ilang begitu dibuka, tanpa nyoba nulis ke /api/notifikasi.
+  const [labDemoRead, setLabDemoRead] = useState(LAB_DEMO_ITEM?.isRead ?? false);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -125,12 +131,14 @@ export function NotifikasiScreen({ navigation }: Props) {
     load();
   }, [load]);
 
-  const items = [...(LAB_DEMO_ITEM ? [LAB_DEMO_ITEM] : []), ...apiItems.map(toDisplayItem)].filter(
-    (n) => filter === 'Semua' || n.kategori === filter
-  );
+  const items = [
+    ...(LAB_DEMO_ITEM ? [{ ...LAB_DEMO_ITEM, isRead: labDemoRead }] : []),
+    ...apiItems.map(toDisplayItem),
+  ].filter((n) => filter === 'Semua' || n.kategori === filter);
 
   function handlePress(item: DisplayItem) {
     if (item.bukaLaporanLab) {
+      setLabDemoRead(true);
       navigation.navigate('DetailLaporanLab');
       return;
     }
@@ -158,7 +166,20 @@ export function NotifikasiScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top + ms(6) }, scrolled && shadows.header]}>
+      <Animated.View
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top + ms(6),
+            backgroundColor: headerBackgroundColor,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 8,
+            shadowOpacity: headerShadowOpacity,
+            elevation: headerElevation,
+          },
+        ]}
+      >
         <View>
           <Text style={styles.title}>Notifikasi</Text>
           <Text style={styles.subtitle}>Pembaruan klinis dan jadwal Anda.</Text>
@@ -185,7 +206,7 @@ export function NotifikasiScreen({ navigation }: Props) {
             );
           })}
         </ScrollView>
-      </View>
+      </Animated.View>
 
       {loading ? (
         <View style={styles.center}>
@@ -296,15 +317,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: ms(16),
     alignItems: 'flex-start',
-    borderWidth: 1,
-    borderColor: colors.surfaceVariant,
-  },
-  cardUnread: {
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.06,
     shadowRadius: 16,
     elevation: 2,
+  },
+  cardUnread: {
+    shadowOpacity: 0.1,
+    elevation: 3,
   },
   cardPressed: { opacity: 0.9 },
   unreadDot: {

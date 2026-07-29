@@ -10,7 +10,9 @@ Fase saat ini: dummy data, backend independen — belum terintegrasi ke SIMRS pr
 - Backend: Node.js + Express (satu backend, tanpa microservice terpisah)
 - DB: PostgreSQL + Prisma ORM
 - Auth: JWT + RBAC middleware
-- Chatbot (Minggu 3, belum dimulai): panggil LLM (Gemini Flash primary, DeepSeek cadangan) langsung dari Express
+- Chatbot: digeser keluar dari Minggu 3 (keputusan Arthuro, 2026-07-29), rencana
+  panggil LLM (Gemini Flash primary, DeepSeek cadangan) langsung dari Express —
+  status jadi buffer/nice-to-have, belum pasti dikerjakan sebelum akhir magang
 - Infra: Docker + docker-compose lokal
 
 ## Entity naming
@@ -58,14 +60,29 @@ Sumber: rencana-pengembangan-aplikasi-dokter.pdf (rencana awal magang). Mulai 14
 - Hari 13 (Min 26 Jul): Integrasi notifikasi (pasien baru, reminder H-1/H-2)
 - Hari 14 (Sen 27 Jul): Testing manual modul 1, 2, 4 + review Minggu 2
 
-### Minggu 3 — Chatbot (28 Jul-3 Ags)
-- Hari 15 (Sel 28 Jul): Desain intent schema final (daftar aksi + entity per aksi)
-- Hari 16 (Rab 29 Jul): Implementasi read-intents (ringkasan, pasien minggu ini, jadwal besok)
-- Hari 17 (Kam 30 Jul): Implementasi validation layer (bentrok jadwal, pasien valid)
-- Hari 18 (Jum 31 Jul): Implementasi write-intents + confirmation step
-- Hari 19 (Sab 1 Ags): Multi-turn clarification handling (kasus ambiguitas)
-- Hari 20 (Min 2 Ags): Audit log integration untuk aksi chatbot
-- Hari 21 (Sen 3 Ags): Testing manual chatbot (~20-30 sample perintah) + review Minggu 3
+### Minggu 3 — Hasil Lab & Dashboard Kinerja (28 Jul-3 Ags)
+Chatbot digeser keluar dari minggu ini (keputusan Arthuro, 2026-07-29), diganti
+2 fitur dummy-data: Cari Hasil Lab (by No. RM) dan Dashboard Kinerja Dokter.
+Lihat `docs/prompts/fitur-cari-hasil-lab.md` dan `docs/prompts/desain-hasil-lab-stitch.md`.
+- Hari 15 (Sel 28 Jul): Catch-up modul Notifikasi (Prioritas 1 & 2, tertinggal dari Minggu 2) — **selesai**
+- Hari 16 (Rab 29 Jul): Desain & struktur data Hasil Lab — `labMock.ts` (dummy,
+  dikelompokkan per laboratorium — nama masih placeholder), desain visual
+  (prompt Stitch), rencana restrukturisasi navigasi (tab Notifikasi disembunyikan
+  dari tab bar, tetap diakses lewat bel di Home), susun pertanyaan buat supervisor
+  (daftar laboratorium asli, metrik dashboard kinerja)
+- Hari 17 (Kam 30 Jul): Implementasi `CariHasilLabScreen` — 3 state (kosong/
+  ditemukan/tidak ditemukan)
+- Hari 18 (Jum 31 Jul): Implementasi navigasi — ganti tab Notifikasi jadi Hasil
+  Lab di tab bar, testing manual regresi (bel Home masih ke Notifikasi, highlight
+  tab lain masih benar)
+- Hari 19 (Sab 1 Ags): Desain Dashboard Kinerja — tentukan metrik dummy (jumlah
+  pasien aktif, konsultasi/operasi selesai, ketepatan jadwal dari data
+  PERUBAHAN_JADWAL yang sudah ada), tentukan lokasi (Home vs screen baru)
+- Hari 20 (Min 2 Ags): Implementasi UI Dashboard Kinerja (kartu ringkasan +
+  grafik, reuse pola "Statistik Pasien Mingguan" di Home)
+- Hari 21 (Sen 3 Ags): Testing manual kedua fitur, update jurnal +
+  testing-manual, review Minggu 3 — idealnya feedback supervisor soal daftar
+  lab & metrik dashboard sudah masuk di titik ini buat disesuaikan
 
 ### Minggu 4 — Hardening, Testing, Dokumentasi (4-10 Ags)
 - Hari 22 (Sel 4 Ags): RBAC hardening — review semua endpoint
@@ -83,7 +100,17 @@ nice-to-have yang dipangkas, atau tugas lain dari supervisor.
 - ERD v2 (entity Konsultasi, Operasi/Konsultasi view-only) adalah versi yang
   berlaku sampai ada instruksi lain — belum di-merge resmi ke dokumen rencana.
 - Pertanyaan terbuka ke supervisor: format data klinis (ICD-10, No. RM),
-  kebijakan data ke LLM pihak ketiga, handover pasca-magang.
+  kebijakan data ke LLM pihak ketiga, handover pasca-magang, daftar
+  laboratorium asli RS Dharmais (dipakai fitur Cari Hasil Lab), metrik apa
+  saja yang relevan untuk Dashboard Kinerja Dokter.
+- Chatbot digeser keluar dari Minggu 3 (keputusan Arthuro, 2026-07-29) —
+  status jadi buffer/nice-to-have, prioritas final belum diputuskan.
+  Diganti fitur Cari Hasil Lab (dummy, dikelompokkan per laboratorium
+  placeholder) dan Dashboard Kinerja Dokter (dummy, metrik masih tentative).
+  Tab bottom-nav "Notifikasi" diganti "Hasil Lab" secara visual, tapi route
+  Notifikasi tetap ada (disembunyikan dari tab bar, diakses lewat bel di
+  header Home) — modul itu sudah tersambung backend asli & sudah dites,
+  jadi tidak dihapus.
 - `DetailLaporanLabScreen` (screen Notifikasi → Detail Laporan Lab) dibangun
   sebagai UI dekoratif hasil eksplorasi desain Figma, di luar 4 modul resmi
   rencana awal. Entity "Laporan Lab" belum ada modelnya di `schema.prisma`.

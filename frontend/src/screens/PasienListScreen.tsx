@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '../api/client';
 import { fetchPasienList } from '../api/pasien';
 import { useAuthStore } from '../store/authStore';
-import { colors, radius, shadows, spacing } from '../theme/colors';
+import { colors, radius, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
 import { TextInput } from '../components/TextInput';
 import { ScrollToTopButton } from '../components/ScrollToTopButton';
@@ -15,6 +15,7 @@ import type { AssignmentStatus, PasienListItem } from '../api/types';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useScrollToTopButton } from '../hooks/useScrollToTopButton';
+import { useAnimatedHeaderFade } from '../hooks/useAnimatedHeaderFade';
 import type { PasienStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<PasienStackParamList, 'PasienList'>;
@@ -52,6 +53,7 @@ export function PasienListScreen({ navigation }: Props) {
   const tabBarClearance = useTabBarClearance();
   const { onScroll: onDockScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
   const { onScroll: onTopButtonScroll, visible: showScrollTop } = useScrollToTopButton();
+  const { headerBackgroundColor, headerShadowOpacity, headerElevation } = useAnimatedHeaderFade(scrolled);
   const listRef = useRef<FlatList<PasienListItem>>(null);
   const token = useAuthStore((s) => s.token);
   const [searchInput, setSearchInput] = useState('');
@@ -94,7 +96,18 @@ export function PasienListScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={[{ paddingTop: insets.top }, scrolled && shadows.header]}>
+      <Animated.View
+        style={[
+          { paddingTop: insets.top, backgroundColor: headerBackgroundColor },
+          {
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 8,
+            shadowOpacity: headerShadowOpacity,
+            elevation: headerElevation,
+          },
+        ]}
+      >
         <View style={[styles.searchWrapper, { marginTop: spacing.base }]}>
           <MaterialIcons name="search" size={20} color={colors.primary} />
           <TextInput
@@ -127,7 +140,7 @@ export function PasienListScreen({ navigation }: Props) {
             );
           })}
         </View>
-      </View>
+      </Animated.View>
 
       {loading ? (
         <View style={styles.center}>

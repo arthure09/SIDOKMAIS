@@ -13,9 +13,10 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radius, shadows, spacing } from '../theme/colors';
-import { ms, wp } from '../theme/responsive';
+import { colors, radius, spacing } from '../theme/colors';
+import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
+import { TextInput } from '../components/TextInput';
 import { ScrollToTopButton } from '../components/ScrollToTopButton';
 import { ApiError } from '../api/client';
 import { fetchOperasiList } from '../api/operasi';
@@ -25,6 +26,7 @@ import type { KunjunganListItem, OperasiListItem, OperasiStatus, StatusKunjungan
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useScrollToTopButton } from '../hooks/useScrollToTopButton';
+import { useAnimatedHeaderFade } from '../hooks/useAnimatedHeaderFade';
 import type { OperasiStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<OperasiStackParamList, 'JadwalOperasiKonsul'>;
@@ -106,11 +108,13 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   const tabBarClearance = useTabBarClearance();
   const { onScroll: onDockScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
   const { onScroll: onTopButtonScroll, visible: showScrollTop, reset: resetScrollTop } = useScrollToTopButton();
+  const { headerBackgroundColor, headerShadowOpacity, headerElevation } = useAnimatedHeaderFade(scrolled);
   const konsulScrollRef = useRef<ScrollView>(null);
   const operasiScrollRef = useRef<ScrollView>(null);
   const token = useAuthStore((s) => s.token);
   const [tab, setTab] = useState<'OPERASI' | 'KONSUL'>('OPERASI');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [search, setSearch] = useState('');
 
   useEffect(() => {
     resetScrollTop();
@@ -203,29 +207,48 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
     navigation.navigate('DetailKonsul', { kunjunganId: item.id });
   }
 
+  const searchTerm = search.trim().toLowerCase();
+
   const filteredOperasiItems = sortByStatusThenNearestDate(
-    statusFilter === 'ALL' ? operasiItems : operasiItems.filter((item) => item.status === statusFilter),
+    (statusFilter === 'ALL' ? operasiItems : operasiItems.filter((item) => item.status === statusFilter)).filter(
+      (item) =>
+        !searchTerm ||
+        item.kunjungan.pasien.nama.toLowerCase().includes(searchTerm) ||
+        item.kunjungan.pasien.norm.toLowerCase().includes(searchTerm),
+    ),
     (item) => item.status,
     (item) => item.tanggalOperasi,
   );
   const filteredKunjunganItems = sortByStatusThenNearestDate(
-    statusFilter === 'ALL'
+    (statusFilter === 'ALL'
       ? kunjunganItems
-      : kunjunganItems.filter((item) => item.statusKunjungan === statusFilter),
+      : kunjunganItems.filter((item) => item.statusKunjungan === statusFilter)
+    ).filter(
+      (item) =>
+        !searchTerm ||
+        item.pasien.nama.toLowerCase().includes(searchTerm) ||
+        item.pasien.norm.toLowerCase().includes(searchTerm),
+    ),
     (item) => item.statusKunjungan,
     (item) => item.tanggalMasuk,
   );
 
   return (
     <View style={styles.container}>
-      <View
+      <Animated.View
         style={[
           styles.headerArea,
-          { paddingTop: insets.top + ms(spacing.marginMobile) },
-          scrolled && shadows.header,
+          {
+            paddingTop: insets.top + ms(8),
+            backgroundColor: headerBackgroundColor,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 8,
+            shadowOpacity: headerShadowOpacity,
+            elevation: headerElevation,
+          },
         ]}
       >
-        <Text style={styles.title}>{tab === 'KONSUL' ? 'Jadwal Konsultasi' : 'Jadwal Operasi'}</Text>
         <View style={styles.toggle} onLayout={onToggleLayout}>
           {toggleItemWidth > 0 && (
             <Animated.View
@@ -246,11 +269,31 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
             </Text>
           </Pressable>
         </View>
+        <View style={styles.searchWrapper}>
+          <MaterialIcons name="search" size={20} color={colors.primary} />
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Cari Nama atau No. RM..."
+            placeholderTextColor={colors.outline}
+            style={styles.searchInput}
+          />
+          {search.length > 0 && (
+            <Pressable onPress={() => setSearch('')} hitSlop={8}>
+              <MaterialIcons name="close" size={18} color={colors.onSurfaceVariant} />
+            </Pressable>
+          )}
+        </View>
         <View style={styles.dateFilter}>
           <MaterialIcons name="calendar-month" size={20} color={colors.primary} />
           <Text style={styles.dateFilterText}>Hari Ini, {formatHariIni()}</Text>
         </View>
-        <View style={styles.statusFilterRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.statusFilterScroll}
+          contentContainerStyle={styles.statusFilterRow}
+        >
           {STATUS_FILTERS.map((f) => {
             const active = statusFilter === f.value;
             return (
@@ -265,8 +308,8 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
               </Pressable>
             );
           })}
-        </View>
-      </View>
+        </ScrollView>
+      </Animated.View>
 
       {tab === 'KONSUL' ? (
         kunjunganLoading ? (
@@ -410,18 +453,15 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  headerArea: { padding: spacing.marginMobile, paddingBottom: ms(8), gap: ms(16) },
-  title: { fontSize: ms(20), fontWeight: '700', color: colors.onSurface },
+  headerArea: { padding: spacing.marginMobile, paddingBottom: ms(4), gap: ms(8) },
   toggle: {
     flexDirection: 'row',
     backgroundColor: colors.surfaceVariant,
     borderRadius: radius.full,
     padding: ms(4),
-    alignSelf: 'center',
     width: '100%',
-    maxWidth: wp(85),
   },
-  toggleButton: { flex: 1, paddingVertical: ms(10), borderRadius: radius.full, alignItems: 'center' },
+  toggleButton: { flex: 1, paddingVertical: ms(8), borderRadius: radius.full, alignItems: 'center' },
   toggleIndicator: {
     position: 'absolute',
     top: TOGGLE_INSET,
@@ -439,11 +479,25 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSoft,
     borderRadius: radius.full,
     paddingHorizontal: ms(16),
-    paddingVertical: ms(12),
+    paddingVertical: ms(7),
+    width: '100%',
   },
-  dateFilterText: { fontSize: ms(16), color: colors.onSurface },
+  dateFilterText: { fontSize: ms(14), color: colors.onSurface },
 
-  statusFilterRow: { flexDirection: 'row', gap: ms(8), flexWrap: 'wrap' },
+  searchWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: ms(12),
+    backgroundColor: colors.surfaceVariant,
+    borderRadius: radius.full,
+    paddingHorizontal: ms(16),
+    paddingVertical: ms(7),
+    width: '100%',
+  },
+  searchInput: { flex: 1, fontSize: ms(14), color: colors.onSurface, paddingVertical: 0 },
+
+  statusFilterScroll: { marginHorizontal: -spacing.marginMobile },
+  statusFilterRow: { flexDirection: 'row', gap: ms(8), paddingHorizontal: spacing.marginMobile },
   statusFilterChip: {
     paddingHorizontal: ms(14),
     paddingVertical: ms(6),

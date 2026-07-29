@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Animated, Image, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -9,6 +9,7 @@ import { Text } from '../components/Text';
 import { navigasiCards, pasienPrioritas, statistikMingguan } from '../mocks/homeMock';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
+import { useAnimatedHeaderFade } from '../hooks/useAnimatedHeaderFade';
 import type { MainTabParamList } from '../navigation/types';
 import { fetchPasienList } from '../api/pasien';
 import { fetchOperasiList } from '../api/operasi';
@@ -39,11 +40,9 @@ const RINGKASAN_ROWS = [
   { key: 'konsulHariIni' as const, label: 'Konsultasi Hari Ini', icon: 'chat-bubble', tint: colors.primary },
 ];
 
-const CARD_TARGET_TAB: Partial<Record<string, keyof MainTabParamList>> = {
-  pasien: 'PasienTab',
-  operasi: 'OperasiTab',
-  notifikasi: 'NotifikasiTab',
-};
+// 'chatbot' dan 'hasillab' belum punya tujuan navigasi (chatbot digeser keluar
+// scope, layar Cari Hasil Lab belum diimplementasikan) — tombolnya non-aktif dulu.
+const NAVIGABLE_CARD_IDS = new Set(['pasien', 'operasi', 'notifikasi', 'pendapatan']);
 
 export function HomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
@@ -55,22 +54,7 @@ export function HomeScreen({ navigation }: Props) {
   const [ringkasan, setRingkasan] = useState({ pasienAktif: 0, operasiHariIni: 0, konsulHariIni: 0 });
   const [ringkasanLoading, setRingkasanLoading] = useState(true);
 
-  const headerFade = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.timing(headerFade, {
-      toValue: scrolled ? 1 : 0,
-      duration: 200,
-      useNativeDriver: false,
-    }).start();
-  }, [scrolled, headerFade]);
-
-  const headerBackgroundColor = headerFade.interpolate({
-    inputRange: [0, 1],
-    outputRange: [colors.background, colors.backgroundWhite],
-  });
-  const headerShadowOpacity = headerFade.interpolate({ inputRange: [0, 1], outputRange: [0, 0.1] });
-  const headerElevation = headerFade.interpolate({ inputRange: [0, 1], outputRange: [0, 4] });
+  const { headerBackgroundColor, headerShadowOpacity, headerElevation } = useAnimatedHeaderFade(scrolled);
 
   const loadRingkasan = useCallback(async () => {
     if (!token) return;
@@ -96,6 +80,23 @@ export function HomeScreen({ navigation }: Props) {
   useEffect(() => {
     loadRingkasan();
   }, [loadRingkasan]);
+
+  function handleCardPress(id: string) {
+    switch (id) {
+      case 'pasien':
+        navigation.navigate('PasienTab');
+        break;
+      case 'operasi':
+        navigation.navigate('OperasiTab');
+        break;
+      case 'notifikasi':
+        navigation.navigate('NotifikasiTab');
+        break;
+      case 'pendapatan':
+        navigation.navigate('ProfilTab', { screen: 'DataPendapatan' });
+        break;
+    }
+  }
 
   return (
     <View style={styles.container}>
@@ -158,17 +159,19 @@ export function HomeScreen({ navigation }: Props) {
 
           <View style={styles.grid}>
             {navigasiCards.map((card) => {
-              const targetTab = CARD_TARGET_TAB[card.id];
+              const isNavigable = NAVIGABLE_CARD_IDS.has(card.id);
               return (
                 <Pressable
                   key={card.id}
-                  disabled={!targetTab}
-                  onPress={() => targetTab && navigation.navigate(targetTab)}
+                  disabled={!isNavigable}
+                  onPress={() => handleCardPress(card.id)}
                   style={({ pressed }) => [styles.gridCard, pressed && styles.gridCardPressed]}
                 >
-                  {card.id === 'notifikasi' && <View style={styles.gridCardDot} />}
-                  <View style={styles.gridIconCircle}>
-                    <MaterialIcons name={card.icon as never} size={28} color={colors.primary} />
+                  <View style={styles.gridIconWrap}>
+                    <View style={styles.gridIconCircle}>
+                      <MaterialIcons name={card.icon as never} size={26} color={colors.primary} />
+                    </View>
+                    {card.id === 'notifikasi' && <View style={styles.gridCardDot} />}
                   </View>
                   <Text style={styles.gridLabel}>{card.label}</Text>
                 </Pressable>
@@ -235,8 +238,9 @@ const styles = StyleSheet.create({
     minHeight: 88,
     paddingLeft: spacing.marginMobile,
     paddingRight: spacing.marginMobile,
+    paddingBottom: 4,
   },
-  headerLogo: { width: 168, height: 48 },
+  headerLogo: { width: 112, height: 32 },
   notifButton: {
     width: 44,
     height: 44,
@@ -255,41 +259,41 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: spacing.gutter,
+    justifyContent: 'space-between',
+    rowGap: spacing.gutter,
   },
   gridCard: {
-    width: '47%',
-    backgroundColor: colors.backgroundWhite,
-    borderRadius: 24,
-    paddingVertical: 22,
-    paddingHorizontal: 16,
+    width: '30%',
     alignItems: 'center',
-    gap: 12,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 15,
-    elevation: 2,
+    gap: 8,
   },
-  gridCardPressed: { opacity: 0.9, transform: [{ scale: 0.98 }] },
+  gridCardPressed: { opacity: 0.85, transform: [{ scale: 0.96 }] },
+  gridIconWrap: { position: 'relative' },
   gridCardDot: {
     position: 'absolute',
-    top: 16,
-    right: 16,
+    top: 2,
+    right: 2,
     width: 12,
     height: 12,
     borderRadius: 6,
     backgroundColor: colors.tertiaryFixed,
+    borderWidth: 2,
+    borderColor: colors.backgroundWhite,
   },
   gridIconCircle: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: colors.surfaceSoft,
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.backgroundWhite,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  gridLabel: { fontSize: 20, fontWeight: '700', color: colors.deepTealDark, textAlign: 'center' },
+  gridLabel: { fontSize: 12, fontWeight: '600', color: colors.deepTealDark, textAlign: 'center' },
 
   summaryCard: {
     backgroundColor: colors.surfaceSoft,

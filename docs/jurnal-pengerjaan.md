@@ -209,15 +209,134 @@ via curl ke DB dev + `npx tsc --noEmit` bersih di frontend, bukan smoke test di
 device beneran. Prioritas 3 (migration `expoPushToken`, `expo-server-sdk`,
 cron reminder H-1/H-2) belum dikerjakan sama sekali, sesuai rencana di prompt.
 
+### Catatan lanjutan 28 Jul 2026 — Polish UI Home/Pasien/Jadwal (di luar rencana awal)
+Sesi terpisah dari catch-up Hari 12-13 di atas — murni polish UI/UX di frontend
+atas permintaan Arthuro, tanggal sama (28 Jul), tidak masuk item resmi
+`rencana-pengembangan-aplikasi-dokter.pdf`. Semua perubahan hanya di
+`frontend/`, tidak menyentuh backend/schema. Diverifikasi tiap langkah pakai
+`npx tsc --noEmit` (bersih di akhir), belum dites di Expo Go/HP fisik.
+
+**1. Shadow header saat discroll (semua screen dengan header fixed):**
+- Hook `useTabBarDockOnScroll` (`frontend/src/hooks/`) ditambah state `scrolled`
+  (threshold 2px dari atas), dipakai bareng logic dock FloatingTabBar yang
+  sudah ada — satu `onScroll` yang sama, tidak perlu subscribe dua kali.
+- Hook baru `useHeaderScrollShadow` buat 3 screen yang sebelumnya belum ada
+  `onScroll` sama sekali di ScrollView-nya (`PasienDetailScreen`,
+  `DetailJadwalOperasiScreen`, `DetailKonsulScreen`) — dipasang berdiri
+  sendiri, tanpa ikut logic dock tab bar.
+- Style bersama `shadows.header` ditambah di `theme/colors.ts`, dipasang
+  kondisional (`scrolled && shadows.header`) ke header 11 screen: Home,
+  PasienList, Notifikasi, JadwalOperasiKonsul, ProfilDokter, DataPendapatan,
+  PasienDetail, DetailJadwalOperasi, DetailKonsul, DetailNotifikasi,
+  DetailLaporanLab. Login & Welcome screen sengaja dilewati — headernya ikut
+  scroll bareng konten, bukan fixed di atas.
+
+**2. `PasienListScreen` — search box & navigasi list:**
+- Background kotak pencarian digelapkan (`surfaceSoft` → `surfaceVariant`,
+  placeholder disesuaikan ke `colors.outline`) karena kontrasnya kurang kelihatan.
+- Tombol clear (ikon "x") muncul di kotak pencarian begitu user mulai
+  mengetik, buat hapus cepat tanpa backspace manual.
+- Floating action button "scroll to top" (komponen baru
+  `components/ScrollToTopButton.tsx` + hook `hooks/useScrollToTopButton.ts`),
+  muncul begitu list discroll sedikit (threshold 2px, awalnya 300px lalu
+  direvisi ke 2px atas permintaan Arthuro), posisi ngambang persis di atas
+  FloatingTabBar.
+
+**3. `JadwalOperasiKonsulScreen` — sorting & navigasi list:**
+- Floating "scroll to top" yang sama, dipasang per-tab (ref terpisah buat
+  ScrollView Operasi vs Konsultasi, direset tiap ganti tab biar tidak nyangkut
+  visible dari posisi scroll tab sebelumnya).
+- Filter "Semua" sekarang mengurutkan kartu jadwal operasi & konsultasi:
+  **status dulu** (Terjadwal/Berlangsung → Selesai → Batal jadi 3 kelompok),
+  **tanggal terdekat ke hari ini di dalam tiap kelompok**. Keputusan urutan
+  ini sempat dikonfirmasi eksplisit ke Arthuro dulu (ada 2 interpretasi
+  mungkin — status-dulu vs tanggal-dulu — karena beda hasil signifikan).
+
+**4. Identitas fallback akun ADMIN:**
+- Akun `Pengguna` role ADMIN tidak punya relasi ke `Dokter` (`dokterId` null),
+  jadi selama ini nama & spesialisasi yang tampil di UI jatuh ke fallback
+  generik ("User" / "Spesialisasi belum diatur"). Diganti jadi "Reza Auditore"
+  / "Spesialis Kelamin" di `HomeScreen` (sapaan) dan `ProfilDokterScreen`
+  (nama + spesialisasi) — permintaan langsung Arthuro, murni tampilan
+  frontend, tidak ada perubahan skema/data di backend.
+
+**5. Redesign `HomeScreen`:**
+- Logo header diganti dari `Logo sidokmais.png` ke
+  `logo sidokmais dan tulisan.png` (versi dengan wordmark).
+- Ditemukan file PNG-nya punya padding transparan ~106px di kiri-kanan (canvas
+  854x292, konten asli cuma 643x184) — ini yang bikin logo kelihatan tidak
+  align ke kiri sejajar teks "Halo" meskipun `paddingLeft` container sudah
+  disamakan. Di-crop pakai PIL (`Image.getbbox()` + `.crop()`) langsung ke
+  file asset-nya supaya bounding box Image di RN pas dengan konten visible-nya.
+  Ukuran `headerLogo` disesuaikan beberapa kali ikut feedback Arthuro
+  (diperbesar dulu, lalu dikecilkan lagi ke 168×48 final).
+- Header sekarang pakai `Animated.Value` — background header fade dari
+  `colors.background` ke putih (`colors.backgroundWhite`) plus shadow-nya,
+  dianimasikan halus 200ms pas discroll (bukan langsung snap), khusus di Home
+  saja (screen lain tetap warna shadow header default).
+- "Ringkasan Aktivitas Hari Ini" digabung jadi satu section sama grid 4
+  tombol quick action (ringkasan tampil duluan, grid di bawahnya), lalu
+  background kartu (`summaryCard`) di section gabungan ini dihilangkan atas
+  permintaan Arthuro (jadi section polos tanpa panel), dan ukuran tombol
+  quick action + ringkasan diperbesar lagi karena sudah tidak dibatasi
+  padding kartu. "Pasien Prioritas" + "Statistik Pasien Mingguan" tetap satu
+  kartu terpisah, tidak ikut digabung (sesuai instruksi eksplisit — cuma
+  Ringkasan yang boleh gabung sama quick action).
+- Tombol bell notifikasi ditambah di pojok kanan header (navigasi ke
+  `NotifikasiTab`), sejajar logo yang di kiri.
+
+**Commit & push:** semua perubahan di atas digabung 1 commit
+(`aa1c4eb feat: header scroll shadow, list scroll-to-top FAB, jadwal sort, home redesign`)
+dan di-push ke `origin/main`. Push sempat butuh override manual
+(`-c http.postBuffer=524288000 -c http.version=HTTP/1.1`, non-persisten, tidak
+mengubah `~/.gitconfig`) karena pola HTTP 400 yang sudah pernah ketemu
+sebelumnya di repo ini pas ada perubahan asset binary (PNG logo).
+
 ---
 
-## Minggu 3 — Chatbot (28 Jul-3 Ags)
-Hari 15-21: **tertunda**, nunggu Minggu 2 (Hari 12-14) beres dan hasil review
-supervisor 28 Jul (khususnya kebijakan data ke LLM pihak ketiga). Scope aslinya:
-desain intent schema, read-intents, validation layer, write-intents + konfirmasi,
-multi-turn clarification, audit log integration, testing manual (~20-30 sample
-perintah). Tanggal di jadwal awal kemungkinan perlu digeser menyesuaikan
-keterlambatan ini.
+## Minggu 3 — Hasil Lab & Dashboard Kinerja (28 Jul-3 Ags)
+Chatbot digeser keluar dari minggu ini (keputusan Arthuro, 29 Jul 2026), diganti
+2 fitur dummy-data: Cari Hasil Lab (by No. RM) dan Dashboard Kinerja Dokter.
+Scope chatbot lama (intent schema, read/write-intents, validation layer,
+konfirmasi, audit log integration) jadi buffer/nice-to-have, belum pasti
+dikerjakan sebelum akhir magang — lihat `CLAUDE.md`.
+
+### Hari 15 (Sel, 28 Jul) — Catch-up Notifikasi
+Lihat catatan "Catch-up Hari 12-13" di atas (dikerjakan tanggal yang sama,
+28 Jul, sesuai jadwal asli).
+
+### Hari 16 (Rab, 29 Jul) — Desain & struktur data Hasil Lab
+Scope hari ini sengaja dibatasi ke desain & data saja (bukan screen — itu
+Hari 17, bukan navigasi — itu Hari 18), sesuai
+`docs/prompts/hari-16-tugas-hari-ini.md`.
+- `frontend/src/mocks/labMock.ts` dibuat: type `HasilLabItem`,
+  `KelompokHasilLab` (field `laboratorium`, dummy murni — "Laboratorium A/B/C",
+  belum ada nama unit lab asli), `HasilLabPasien`, dan `hasilLabByNorm` isi 3
+  pasien dummy (No. RM 10-digit numerik, pola sama seperti `norm` di
+  `prisma/seed.js`, bukan format hyphenated), tiap pasien 2 kelompok, tiap
+  kelompok 1-3 item. Entry pasien pertama (`9821140512`, Tn. Ahmad Subarjo)
+  reuse teks dari `notifikasiMock.ts` → `laporanLabDetail`, 4 item lab lama
+  dipecah jadi 2 kelompok ("Laboratorium A" / "Laboratorium B") biar gak
+  dobel karang teks. File ini belum dipakai di layar manapun — itu wajar,
+  konsumennya (`CariHasilLabScreen`) baru dibuat Hari 17. Diverifikasi
+  `npx tsc --noEmit` bersih.
+- Desain visual: prompt Stitch di `docs/prompts/desain-hasil-lab-stitch.md`
+  sudah siap dipakai (belum ditempel ke Stitch oleh AI — itu langkah manual
+  Arthuro di tool Stitch, di luar akses Claude Code).
+- Rencana navigasi (`fitur-cari-hasil-lab.md` bagian 3) sudah dibaca ulang:
+  tab `NotifikasiTab` tetap terdaftar sebagai route, cuma difilter dari
+  render tombol `FloatingTabBar.tsx` (bukan dihapus dari navigator) — biar
+  bel di Home (`navigation.navigate('NotifikasiTab')`) tetap jalan tanpa
+  restrukturisasi navigator. Dieksekusi Hari 18, belum ada perubahan kode
+  navigasi hari ini.
+- Pertanyaan buat supervisor (belum dijawab, dibawa ke pertemuan berikutnya):
+  1. Daftar laboratorium yang benar-benar ada di RS Dharmais (nama resmi unit
+     lab) — buat ganti string dummy `laboratorium` di `labMock.ts`.
+  2. Metrik apa yang relevan buat Dashboard Kinerja Dokter (jumlah pasien
+     aktif? konsultasi/operasi selesai? ketepatan jadwal dari data
+     `PERUBAHAN_JADWAL`? komposisi kasus?).
+  3. (Opsional) Konfirmasi ulang status chatbot — tetap buffer akhir magang
+     atau resmi dicoret dari scope.
 
 ## Minggu 4 — Hardening, Testing, Dokumentasi (4-10 Ags)
 Hari 22-28: belum dimulai. Scope: RBAC hardening, verifikasi audit log,

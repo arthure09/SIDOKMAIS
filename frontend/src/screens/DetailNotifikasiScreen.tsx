@@ -55,13 +55,15 @@ export function DetailNotifikasiScreen({ route, navigation }: Props) {
           <Text style={styles.pesanText}>{pesan}</Text>
         </View>
 
-        <View style={styles.readStatusPill}>
+        <View style={[styles.readStatusPill, isRead && styles.readStatusPillActive]}>
           <MaterialIcons
             name={isRead ? 'check-circle' : 'radio-button-unchecked'}
             size={20}
-            color={colors.onSurfaceVariant}
+            color={isRead ? colors.primary : colors.onSurfaceVariant}
           />
-          <Text style={styles.readStatusText}>{isRead ? 'Sudah Dibaca' : 'Belum Dibaca'}</Text>
+          <Text style={[styles.readStatusText, isRead && styles.readStatusTextActive]}>
+            {isRead ? 'Sudah Dibaca' : 'Belum Dibaca'}
+          </Text>
         </View>
       </ScrollView>
     </View>
@@ -146,5 +148,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     marginTop: ms(8),
   },
+  readStatusPillActive: { backgroundColor: colors.primaryContainer },
   readStatusText: { fontSize: ms(16), fontWeight: '700', color: colors.onSurfaceVariant },
+  readStatusTextActive: { color: colors.primary },
 });

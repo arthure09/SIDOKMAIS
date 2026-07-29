@@ -1,3 +1,5 @@
+import type { NavigatorScreenParams } from '@react-navigation/native';
+
 export type RootStackParamList = {
   Welcome: undefined;
   Login: undefined;
@@ -9,7 +11,7 @@ export type MainTabParamList = {
   PasienTab: undefined;
   OperasiTab: undefined;
   NotifikasiTab: undefined;
-  ProfilTab: undefined;
+  ProfilTab: NavigatorScreenParams<ProfilStackParamList> | undefined;
 };
 
 export type PasienStackParamList = {
