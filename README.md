@@ -9,14 +9,36 @@ pengerjaan ada di [CLAUDE.md](CLAUDE.md).
 
 ```
 sidokmais/
-├── backend/    Node.js + Express + Prisma + PostgreSQL (JWT auth, RBAC)
-├── frontend/   React Native + Expo (React Navigation, React Native Paper, Zustand)
-├── docs/       Dokumentasi umum (testing manual, ERD, dll — bukan spesifik backend/frontend)
+├── backend/    Node.js + Express + Prisma + PostgreSQL (JavaScript, JWT auth, RBAC)
+├── frontend/   React Native + Expo + TypeScript (React Navigation, Zustand)
+├── docs/       Dokumentasi umum (testing manual, laporan harian, ERD, dll)
 └── CLAUDE.md   Context project lengkap (stack, aturan arsitektur, jadwal)
 ```
 
-- **backend/** — API server. Lihat `backend/prisma/schema.prisma` untuk skema DB.
-- **frontend/** — Belum ada screen/logic, baru scaffold Expo kosong.
+- **backend/** — API server, **JavaScript (`.js`, CommonJS)**. Lihat
+  `backend/prisma/schema.prisma` untuk skema DB (13 model per 30 Jul 2026).
+- **frontend/** — TypeScript. 13 screen sudah ada (list/detail pasien, jadwal
+  operasi & konsultasi, notifikasi, pendapatan, profil, dll); sebagian
+  tersambung API asli, sebagian masih `src/mocks/`.
+- **docs/laporan-harian/** — laporan harian per hari untuk pelaporan magang.
+  Jurnal teknis kronologis ada di [docs/jurnal-pengerjaan.md](docs/jurnal-pengerjaan.md).
+
+### Catatan stack (hasil audit dokumentasi 30 Jul 2026)
+
+Dokumentasi lama menyebut beberapa teknologi yang tidak dipakai di kode.
+Yang berlaku:
+
+| Klaim lama | Kondisi aktual |
+|---|---|
+| Backend TypeScript | **JavaScript** — 16 file `.js`, tanpa `tsconfig.json`. Tidak dimigrasi (prioritas fitur). |
+| HTTP client axios | **`fetch` native** via helper `apiFetch<T>()` di `frontend/src/api/client.ts`. |
+| UI React Native Paper | Terpasang & `PaperProvider` masih membungkus app, tapi **tidak ada komponen Paper dipakai** — UI disusun dari `View`/`Pressable`. |
+| Zustand untuk state modul | Hanya `authStore` + `tabBarStore`. Data modul di-fetch per screen (`useState`/`useEffect`). |
+| Primary Teal `#27B4AC` | `primary` = `#006a65`; `#27b4ac` = `primaryContainer`. Lihat `frontend/src/theme/colors.ts`. |
+| 10 entitas, nama `Assignment` | **13 model**, namanya `DokterPasienAssignment`. Tidak ada model `Konsultasi`. |
+
+Rincian dan alasannya ada di [CLAUDE.md](CLAUDE.md) bagian *Tech Stack* dan
+*Entity naming*.
 
 ## Menjalankan backend
 
@@ -46,6 +68,8 @@ HP itu sendiri, bukan laptop.
 
 ## TODO
 
-- [ ] Isi detail environment variable frontend (base URL API) setelah screen pertama dibuat (Hari 9)
-- [ ] Dokumentasi ERD final di `docs/`
+- [x] Isi detail environment variable frontend (base URL API) — selesai Hari 9
+      (`frontend/.env.example`, dikonsumsi `src/api/client.ts`)
+- [ ] Dokumentasi ERD final di `docs/` — perlu update, sudah 13 model
 - [ ] Panduan pakai app (rencana Hari 27)
+- [ ] Keputusan yang sengaja ditunda: lihat [docs/keputusan-tertunda.md](docs/keputusan-tertunda.md)

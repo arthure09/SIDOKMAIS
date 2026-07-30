@@ -25,9 +25,14 @@ ERD, daftar endpoint API, draft intent chatbot. Artefak di luar repo.
 Init repo, Docker Compose (Node app + Postgres), environment config (`.env.example`).
 
 ### Hari 6 (Min, 19 Jul) — DB schema + seed
-Prisma migration untuk 10 entity (Dokter, Pasien, DokterPasienAssignment, Ruangan,
+Prisma migration untuk **11 entity** (Dokter, Pasien, DokterPasienAssignment, Ruangan,
 Kunjungan, Pengguna, Notifikasi, Operasi, Penjamin, Pendapatan, AuditLog). Seed
 dummy data pakai `@faker-js/faker` locale Indonesia, password di-hash pakai bcrypt.
+
+> Koreksi 30 Jul 2026 (audit dokumentasi): entri ini sebelumnya menulis
+> "10 entity" padahal daftar di dalam tanda kurungnya berisi 11 nama —
+> `AuditLog` tidak ikut terhitung. Per 30 Jul jumlahnya jadi **13** setelah
+> `PemeriksaanLab` + `HasilLabItem` masuk.
 
 ### Hari 7 (Sen, 20 Jul) — RBAC skeleton
 `auth.middleware.js` (verifikasi JWT, attach `req.user` dari klaim token) dan
@@ -338,6 +343,140 @@ Hari 17, bukan navigasi — itu Hari 18), sesuai
   3. (Opsional) Konfirmasi ulang status chatbot — tetap buffer akhir magang
      atau resmi dicoret dari scope.
 
+### Catatan lanjutan 29 Jul 2026 — Polish UI header animasi, search jadwal, Home quick action 6-tombol
+Sesi terpisah dari scope resmi Hari 16 di atas (labMock.ts/desain), tapi
+digabung ke commit yang sama karena sama-sama 29 Jul — murni polish UI/UX
+frontend di luar `docs/prompts/hari-16-tugas-hari-ini.md`, tidak menyentuh
+backend/schema. Diverifikasi `npx tsc --noEmit` bersih, belum dites di Expo
+Go/HP fisik.
+
+**1. Hook `useAnimatedHeaderFade` diekstrak dari `HomeScreen`:**
+- Logic animasi header fade (background `colors.background` → `backgroundWhite`
+  + shadow + elevation, 200ms, dibuat 28 Jul khusus buat Home) dipindah dari
+  inline `Animated.Value`/`useEffect`/interpolate di `HomeScreen.tsx` ke hook
+  reusable `frontend/src/hooks/useAnimatedHeaderFade.ts`.
+- Dipasang juga di `NotifikasiScreen` dan `JadwalOperasiKonsulScreen`
+  (sebelumnya header statis, cuma `scrolled && shadows.header`), dan
+  `PasienListScreen` ikut dipindah ke hook yang sama gantiin pola statis
+  yang sama. Jadi 4 screen (Home, Notifikasi, Jadwal Operasi/Konsul, Pasien)
+  sekarang share 1 implementasi animasi fade header, bukan re-implement
+  masing-masing.
+
+**2. `JadwalOperasiKonsulScreen` — search box by nama/No. RM:**
+- State `search` baru, filter client-side by `pasien.nama`/`pasien.norm`
+  (case-insensitive) dipasang di atas filter status yang sudah ada, sebelum
+  `sortByStatusThenNearestDate` — jadi hasil search ikut tersortir juga
+  (status dulu, tanggal terdekat di dalam grup), bukan cuma numpuk di akhir.
+  Berlaku di kedua list (Operasi & Konsultasi).
+- Judul screen ("Jadwal Operasi"/"Jadwal Konsultasi") dihapus dari header
+  buat kasih tempat search box; chip filter status dipindah dari `flexWrap`
+  ke `ScrollView` horizontal karena header makin sempit vertikal dengan
+  tambahan search box.
+
+**3. `NotifikasiScreen` — status baca lokal untuk item demo Laporan Lab:**
+- Item demo Laporan Lab bukan entity API asli (`DetailLaporanLabScreen`
+  masih murni dekoratif, entity-nya belum ada modelnya di `schema.prisma` —
+  catatan lama di `CLAUDE.md`), jadi tidak bisa panggil
+  `PATCH /api/notifikasi/:id/read` buat dia. State `labDemoRead` lokal
+  ditambah supaya titik unread-nya hilang begitu item dibuka (navigasi ke
+  `DetailLaporanLab`), tanpa mencoba nulis ke endpoint notifikasi
+  beda-entity.
+
+**4. `DetailNotifikasiScreen` — pill status baca dapat state aktif:**
+- Pill "Sudah Dibaca"/"Belum Dibaca" sebelumnya selalu abu-abu
+  (`colors.onSurfaceVariant`) apapun statusnya. Sekarang berubah warna
+  primary (background `primaryContainer`, teks/ikon `colors.primary`) kalau
+  `isRead` true — konsisten sama badge/dot unread yang sudah ada di list
+  `NotifikasiScreen`.
+
+**5. `HomeScreen` — quick action grid 4→6 tombol, formasi 3x2:**
+- 2 kartu baru ditambah ke `navigasiCards` (`homeMock.ts`): "Data Pendapatan"
+  dan "Cari Hasil Lab".
+- Bentuk kartu diganti dari kotak besar (shadow per-kartu, label besar) jadi
+  tombol bulat (lingkaran ikon 64px dengan shadow sendiri, label kecil di
+  bawah) supaya 3 kartu muat sebaris — formasi 3x2 gantiin 2x2.
+- "Data Pendapatan" disambungin nested navigate `ProfilTab → DataPendapatan`
+  — perlu ubah tipe `ProfilTab` di `navigation/types.ts` dari `undefined`
+  jadi `NavigatorScreenParams<ProfilStackParamList> | undefined` supaya bisa
+  passing target screen di nested stack.
+- "Cari Hasil Lab" masih non-navigable (masuk `NAVIGABLE_CARD_IDS` yang
+  di-exclude, sama seperti "Chatbot") — layar tujuannya (`CariHasilLabScreen`)
+  belum ada, itu scope Hari 17.
+- Logo header dikecilkan lagi (168×48 → 112×32, ukuran final sebelumnya di
+  28 Jul) buat kasih ruang tambahan ke header yang makin padat.
+
+### Hari 17 (Kam, 30 Jul) — Fondasi data modul lab (backend)
+**Menyimpang dari rencana:** rencana awal Hari 17 adalah `CariHasilLabScreen`.
+Diganti jadi fondasi data backend karena membuat screen kedua di atas mock
+(`labMock.ts`) hanya menghasilkan 2 screen yang sama-sama tidak bisa dites
+end-to-end. Urutan dibalik: data (H17) → endpoint (H18) → screen (H19).
+Laporan lengkap versi non-teknis: `docs/laporan-harian/day-17-30-juli-2026.md`.
+
+**Schema & migration:**
+- 2 model baru: `PemeriksaanLab` (order lab) + `HasilLabItem` (parameter per
+  order, cascade delete dari parent). 2 enum baru: `StatusPemeriksaanLab`
+  (PENDING/COMPLETED/CANCELLED), `FlagHasilLab` (RENDAH/NORMAL/TINGGI/ABNORMAL).
+- `NotifikasiTipe.HASIL_LAB` + field `relatedId`/`relatedType` di `Notifikasi`
+  (polymorphic ringan — supaya notifikasi bisa nunjuk ke entity apa pun tanpa
+  nambah kolom FK tiap ada modul baru).
+- Migration `20260730024026_add_lab_module`. Total model jadi 13.
+- `backend/src/constants/lab.js` baru: `LAB_KATEGORI` (6 kategori), satu sumber
+  kebenaran buat seed + validasi endpoint H18.
+
+**Keputusan schema (detail alasan di laporan harian):**
+1. 2 entitas, bukan 1 — 1 order → banyak parameter.
+2. `pasienId` wajib, `kunjunganId` nullable; **hak akses lewat
+   `DokterPasienAssignment`, bukan `kunjungan.dokterId`**. Alasan klinis:
+   pasien onkologi lintas dokter, order sering diminta dokter lain (dokter
+   jaga), jadi hak akses lewat kunjungan bikin dokter PJ tidak bisa lihat hasil
+   lab pasiennya sendiri. `dokterPemintaId` disimpan sebagai info, bukan
+   penentu akses. **Masih asumsi — belum dikonfirmasi supervisor.**
+3. `kategori` String, bukan enum — daftar resmi RS belum ada; arah String→enum
+   lebih murah daripada sebaliknya.
+4. `nilai` String, bukan Decimal — banyak hasil kualitatif ("Reaktif", "3+",
+   "Tidak ditemukan sel ganas").
+5. `flag` diturunkan dari perbandingan nilai vs rujukan yang sama dipakai
+   generate nilainya, bukan diacak terpisah. Rujukan per jenis kelamin untuk
+   Hb/Hematokrit/Eritrosit/Kreatinin; tumor marker perempuan (CA 15-3, CA-125)
+   tidak pernah muncul di pasien laki-laki.
+
+**Seed lab + hygiene seed:**
+- `seedPemeriksaanLab()` 2-pass: pass 1 bangun spec JS, lalu
+  `ensureMinimumKunjunganNull` (~20%), `ensureMinimumCrossDokter` (>=3),
+  `ensureMinimumPending` (>=1) memaksa distribusi wajib; pass 2 baru insert ke
+  DB. Ini supaya proporsi tidak bergantung murni pada probabilitas acak.
+- `faker.seed(20260730)` dipasang paling awal di `main()`.
+- **Temuan:** `pickOne`/`pickMany` masih pakai `Math.random()`, jadi
+  `faker.seed()` tidak benar-benar mengontrol seluruh keacakan. Diperbaiki ke
+  `faker.helpers.arrayElement`/`arrayElements`. Ini jenis bug yang verifikasi
+  determinismenya lolos di permukaan (jumlah baris sama) tapi isinya beda.
+- Guard username collision di `seedPengguna`, `dedupeKataBerurutan()` buat
+  quirk `fakerID_ID.person.fullName()` yang ~25% menggandakan kata pertama
+  ("Indira Indira Jelita"), pemisahan `JENIS_TINDAKAN_PEREMPUAN` dari daftar
+  netral (Mastektomi tidak muncul di pasien laki-laki).
+
+**Verifikasi:** 37 `PemeriksaanLab`, 75 `HasilLabItem`; status COMPLETED 24 /
+PENDING 4 / CANCELLED 9; rata-rata 3,13 item per order COMPLETED (2,03 kalau
+dibagi seluruh order); `kunjunganId` null 8 (22%); 6 order cross-dokter;
+`dokterPemintaId` null 7; flag RENDAH 3 / NORMAL 56 / TINGGI 8 / ABNORMAL 8;
+**0 dari 24 order COMPLETED yang panelnya tidak penuh**. Seed dijalankan 3×
+berturut-turut, username akun identik (`admin`, `indira.jelita`,
+`irma.febrianti`).
+
+**Kendala:** Tailscale sempat mati sehingga migration gagal (Prisma tidak bisa
+reach DB) — disambung ulang, migration dijalankan lagi, bukan bikin migration
+baru.
+
+**Belum dikerjakan / catatan:**
+- Pola `Math.random()` yang sama **masih ada** di
+  `backend/prisma/seed-kunjungan-operasi.js:67,71` — belum ikut diperbaiki.
+  Tidak dipakai di alur seed utama, tapi berpotensi jadi jebakan yang sama.
+- Kualitas data lab belum realistis klinis (kopling Hb–Hematokrit–Eritrosit,
+  arah flag untuk pasien pasca-kemo) — dijadwalkan Day 21, lihat
+  `docs/keputusan-tertunda.md`.
+- Audit dokumentasi 6 klaim stale — lihat bagian "Koreksi dokumentasi" di
+  bawah.
+
 ## Minggu 4 — Hardening, Testing, Dokumentasi (4-10 Ags)
 Hari 22-28: belum dimulai. Scope: RBAC hardening, verifikasi audit log,
 integration testing, bug fixing (2 round), user documentation, final review.
@@ -347,7 +486,39 @@ integration testing, bug fixing (2 round), user documentation, final review.
 ## Catatan lintas-hari yang masih terbuka
 - ERD v2 (entity Konsultasi terpisah dari Operasi) belum di-merge resmi ke
   dokumen rencana, masih pending keputusan supervisor
-- Entity "Laporan Lab" belum ada modelnya di `schema.prisma` — `DetailLaporanLabScreen`
-  murni UI dekoratif untuk saat ini
+- ~~Entity "Laporan Lab" belum ada modelnya di `schema.prisma`~~ — **selesai
+  30 Jul 2026**: `PemeriksaanLab` + `HasilLabItem` masuk lewat migration
+  `20260730024026_add_lab_module`. `DetailLaporanLabScreen` masih pakai mock;
+  penyambungan ke data asli dijadwalkan Hari 19.
 - Pertanyaan terbuka ke supervisor: format data klinis (ICD-10, No. RM), kebijakan
-  data ke LLM pihak ketiga, handover pasca-magang
+  data ke LLM pihak ketiga, handover pasca-magang. Khusus modul lab, daftar
+  pertanyaan terstruktur ada di `docs/pertanyaan-supervisor-modul-lab.md`.
+- Hal-hal yang sengaja ditunda (bukan terlupa) dicatat di
+  `docs/keputusan-tertunda.md`.
+
+---
+
+## Koreksi dokumentasi — audit 30 Jul 2026
+
+Audit terhadap kode aktual menemukan 6 klaim di dokumentasi proyek yang sudah
+tidak sesuai. Ini penting karena dokumentasi dipakai sebagai konteks untuk
+prompt-prompt berikutnya, jadi selama salah ia terus menyuntikkan fakta keliru.
+
+| Klaim di dokumentasi | Hasil verifikasi | Bukti |
+|---|---|---|
+| HTTP client: axios | **SALAH** — `fetch` native + `apiFetch<T>()` | `frontend/src/api/client.ts:18,26`; `axios` tidak ada di `frontend/package.json` |
+| UI: React Native Paper | **SEBAGIAN** — terpasang & `PaperProvider` aktif, tapi 0 komponen Paper dipakai | `frontend/package.json:19`; `frontend/App.tsx:4` satu-satunya import; 220 `<View` + 72 `Pressable` di `src/screens`+`src/components` |
+| Zustand untuk state modul | **SEBAGIAN** — benar dipakai, tapi hanya auth & tab bar | `frontend/src/store/` hanya `authStore.ts`, `tabBarStore.ts`, `authStorage.ts`; 12 dari 13 screen pakai `useState`/`useEffect` sendiri |
+| Primary Teal `#27B4AC` | **SALAH** — itu `primaryContainer` | `frontend/src/theme/colors.ts:2` `primary: '#006a65'`, baris 4 `primaryContainer: '#27b4ac'` |
+| Backend TypeScript | **SALAH** — JavaScript | 16 file `.js`, 0 file `.ts` di `backend/src`+`backend/prisma`; tidak ada `backend/tsconfig.json`; `backend/package.json:5` `main: src/server.js` |
+| 10 entitas, nama `Assignment` | **SEBAGIAN** — nama benar `DokterPasienAssignment`, `AuditLog` memang luput, tapi jumlahnya **13** bukan 10 atau 11 | `backend/prisma/schema.prisma` — 13 `model` |
+
+Yang dikoreksi: `CLAUDE.md` (Tech Stack, Entity naming, jadwal Minggu 3,
+catatan pending Laporan Lab), `README.md` (struktur folder + tabel catatan
+stack), `docs/jurnal-pengerjaan.md` (Hari 6, catatan lintas-hari, bagian ini).
+
+**Belum bisa dikoreksi:** klaim `axios`, `TypeScript`, `#27B4AC`, dan
+"10-entity schema (`Assignment`)" juga tersimpan di *project knowledge*
+Claude.ai (`memory.md` dan `rencana-pengembangan-aplikasi-dokter.md`), yang
+di-mount read-only dan tidak bisa diedit dari repo. Itu kemungkinan sumber
+utama drift-nya — perlu diperbarui manual dari sisi Claude.ai.

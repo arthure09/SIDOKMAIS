@@ -113,7 +113,7 @@ export function ProfilDokterScreen({ navigation }: Props) {
           onPress={handleLogout}
           style={({ pressed }) => [styles.logoutButton, pressed && styles.logoutButtonPressed]}
         >
-          <MaterialIcons name="logout" size={20} color={colors.error} />
+          <MaterialIcons name="logout" size={20} color={colors.onError} />
           <Text style={styles.logoutText}>Keluar Akun</Text>
         </Pressable>
       </ScrollView>
@@ -211,9 +211,8 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 16,
     borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.error,
+    backgroundColor: colors.error,
   },
-  logoutButtonPressed: { backgroundColor: colors.errorContainer },
-  logoutText: { fontSize: 12, fontWeight: '600', letterSpacing: 0.5, color: colors.error },
+  logoutButtonPressed: { backgroundColor: colors.onErrorContainer },
+  logoutText: { fontSize: 12, fontWeight: '600', letterSpacing: 0.5, color: colors.onError },
 });

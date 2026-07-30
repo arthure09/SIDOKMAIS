@@ -169,7 +169,7 @@ export function HomeScreen({ navigation }: Props) {
                 >
                   <View style={styles.gridIconWrap}>
                     <View style={styles.gridIconCircle}>
-                      <MaterialIcons name={card.icon as never} size={26} color={colors.primary} />
+                      <MaterialIcons name={card.icon as never} size={32} color={colors.primary} />
                     </View>
                     {card.id === 'notifikasi' && <View style={styles.gridCardDot} />}
                   </View>
@@ -281,9 +281,9 @@ const styles = StyleSheet.create({
     borderColor: colors.backgroundWhite,
   },
   gridIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     backgroundColor: colors.backgroundWhite,
     alignItems: 'center',
     justifyContent: 'center',

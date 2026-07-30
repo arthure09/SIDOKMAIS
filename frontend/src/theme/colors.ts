@@ -22,6 +22,7 @@ export const colors = {
   outline: '#6c7a78',
   outlineVariant: '#bbc9c7',
   error: '#ba1a1a',
+  onError: '#ffffff',
   errorContainer: '#ffdad6',
   onErrorContainer: '#93000a',
   deepTealDark: '#0D3D3B',

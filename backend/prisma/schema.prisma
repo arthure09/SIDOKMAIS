@@ -39,6 +39,7 @@ enum NotifikasiTipe {
   PASIEN_BARU
   REMINDER_OPERASI
   PERUBAHAN_JADWAL
+  HASIL_LAB
 }
 
 enum OperasiStatus {
@@ -46,6 +47,19 @@ enum OperasiStatus {
   IN_PROGRESS
   COMPLETED
   CANCELLED
+}
+
+enum StatusPemeriksaanLab {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+enum FlagHasilLab {
+  RENDAH
+  NORMAL
+  TINGGI
+  ABNORMAL
 }
 
 model Dokter {
@@ -58,10 +72,11 @@ model Dokter {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  penggunaAkun Pengguna?
-  assignments  DokterPasienAssignment[]
-  kunjungan    Kunjungan[]
-  notifikasi   Notifikasi[]
+  penggunaAkun   Pengguna?
+  assignments    DokterPasienAssignment[]
+  kunjungan      Kunjungan[]
+  notifikasi     Notifikasi[]
+  pemeriksaanLab PemeriksaanLab[]
 }
 
 model Pasien {
@@ -79,8 +94,9 @@ model Pasien {
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
-  assignments DokterPasienAssignment[]
-  kunjungan   Kunjungan[]
+  assignments    DokterPasienAssignment[]
+  kunjungan      Kunjungan[]
+  pemeriksaanLab PemeriksaanLab[]
 }
 
 model Ruangan {
@@ -124,7 +140,8 @@ model Kunjungan {
   dokter  Dokter  @relation(fields: [dokterId], references: [id], onDelete: Restrict)
   ruangan Ruangan @relation(fields: [ruanganId], references: [id], onDelete: Restrict)
 
-  operasi Operasi[]
+  operasi        Operasi[]
+  pemeriksaanLab PemeriksaanLab[]
 }
 
 model Pengguna {
@@ -140,12 +157,14 @@ model Pengguna {
 }
 
 model Notifikasi {
-  id        String         @id @default(uuid())
-  dokterId  String
-  tipe      NotifikasiTipe
-  pesan     String
-  isRead    Boolean        @default(false)
-  createdAt DateTime       @default(now())
+  id          String         @id @default(uuid())
+  dokterId    String
+  tipe        NotifikasiTipe
+  pesan       String
+  isRead      Boolean        @default(false)
+  relatedId   String?
+  relatedType String?
+  createdAt   DateTime       @default(now())
 
   dokter Dokter @relation(fields: [dokterId], references: [id], onDelete: Cascade)
 }
@@ -194,6 +213,54 @@ model Pendapatan {
 
   operasi  Operasi  @relation(fields: [operasiId], references: [id], onDelete: Restrict)
   penjamin Penjamin @relation(fields: [penjaminId], references: [id], onDelete: Restrict)
+}
+
+// Satu order/permintaan lab. `kunjunganId` nullable (lab rawat inap/order susulan
+// di luar konteks kunjungan poli). Hak akses dokter ditentukan lewat
+// DokterPasienAssignment (pola pasien.routes.js), BUKAN dokterPemintaId — dokter
+// lain tetap perlu bisa lihat riwayat lab pasien yang di-assign kepadanya.
+model PemeriksaanLab {
+  id                String               @id @default(uuid())
+  pasienId          String
+  kunjunganId       String?
+  dokterPemintaId   String?
+  kategori          String
+  namaPemeriksaan   String
+  laboratorium      String?
+  tanggalPermintaan DateTime
+  tanggalHasil      DateTime?
+  status            StatusPemeriksaanLab
+  catatan           String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+
+  pasien        Pasien     @relation(fields: [pasienId], references: [id], onDelete: Restrict)
+  kunjungan     Kunjungan? @relation(fields: [kunjunganId], references: [id], onDelete: SetNull)
+  dokterPeminta Dokter?    @relation(fields: [dokterPemintaId], references: [id], onDelete: SetNull)
+
+  hasilLabItem HasilLabItem[]
+
+  @@index([pasienId])
+  @@index([kunjunganId])
+  @@index([tanggalPermintaan])
+  @@index([pasienId, tanggalPermintaan])
+}
+
+// Satu parameter/analit dalam satu PemeriksaanLab. `nilai`/`nilaiRujukan` String
+// (bukan Decimal) karena banyak hasil lab kualitatif ("Reaktif", "3+", dst).
+model HasilLabItem {
+  id               String       @id @default(uuid())
+  pemeriksaanLabId String
+  namaParameter    String
+  nilai            String
+  satuan           String?
+  nilaiRujukan     String?
+  flag             FlagHasilLab
+  urutan           Int?
+
+  pemeriksaanLab PemeriksaanLab @relation(fields: [pemeriksaanLabId], references: [id], onDelete: Cascade)
+
+  @@index([pemeriksaanLabId])
 }
 
 // Audit generik wajib untuk semua write action manual/chatbot (CLAUDE.md aturan #4).
