@@ -8,7 +8,7 @@ export type RootStackParamList = {
 
 export type MainTabParamList = {
   HomeTab: undefined;
-  PasienTab: undefined;
+  PasienTab: NavigatorScreenParams<PasienStackParamList> | undefined;
   OperasiTab: undefined;
   NotifikasiTab: undefined;
   ProfilTab: NavigatorScreenParams<ProfilStackParamList> | undefined;
@@ -17,6 +17,10 @@ export type MainTabParamList = {
 export type PasienStackParamList = {
   PasienList: undefined;
   PasienDetail: { pasienId: string; nama: string };
+  PilihPasienHasilLab: undefined;
+  HasilLabList: { pasienId: string; nama: string };
+  HasilLabDetail: { pemeriksaanLabId: string };
+  LihatPdfLab: { namaLaporan: string; tanggal: string };
 };
 
 export type OperasiStackParamList = {

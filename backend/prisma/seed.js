@@ -376,6 +376,21 @@ const LAB_PROFIL = {
 
 const ABNORMAL_CHANCE = 0.36;
 
+// Dipakai supaya arah RENDAH/TINGGI Hb, Hematokrit, dan Eritrosit bergerak
+// bersama (satu faktor keparahan per pasien) alih-alih diacak independen per
+// parameter — lihat buildHematologiItems().
+const PARAM_KORELASI_HB = ["Hemoglobin", "Hematokrit", "Eritrosit"];
+
+// Tidak ada field khusus "riwayat kemoterapi" di schema (Pasien/Kunjungan) —
+// satu-satunya sinyal adalah teks bebas Kunjungan.diagnosa (lih. DIAGNOSA_CONTOH:
+// "Kontrol rutin pasca kemoterapi"). Di-derive per pasien: kalau salah satu
+// kunjungannya cocok, pasien dianggap punya riwayat kemoterapi.
+const RIWAYAT_KEMOTERAPI_REGEX = /kemoterapi/i;
+
+function pasienPunyaRiwayatKemoterapi(kunjunganPasien) {
+  return kunjunganPasien.some((k) => k.diagnosa && RIWAYAT_KEMOTERAPI_REGEX.test(k.diagnosa));
+}
+
 function resolveRujukan(paramDef, jenisKelamin) {
   return Array.isArray(paramDef.rujukan) ? paramDef.rujukan : paramDef.rujukan[jenisKelamin];
 }
@@ -384,11 +399,23 @@ function formatRujukan(min, max, desimal) {
   return `${min.toFixed(desimal)} - ${max.toFixed(desimal)}`;
 }
 
+// Untuk pasien dgn riwayat kemoterapi, arah abnormal di-skew ke RENDAH (sitopenia:
+// Hb/leukosit/trombosit cenderung turun pasca kemo) — bukan random 50/50 atau
+// skew ke TINGGI. Kalau arahAbnormal cuma punya 1 opsi (mis. SGOT selalu TINGGI),
+// skew tidak relevan dan opsi itu langsung dipakai.
+function pickArahAbnormal(arahAbnormal, riwayatKemoterapi) {
+  if (arahAbnormal.length === 1) return arahAbnormal[0];
+  if (riwayatKemoterapi && arahAbnormal.includes("RENDAH")) {
+    return faker.datatype.boolean(0.85) ? "RENDAH" : "TINGGI";
+  }
+  return pickOne(arahAbnormal);
+}
+
 // `flag` SELALU dihitung dari perbandingan nilai vs rentang rujukan yang sama
 // dipakai buat generate nilai-nya — bukan diacak terpisah — supaya tidak
 // pernah muncul kombinasi tidak konsisten (mis. Hb 14.1 dgn rujukan 13.2-17.3
 // tapi diberi flag TINGGI).
-function buildKuantitatifItem(paramDef, jenisKelamin, urutan) {
+function buildKuantitatifItem(paramDef, jenisKelamin, urutan, riwayatKemoterapi = false) {
   const [min, max] = resolveRujukan(paramDef, jenisKelamin);
   const arahAbnormal = paramDef.arahAbnormal || ["RENDAH", "TINGGI"];
   const desimal = paramDef.desimal ?? 1;
@@ -397,9 +424,58 @@ function buildKuantitatifItem(paramDef, jenisKelamin, urutan) {
 
   let nilaiNum;
   if (abnormal) {
-    const arah = pickOne(arahAbnormal);
+    const arah = pickArahAbnormal(arahAbnormal, riwayatKemoterapi);
     const delta = Math.max(range * faker.number.float({ min: 0.15, max: 0.45 }), Math.pow(10, -desimal) * 2);
     nilaiNum = arah === "RENDAH" ? min - delta : max + delta;
+    if (nilaiNum < 0) nilaiNum = 0;
+  } else {
+    nilaiNum = faker.number.float({ min, max, fractionDigits: desimal });
+  }
+  nilaiNum = Number(nilaiNum.toFixed(desimal));
+
+  const flag = nilaiNum < min ? "RENDAH" : nilaiNum > max ? "TINGGI" : "NORMAL";
+
+  return {
+    namaParameter: paramDef.nama,
+    nilai: nilaiNum.toFixed(desimal),
+    satuan: paramDef.satuan || null,
+    nilaiRujukan: formatRujukan(min, max, desimal),
+    flag,
+    urutan,
+  };
+}
+
+// Hb, Hematokrit, dan Eritrosit WAJIB satu faktor keparahan (abnormal?, arah,
+// magnitude) supaya bergerak bersama secara klinis — Leukosit & Trombosit beda
+// lini sel darah jadi TETAP independen, tapi arahnya tetap ikut skew kemoterapi.
+function buildHematologiItems(profil, jenisKelamin, riwayatKemoterapi) {
+  const hbGroupAbnormal = faker.datatype.boolean(ABNORMAL_CHANCE);
+  const hbGroupSeverity = {
+    abnormal: hbGroupAbnormal,
+    arah: hbGroupAbnormal ? pickArahAbnormal(["RENDAH", "TINGGI"], riwayatKemoterapi) : null,
+    magnitude: faker.number.float({ min: 0.15, max: 0.45 }),
+  };
+
+  return profil.params.map((paramDef, idx) => {
+    const urutan = idx + 1;
+    if (PARAM_KORELASI_HB.includes(paramDef.nama)) {
+      return buildSeverityDrivenItem(paramDef, jenisKelamin, urutan, hbGroupSeverity);
+    }
+    return buildKuantitatifItem(paramDef, jenisKelamin, urutan, riwayatKemoterapi);
+  });
+}
+
+// Sama seperti buildKuantitatifItem, tapi abnormal?/arah/magnitude datang dari
+// luar (faktor keparahan bersama) alih-alih diundi sendiri per parameter.
+function buildSeverityDrivenItem(paramDef, jenisKelamin, urutan, severity) {
+  const [min, max] = resolveRujukan(paramDef, jenisKelamin);
+  const desimal = paramDef.desimal ?? 1;
+  const range = max - min;
+
+  let nilaiNum;
+  if (severity.abnormal) {
+    const delta = Math.max(range * severity.magnitude, Math.pow(10, -desimal) * 2);
+    nilaiNum = severity.arah === "RENDAH" ? min - delta : max + delta;
     if (nilaiNum < 0) nilaiNum = 0;
   } else {
     nilaiNum = faker.number.float({ min, max, fractionDigits: desimal });
@@ -529,9 +605,10 @@ function pickLabProfil(kategori, jenisKelamin) {
   return pickOne(LAB_PROFIL[kategori]);
 }
 
-function buildHasilLabItems(kategori, profil, jenisKelamin) {
+function buildHasilLabItems(kategori, profil, jenisKelamin, riwayatKemoterapi) {
   if (kategori === "Mikrobiologi") return buildMikrobiologiItems();
   if (kategori === "Patologi Anatomi") return buildPatologiAnatomiItems();
+  if (kategori === "Hematologi") return buildHematologiItems(profil, jenisKelamin, riwayatKemoterapi);
   return profil.params.map((paramDef, idx) =>
     paramDef.kualitatif
       ? buildKualitatifItem(paramDef, idx + 1)
@@ -596,6 +673,7 @@ async function seedPemeriksaanLab(pasienList, kunjunganList, dokterList, assignm
   for (const pasien of pasienList) {
     const kunjunganPasien = kunjunganByPasien.get(pasien.id) || [];
     const assignedDokterId = assignedDokterByPasien.get(pasien.id) || null;
+    const riwayatKemoterapi = pasienPunyaRiwayatKemoterapi(kunjunganPasien);
     const jumlahOrder = faker.number.int({ min: 1, max: 3 });
 
     for (let i = 0; i < jumlahOrder; i++) {
@@ -620,6 +698,7 @@ async function seedPemeriksaanLab(pasienList, kunjunganList, dokterList, assignm
       specs.push({
         pasienId: pasien.id,
         jenisKelamin: pasien.jenisKelamin,
+        riwayatKemoterapi,
         kunjunganId: kunjunganRef ? kunjunganRef.id : null,
         kunjunganTanggalRef: kunjunganRef ? kunjunganRef.tanggalMasuk : null,
         dokterPemintaId,
@@ -672,7 +751,7 @@ async function seedPemeriksaanLab(pasienList, kunjunganList, dokterList, assignm
     pemeriksaanLabList.push(dibuat);
 
     if (perluHasil) {
-      const items = buildHasilLabItems(spec.kategori, spec.profil, spec.jenisKelamin);
+      const items = buildHasilLabItems(spec.kategori, spec.profil, spec.jenisKelamin, spec.riwayatKemoterapi);
       for (const item of items) {
         await prisma.hasilLabItem.create({
           data: { ...item, pemeriksaanLabId: dibuat.id },

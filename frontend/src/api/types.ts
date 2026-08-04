@@ -150,6 +150,55 @@ export type NotifikasiListResponse = {
   pagination: Pagination;
 };
 
+export type StatusPemeriksaanLab = 'PENDING' | 'COMPLETED' | 'CANCELLED';
+export type FlagHasilLab = 'RENDAH' | 'NORMAL' | 'TINGGI' | 'ABNORMAL';
+
+export type HasilLabRingkasan = {
+  id: string;
+  kategori: string;
+  namaPemeriksaan: string;
+  laboratorium: string | null;
+  status: StatusPemeriksaanLab;
+  tanggalPermintaan: string;
+  tanggalHasil: string | null;
+  jumlahParameter: number;
+  adaFlagAbnormal: boolean;
+};
+
+export type HasilLabListResponse = {
+  data: HasilLabRingkasan[];
+  pagination: Pagination;
+};
+
+export type HasilLabItemApi = {
+  id: string;
+  namaParameter: string;
+  nilai: string;
+  satuan: string | null;
+  nilaiRujukan: string | null;
+  flag: FlagHasilLab;
+  urutan: number | null;
+};
+
+export type HasilLabDetail = {
+  id: string;
+  pasienId: string;
+  kunjunganId: string | null;
+  dokterPemintaId: string | null;
+  kategori: string;
+  namaPemeriksaan: string;
+  laboratorium: string | null;
+  tanggalPermintaan: string;
+  tanggalHasil: string | null;
+  status: StatusPemeriksaanLab;
+  catatan: string | null;
+  pasien: { id: string; nama: string; norm: string };
+  dokterPeminta: { id: string; nama: string; spesialisasi: string | null } | null;
+  // Nullable dgn sengaja — backend belum dikonfirmasi apakah SIMRS asli simpan
+  // hasil lab terstruktur per-parameter atau cuma dokumen (lihat lab.routes.js).
+  hasilLabItem: HasilLabItemApi[] | null;
+};
+
 export type LoginResponse = {
   token: string;
   pengguna: {

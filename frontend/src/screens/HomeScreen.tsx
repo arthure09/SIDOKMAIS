@@ -40,9 +40,10 @@ const RINGKASAN_ROWS = [
   { key: 'konsulHariIni' as const, label: 'Konsultasi Hari Ini', icon: 'chat-bubble', tint: colors.primary },
 ];
 
-// 'chatbot' dan 'hasillab' belum punya tujuan navigasi (chatbot digeser keluar
-// scope, layar Cari Hasil Lab belum diimplementasikan) — tombolnya non-aktif dulu.
-const NAVIGABLE_CARD_IDS = new Set(['pasien', 'operasi', 'notifikasi', 'pendapatan']);
+// 'chatbot' masih digeser keluar scope — tombolnya non-aktif dulu. 'hasillab'
+// diaktifkan Hari 19 (docs/prompts/prompts-day-21-18-19.md), arahnya ke layar
+// pilih pasien dulu (endpoint /api/lab discope per pasienId, bukan No. RM).
+const NAVIGABLE_CARD_IDS = new Set(['pasien', 'operasi', 'notifikasi', 'pendapatan', 'hasillab']);
 
 export function HomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
@@ -94,6 +95,9 @@ export function HomeScreen({ navigation }: Props) {
         break;
       case 'pendapatan':
         navigation.navigate('ProfilTab', { screen: 'DataPendapatan' });
+        break;
+      case 'hasillab':
+        navigation.navigate('PasienTab', { screen: 'PilihPasienHasilLab' });
         break;
     }
   }
