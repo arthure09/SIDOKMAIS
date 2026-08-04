@@ -44,7 +44,44 @@ function parseListQuery(query) {
     }
   }
 
-  return { errors, values: { pasienId, page, limit } };
+  // dariTanggal/sampaiTanggal dikirim frontend sebagai "YYYY-MM-DD" — tanggal
+  // kalender LOKAL device (lewat getFullYear/getMonth/getDate di toDateParam),
+  // bukan UTC. Date.parse membaca string tanpa jam sebagai UTC 00:00, jadi kalau
+  // dipakai apa adanya batasnya meleset sebesar offset timezone pengguna (mis.
+  // +7 jam buat WIB) — bukan cuma kosmetik, karena tanggalPermintaan punya jam
+  // sungguhan (seed pakai randomDateBetween), jadi baris di tepi jendela bisa
+  // salah ikut tersaring atau salah terbuang.
+  //
+  // Aplikasi ini diasumsikan satu zona waktu (WIB, UTC+7) — belum ada
+  // per-user timezone. Kalau nanti perlu lebih benar, frontend harus kirim
+  // offset device eksplisit, bukan asumsi WIB di sini.
+  const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+  let dariTanggal;
+  if (query.dariTanggal !== undefined && query.dariTanggal !== "") {
+    const parsed = typeof query.dariTanggal === "string" ? Date.parse(query.dariTanggal) : NaN;
+    if (Number.isNaN(parsed)) {
+      errors.push("dariTanggal harus tanggal yang valid (format YYYY-MM-DD)");
+    } else {
+      dariTanggal = new Date(parsed - WIB_OFFSET_MS);
+    }
+  }
+
+  let sampaiTanggal;
+  if (query.sampaiTanggal !== undefined && query.sampaiTanggal !== "") {
+    const parsed = typeof query.sampaiTanggal === "string" ? Date.parse(query.sampaiTanggal) : NaN;
+    if (Number.isNaN(parsed)) {
+      errors.push("sampaiTanggal harus tanggal yang valid (format YYYY-MM-DD)");
+    } else {
+      sampaiTanggal = new Date(parsed - WIB_OFFSET_MS + 24 * 60 * 60 * 1000 - 1);
+    }
+  }
+
+  if (dariTanggal && sampaiTanggal && dariTanggal > sampaiTanggal) {
+    errors.push("dariTanggal tidak boleh setelah sampaiTanggal");
+  }
+
+  return { errors, values: { pasienId, page, limit, dariTanggal, sampaiTanggal } };
 }
 
 function toRingkasan(pemeriksaan) {
@@ -74,7 +111,7 @@ router.get("/", async (req, res) => {
     return res.status(400).json({ message: "Query params tidak valid", errors });
   }
 
-  const { pasienId, page, limit } = values;
+  const { pasienId, page, limit, dariTanggal, sampaiTanggal } = values;
 
   // Sama seperti pasien.routes.js GET /:id: tidak dibedakan "pasien tidak ada"
   // vs "bukan assignment kamu" — keduanya balik 403 supaya endpoint ini tidak
@@ -87,6 +124,11 @@ router.get("/", async (req, res) => {
   }
 
   const where = { pasienId };
+  if (dariTanggal || sampaiTanggal) {
+    where.tanggalPermintaan = {};
+    if (dariTanggal) where.tanggalPermintaan.gte = dariTanggal;
+    if (sampaiTanggal) where.tanggalPermintaan.lte = sampaiTanggal;
+  }
 
   const [total, pemeriksaanList] = await Promise.all([
     prisma.pemeriksaanLab.count({ where }),
