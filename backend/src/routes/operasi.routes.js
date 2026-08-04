@@ -3,6 +3,7 @@ const { Prisma } = require("@prisma/client");
 const prisma = require("../lib/prisma");
 const authorize = require("../middleware/rbac.middleware");
 const { logAudit } = require("../utils/auditLog");
+const { dokterPunyaAksesPasien } = require("../utils/aksesPasien");
 
 const router = express.Router();
 
@@ -62,12 +63,24 @@ router.get("/", async (req, res) => {
   }
 
   const { status, page, limit, dokterId } = values;
-  const kunjunganDokterId = role === "DOKTER" ? ownDokterId : dokterId;
 
   const where = {
     ...(status && { status }),
-    ...(kunjunganDokterId && { kunjungan: { dokterId: kunjunganDokterId } }),
   };
+
+  if (role === "DOKTER") {
+    // Dokter juga berhak lihat operasi pasien yang di-assign kepadanya
+    // (DokterPasienAssignment), bukan cuma operasi yang kunjungan-nya
+    // kebetulan tercatat dokterId dia secara langsung — lihat utils/aksesPasien.js.
+    where.kunjungan = {
+      OR: [
+        { dokterId: ownDokterId },
+        { pasien: { assignments: { some: { dokterId: ownDokterId } } } },
+      ],
+    };
+  } else if (dokterId) {
+    where.kunjungan = { dokterId };
+  }
 
   const [total, operasi] = await Promise.all([
     prisma.operasi.count({ where }),
@@ -365,6 +378,14 @@ router.get("/:id", async (req, res) => {
   const { role, dokterId: ownDokterId } = req.user;
   const { id } = req.params;
 
+  if (role === "DOKTER" && !ownDokterId) {
+    return res.status(403).json({ message: "Akun ini tidak terhubung ke data dokter" });
+  }
+
+  // `pendapatan` sengaja TIDAK di-include — data finansial per-operasi
+  // (tarifTotal, jumlahDiterimaDokter) tidak dipakai frontend sama sekali di
+  // layar detail operasi (DataPendapatanScreen masih murni mock terpisah),
+  // jadi tidak perlu ikut ter-embed ke response endpoint ini.
   const operasi = await prisma.operasi.findUnique({
     where: { id },
     include: {
@@ -375,7 +396,6 @@ router.get("/:id", async (req, res) => {
         },
       },
       ruangan: true,
-      pendapatan: true,
     },
   });
 
@@ -384,7 +404,12 @@ router.get("/:id", async (req, res) => {
   }
 
   if (role === "DOKTER" && operasi.kunjungan.dokterId !== ownDokterId) {
-    return res.status(403).json({ message: "Anda tidak memiliki akses ke data operasi ini" });
+    // Bukan dokter yang tercatat langsung di kunjungan operasi ini — masih
+    // boleh lewat kalau dia di-assign ke pasiennya (lihat utils/aksesPasien.js).
+    const punyaAkses = await dokterPunyaAksesPasien(ownDokterId, operasi.kunjungan.pasienId);
+    if (!punyaAkses) {
+      return res.status(403).json({ message: "Anda tidak memiliki akses ke data operasi ini" });
+    }
   }
 
   res.json(operasi);

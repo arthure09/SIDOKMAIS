@@ -1,5 +1,6 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
+const { dokterPunyaAksesPasien } = require("../utils/aksesPasien");
 
 const router = express.Router();
 
@@ -63,12 +64,22 @@ router.get("/", async (req, res) => {
   }
 
   const { status, page, limit, dokterId } = values;
-  const effectiveDokterId = role === "DOKTER" ? ownDokterId : dokterId;
 
   const where = {
     ...(status && { statusKunjungan: status }),
-    ...(effectiveDokterId && { dokterId: effectiveDokterId }),
   };
+
+  if (role === "DOKTER") {
+    // Dokter juga berhak lihat kunjungan pasien yang di-assign kepadanya
+    // (DokterPasienAssignment), bukan cuma kunjungan yang kebetulan tercatat
+    // dokterId dia secara langsung — lihat utils/aksesPasien.js.
+    where.OR = [
+      { dokterId: ownDokterId },
+      { pasien: { assignments: { some: { dokterId: ownDokterId } } } },
+    ];
+  } else if (dokterId) {
+    where.dokterId = dokterId;
+  }
 
   const [total, kunjungan] = await Promise.all([
     prisma.kunjungan.count({ where }),
@@ -106,6 +117,10 @@ router.get("/:id", async (req, res) => {
   const { role, dokterId: ownDokterId } = req.user;
   const { id } = req.params;
 
+  if (role === "DOKTER" && !ownDokterId) {
+    return res.status(403).json({ message: "Akun ini tidak terhubung ke data dokter" });
+  }
+
   const kunjungan = await prisma.kunjungan.findUnique({
     where: { id },
     include: {
@@ -121,7 +136,12 @@ router.get("/:id", async (req, res) => {
   }
 
   if (role === "DOKTER" && kunjungan.dokterId !== ownDokterId) {
-    return res.status(403).json({ message: "Anda tidak memiliki akses ke data kunjungan ini" });
+    // Bukan dokter yang tercatat langsung di kunjungan ini — masih boleh
+    // lewat kalau dia di-assign ke pasiennya (lihat utils/aksesPasien.js).
+    const punyaAkses = await dokterPunyaAksesPasien(ownDokterId, kunjungan.pasienId);
+    if (!punyaAkses) {
+      return res.status(403).json({ message: "Anda tidak memiliki akses ke data kunjungan ini" });
+    }
   }
 
   res.json(kunjungan);

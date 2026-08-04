@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Animated, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated, Easing, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius } from '../theme/colors';
+import { useTabBarStore } from '../store/tabBarStore';
 import { TAB_BAR_HEIGHT } from './tabBarMetrics';
 import type { MainTabParamList } from './types';
 
@@ -68,8 +69,13 @@ function TabButton({
 
 export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
+  const hidden = useTabBarStore((s) => s.hidden);
   const [barWidth, setBarWidth] = useState(0);
   const translateX = useRef(new Animated.Value(0)).current;
+  // Screen full-bleed (mis. LihatPdfLabScreen) minta tab bar disembunyikan
+  // total lewat useHideTabBar — di sini digeser turun keluar layar, bukan
+  // instan hilang, supaya transisinya kelihatan sebagai slide-down.
+  const translateY = useRef(new Animated.Value(0)).current;
   const itemWidth = barWidth / state.routes.length;
   const indicatorWidth = Math.max(itemWidth - INDICATOR_INSET * 2, 0);
 
@@ -83,10 +89,24 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
     }).start();
   }, [state.index, itemWidth, translateX]);
 
+  useEffect(() => {
+    Animated.timing(translateY, {
+      // +24 ekstra biar shadow (shadowRadius 12, shadowOffset -4) ikut nggak
+      // kelihatan sisa nyembul pas tab bar disembunyikan.
+      toValue: hidden ? TAB_BAR_HEIGHT + insets.bottom + 24 : 0,
+      duration: 240,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [hidden, insets.bottom, translateY]);
+
   const onLayout = (e: LayoutChangeEvent) => setBarWidth(e.nativeEvent.layout.width);
 
   return (
-    <View style={styles.wrapper} pointerEvents="box-none">
+    <Animated.View
+      style={[styles.wrapper, { transform: [{ translateY }] }]}
+      pointerEvents={hidden ? 'none' : 'box-none'}
+    >
       <View style={[styles.surface, { paddingBottom: insets.bottom }]}>
         <View style={styles.bar} onLayout={onLayout}>
           {barWidth > 0 && (
@@ -114,7 +134,7 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
           })}
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 

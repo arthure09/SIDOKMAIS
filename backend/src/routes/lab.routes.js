@@ -1,24 +1,11 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
+const { dokterPunyaAksesPasien } = require("../utils/aksesPasien");
 
 const router = express.Router();
 
 const DEFAULT_LIMIT = 10;
 const MAX_LIMIT = 100;
-
-// ASUMSI BELUM DIKONFIRMASI SUPERVISOR (Day 18, docs/prompts/prompts-day-21-18-19.md):
-// akses hasil lab discope lewat DokterPasienAssignment, BUKAN kunjungan.dokterId.
-// Alasan: pasien onkologi sering ditangani lintas dokter dan order lab kadang
-// dibuat oleh dokter lain dari yang bertanggung jawab — kalau scoping pakai
-// kunjungan.dokterId, dokter penanggung jawab pasien bisa kehilangan akses ke
-// hasil lab pasiennya sendiri. Kalau supervisor mengoreksi, cari fungsi ini +
-// pemanggilnya di bawah dan ganti sumber scoping-nya.
-async function dokterPunyaAksesPasien(dokterId, pasienId) {
-  const assignment = await prisma.dokterPasienAssignment.findFirst({
-    where: { dokterId, pasienId },
-  });
-  return Boolean(assignment);
-}
 
 function parseListQuery(query) {
   const errors = [];
@@ -123,7 +110,12 @@ router.get("/", async (req, res) => {
     }
   }
 
-  const where = { pasienId };
+  // List Hasil Lab pasien cuma nampilin pemeriksaan yang laporannya memang
+  // sudah ada (COMPLETED) — PENDING (belum ada hasil) dan CANCELLED (batal,
+  // tidak akan pernah ada hasil) sama-sama dikeluarkan di sini supaya tidak
+  // perlu status/badge apa pun lagi di UI; semua item yang tampil pasti bisa
+  // dibuka.
+  const where = { pasienId, status: "COMPLETED" };
   if (dariTanggal || sampaiTanggal) {
     where.tanggalPermintaan = {};
     if (dariTanggal) where.tanggalPermintaan.gte = dariTanggal;

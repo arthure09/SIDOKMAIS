@@ -10,21 +10,12 @@ import { useAuthStore } from '../store/authStore';
 import { colors, radius, shadows, spacing } from '../theme/colors';
 import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
-import type { HasilLabRingkasan, StatusPemeriksaanLab } from '../api/types';
+import type { HasilLabRingkasan } from '../api/types';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useHeaderScrollShadow } from '../hooks/useHeaderScrollShadow';
 import type { PasienStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<PasienStackParamList, 'HasilLabList'>;
-
-// PENDING/CANCELLED belum ada laporan buat dilihat — cuma status yang
-// ditampilkan, kartu-nya non-tappable (pola sama dgn JadwalOperasiKonsulScreen
-// utk kartu berstatus CANCELLED).
-const STATUS_LABEL: Record<StatusPemeriksaanLab, string> = {
-  COMPLETED: 'Selesai',
-  PENDING: 'Menunggu Hasil',
-  CANCELLED: 'Dibatalkan',
-};
 
 function formatTanggal(value: string | null) {
   if (!value) return '-';
@@ -323,11 +314,12 @@ export function HasilLabListScreen({ route, navigation }: Props) {
           onScroll={onScroll}
           scrollEventThrottle={scrollEventThrottle}
           renderItem={({ item }) => {
-            const bisaDilihat = item.status === 'COMPLETED';
+            // Backend GET /api/lab cuma balikin status COMPLETED (lihat lab.routes.js)
+            // — jadi setiap item yang sampai ke sini pasti punya laporan buat dilihat,
+            // tidak perlu lagi status/badge atau kondisi tappable di sini.
             const tanggal = formatTanggal(item.tanggalHasil ?? item.tanggalPermintaan);
             return (
               <Pressable
-                disabled={!bisaDilihat}
                 onPress={() =>
                   navigation.navigate('LihatPdfLab', { namaLaporan: item.namaPemeriksaan, tanggal })
                 }
@@ -344,14 +336,10 @@ export function HasilLabListScreen({ route, navigation }: Props) {
                 </View>
                 <View style={styles.rowRight}>
                   <Text style={styles.tanggal}>{tanggal}</Text>
-                  {bisaDilihat ? (
-                    <View style={styles.lihatPdfPill}>
-                      <MaterialIcons name="visibility" size={12} color={colors.primary} />
-                      <Text style={styles.lihatPdfText}>Lihat PDF</Text>
-                    </View>
-                  ) : (
-                    <Text style={styles.statusText}>{STATUS_LABEL[item.status]}</Text>
-                  )}
+                  <View style={styles.lihatPdfPill}>
+                    <MaterialIcons name="visibility" size={12} color={colors.primary} />
+                    <Text style={styles.lihatPdfText}>Lihat PDF</Text>
+                  </View>
                 </View>
               </Pressable>
             );
@@ -481,7 +469,6 @@ const styles = StyleSheet.create({
   kategori: { fontSize: 12, color: colors.outline, marginTop: 2 },
   rowRight: { alignItems: 'flex-end', gap: 4 },
   tanggal: { fontSize: 12, color: colors.onSurfaceVariant },
-  statusText: { fontSize: 11, fontWeight: '600', color: colors.outline },
   lihatPdfPill: {
     flexDirection: 'row',
     alignItems: 'center',

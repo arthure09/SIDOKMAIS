@@ -7,6 +7,7 @@ import { Asset } from 'expo-asset';
 import { WebView } from 'react-native-webview';
 import { colors, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
+import { useHideTabBar } from '../hooks/useHideTabBar';
 import type { PasienStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<PasienStackParamList, 'LihatPdfLab'>;
@@ -19,6 +20,7 @@ const DUMMY_PDF_ASSET = require('../../assets/dummy.pdf');
 export function LihatPdfLabScreen({ route, navigation }: Props) {
   const { namaLaporan, tanggal } = route.params;
   const insets = useSafeAreaInsets();
+  useHideTabBar();
   const [localUri, setLocalUri] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
