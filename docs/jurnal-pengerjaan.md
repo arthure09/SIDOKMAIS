@@ -664,8 +664,66 @@ importer `theme/responsive.ts`).
   Reset draft tidak menembus pola apply, ganti filter cepat-cepat) — lihat
   section "Modul: Hasil Lab (Day 18-22)" → "3. Regresi — review kode Day 22".
 
-Hari 23-28: belum dimulai. Sisa scope: verifikasi audit log, integration
-testing, bug fixing (2 round), user documentation, final review.
+### Hari 23 (Rab, 5 Ags) — Verifikasi audit log
+Eksekusi `docs/prompts/hari-23-audit-log-verifikasi.md`. Beda dari audit
+sebelumnya (yang cuma baca kode buat pastikan `logAudit()` DIPANGGIL): kali
+ini isi baris `AuditLog` yang beneran tersimpan di DB dev dicek langsung —
+curl ke backend lokal (`npm run dev`, terhubung ke DB dev via Tailscale
+`100.109.84.118`, sama seperti pola verifikasi Hari 10/12-13), lalu baca
+hasilnya lewat Prisma, bukan cuma percaya response API-nya.
+
+**Cek statis (grep semua `backend/src/routes/*.routes.js`):** 4 write
+handler ketemu, 3 di `operasi.routes.js` (create/update/delete) + 1 di
+`notifikasi.routes.js` (mark-as-read) — semuanya manggil `logAudit()`.
+`pasien.routes.js`/`kunjungan.routes.js`/`lab.routes.js`/`auth.routes.js`
+nol write handler, konsisten sama status read-only masing-masing modul.
+
+**Temuan — 1 gap ketemu, dikonfirmasi hidup lewat curl bukan cuma baca
+kode:** trigger notifikasi `PERUBAHAN_JADWAL` (`prisma.notifikasi.create` di
+dalam `PATCH /api/operasi/:id`, `operasi.routes.js` baris ~329, ditambahkan
+Hari 15) TIDAK dipanggil `logAudit()`. Dites langsung: PATCH `tanggalOperasi`
+sungguhan bikin row `Notifikasi` baru di DB, tapi 0 baris `AuditLog` untuk
+`entityType: "Notifikasi"` dengan `entityId` notifikasi itu. Secara harfiah
+ini write action yang tidak tercatat — melanggar CLAUDE.md aturan #4. Sesuai
+batasan task ini (verifikasi, bukan perbaikan), **belum diperbaiki** — perlu
+keputusan dulu: apakah notifikasi hasil trigger otomatis butuh baris audit
+sendiri, atau cukup ter-cover baris UPDATE `Operasi` yang jadi penyebabnya
+(yang sudah menangkap seluruh before/after perubahan operasinya).
+
+**Verifikasi isi baris `AuditLog` (login `admin`/`admin123` + akun DOKTER
+`putra.tasdik`, terhadap 1 `Operasi` uji yang dibuat khusus buat tes ini):**
+CREATE (`beforeData=null`, `afterData` lengkap), UPDATE Operasi
+(`beforeData`/`afterData` sama-sama lengkap, bukan cuma diff), UPDATE
+Notifikasi lewat mark-as-read (`isRead` false→true, `actorId` cocok akun
+DOKTER yang PATCH — bukan ADMIN yang PATCH operasinya), DELETE
+(`beforeData` record lengkap, `afterData=null`) — semua PASS, `actorId`/
+`actorRole` di tiap baris dicocokkan manual ke akun yang benar-benar login.
+Data uji (`Operasi` + `Notifikasi` hasil trigger) dihapus lagi setelah
+verifikasi; 4 baris `AuditLog` yang terbentuk dari request asli SENGAJA
+tidak dihapus (append-only, pola sama Hari 12-13).
+
+**Fault-tolerance `utils/auditLog.js`:** dikonfirmasi lewat baca kode
+(`try/catch` + `console.error`, tidak ada `throw` ulang) — tidak
+disimulasikan gagal beneran, dianggap tidak sepadan buat scope hari ini.
+
+**`GET /api/me`:** dikonfirmasi eksplisit bukan write action (cuma
+`res.json(req.user)`), tidak ada `logAudit()` di situ — memang seharusnya
+begitu.
+
+**Temuan sampingan (di luar scope inti):** password seed akun `admin`
+TERNYATA **bukan** `Sidokmais#2026` seperti diklaim `docs/testing-manual.md`
+dan `console.log` di `seed.js` sendiri ("password sama untuk semua") —
+`seed.js` bikin hash terpisah dari `"admin123"` khusus buat ADMIN. Ketemu
+pas verifikasi ini gagal login 401 sebelum nyoba `admin123`. Belum
+diperbaiki (di luar scope task ini, cuma dicatat).
+
+Detail lengkap tiap item: `docs/testing-manual.md` section "Modul: Audit
+Log — verifikasi menyeluruh (Hari 23, 5 Ags 2026)".
+
+Hari 24-28: belum dimulai. Sisa scope: integration testing, bug fixing
+(2 round), user documentation, final review. (Ditambah 1 item baru dari
+temuan hari ini: keputusan soal audit log trigger `PERUBAHAN_JADWAL`, dan
+koreksi password seed ADMIN di dokumentasi.)
 
 ---
 
