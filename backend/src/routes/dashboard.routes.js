@@ -1,0 +1,170 @@
+const express = require("express");
+const prisma = require("../lib/prisma");
+
+const router = express.Router();
+
+// Aplikasi ini diasumsikan satu zona waktu (WIB, UTC+7) — belum ada per-user
+// timezone, pola sama seperti WIB_OFFSET_MS di lab.routes.js.
+const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+const HARI_LABEL = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
+
+// Tengah malam WIB (instant UTC absolut, lihat `tengahMalamWIB` di bawah)
+// dikonversi jadi rentang [mulai, akhir] satu hari kalender WIB penuh, supaya
+// bisa dibandingkan langsung ke kolom DateTime di Postgres (yang disimpan
+// sebagai instant UTC). Pola konversi ini sama persis dengan
+// dariTanggal/sampaiTanggal di lab.routes.js.
+function rentangDariTengahMalamWIB(tengahMalamWIB) {
+  return {
+    mulai: new Date(tengahMalamWIB - WIB_OFFSET_MS),
+    akhir: new Date(tengahMalamWIB - WIB_OFFSET_MS + 24 * 60 * 60 * 1000 - 1),
+  };
+}
+
+// Rentang "hari ini" menurut kalender WIB. `now` (waktu server, UTC) digeser
+// maju 7 jam dulu supaya getUTCFullYear/Month/Date yang dibaca adalah
+// tanggal kalender WIB, baru tengah malam WIB itu dikonversi balik lewat
+// rentangDariTengahMalamWIB.
+function getRentangHariIniWIB() {
+  const now = new Date();
+  const wib = new Date(now.getTime() + WIB_OFFSET_MS);
+  const tengahMalamWIB = Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), wib.getUTCDate());
+  return rentangDariTengahMalamWIB(tengahMalamWIB);
+}
+
+// 7 rentang harian (Senin..Minggu) untuk minggu kalender WIB berjalan —
+// dipakai chart "Statistik Pasien Mingguan" di Home. `wib.getUTCDay()` di
+// sini membaca angka hari (0=Minggu..6=Sabtu) dari waktu yang SUDAH digeser
+// ke WIB, jadi hasilnya adalah hari-dalam-minggu WIB, bukan UTC — konsisten
+// dengan pola getRentangHariIniWIB di atas. `Date.UTC(y, m, dSenin + i)`
+// aman dipakai walau dSenin+i "meluber" ke bulan sebelum/sesudahnya (mis.
+// Senin minggu ini jatuh di bulan lalu) karena JS Date menormalisasi
+// overflow tanggal secara otomatis.
+function getRentangMingguIniWIB() {
+  const now = new Date();
+  const wib = new Date(now.getTime() + WIB_OFFSET_MS);
+  const hariKe = wib.getUTCDay(); // 0=Minggu..6=Sabtu
+  const jarakDariSenin = (hariKe + 6) % 7; // Senin=0, Selasa=1, ..., Minggu=6
+  const y = wib.getUTCFullYear();
+  const m = wib.getUTCMonth();
+  const dSenin = wib.getUTCDate() - jarakDariSenin;
+
+  return HARI_LABEL.map((label, i) => ({
+    label,
+    ...rentangDariTengahMalamWIB(Date.UTC(y, m, dSenin + i)),
+  }));
+}
+
+function hitungDalamRentang(waktuList, mulai, akhir) {
+  const mulaiMs = mulai.getTime();
+  const akhirMs = akhir.getTime();
+  return waktuList.filter((waktu) => {
+    const ms = waktu.getTime();
+    return ms >= mulaiMs && ms <= akhirMs;
+  }).length;
+}
+
+// GET /api/dashboard/statistik — ringkasan "Aktivitas Hari Ini" +
+// "Statistik Pasien Mingguan" di HomeScreen.
+//
+// `pasienAktif`/`operasiHariIni`/`konsulHariIni` menggantikan mekanisme lama
+// di frontend (fetch list dengan RINGKASAN_FETCH_LIMIT=100 lalu filter+hitung
+// di client, yang undercounted kalau dokter punya >100 operasi/kunjungan)
+// dengan COUNT langsung di DB.
+//
+// `aktivitasMingguan` (keputusan Arthuro): gabungan jumlah Kunjungan +
+// Operasi per hari, Senin-Minggu minggu berjalan WIB — sebelumnya
+// statistikMingguan di homeMock.ts murni chart placeholder hardcoded
+// (sengaja, lihat docs/prompts/frontend-screens-figma-batch.md), belum
+// pernah dipetakan ke data asli.
+router.get("/statistik", async (req, res) => {
+  const { role, dokterId } = req.user;
+
+  if (role === "DOKTER" && !dokterId) {
+    return res.status(403).json({ message: "Akun ini tidak terhubung ke data dokter" });
+  }
+
+  const mingguRange = getRentangMingguIniWIB();
+
+  // Keputusan desain: endpoint ini scoped ke satu Dokter dari JWT ("statistik
+  // SAYA sebagai dokter yang login"). Akun ADMIN tidak terikat ke satu baris
+  // Dokter (dokterId selalu null di JWT-nya), jadi tidak ada "aku" yang bisa
+  // dihitung statistiknya di sini. Pilihan yang diambil: balikin 0 + catatan
+  // eksplisit, BUKAN agregat lintas-semua-dokter — supaya tidak menyesatkan
+  // ADMIN yang mengira angka itu "milik" akunnya. Kalau nanti benar-benar
+  // perlu laporan lintas-dokter, itu endpoint terpisah dengan semantik
+  // sendiri (mis. GET /api/dashboard/statistik-global), bukan overload di sini.
+  if (role === "ADMIN") {
+    const hariIniIdx = mingguRange.findIndex(({ mulai, akhir }) => {
+      const now = Date.now();
+      return now >= mulai.getTime() && now <= akhir.getTime();
+    });
+    return res.json({
+      pasienAktif: 0,
+      operasiHariIni: 0,
+      konsulHariIni: 0,
+      aktivitasMingguan: mingguRange.map(({ label }, i) => ({
+        label,
+        jumlah: 0,
+        highlight: i === hariIniIdx,
+      })),
+      adminCatatan:
+        "Akun ADMIN tidak terikat ke satu Dokter, jadi statistik ini tidak relevan (selalu 0).",
+    });
+  }
+
+  const { mulai, akhir } = getRentangHariIniWIB();
+
+  // Sama seperti operasi.routes.js/kunjungan.routes.js (pola pasca-hardening
+  // Day 22): dokter berhak lihat data pasien yang di-assign kepadanya
+  // (DokterPasienAssignment), bukan cuma yang kebetulan tercatat dokterId dia
+  // langsung di Kunjungan — lihat utils/aksesPasien.js.
+  const aksesPasienDokter = {
+    OR: [{ dokterId }, { pasien: { assignments: { some: { dokterId } } } }],
+  };
+
+  const mingguMulai = mingguRange[0].mulai;
+  const mingguAkhir = mingguRange[mingguRange.length - 1].akhir;
+
+  const [pasienAktif, operasiHariIni, konsulHariIni, kunjunganMinggu, operasiMinggu] =
+    await Promise.all([
+      prisma.dokterPasienAssignment.count({ where: { dokterId, status: "ACTIVE" } }),
+      prisma.operasi.count({
+        where: {
+          tanggalOperasi: { gte: mulai, lte: akhir },
+          kunjungan: aksesPasienDokter,
+        },
+      }),
+      prisma.kunjungan.count({
+        where: {
+          tanggalMasuk: { gte: mulai, lte: akhir },
+          ...aksesPasienDokter,
+        },
+      }),
+      // 2 query lintas-minggu (bukan 14 query per-hari) — hasilnya cuma
+      // dipakai buat dikelompokkan per hari di JS lewat hitungDalamRentang.
+      prisma.kunjungan.findMany({
+        where: { tanggalMasuk: { gte: mingguMulai, lte: mingguAkhir }, ...aksesPasienDokter },
+        select: { tanggalMasuk: true },
+      }),
+      prisma.operasi.findMany({
+        where: { tanggalOperasi: { gte: mingguMulai, lte: mingguAkhir }, kunjungan: aksesPasienDokter },
+        select: { tanggalOperasi: true },
+      }),
+    ]);
+
+  const waktuKunjungan = kunjunganMinggu.map((k) => k.tanggalMasuk);
+  const waktuOperasi = operasiMinggu.map((o) => o.tanggalOperasi);
+
+  const aktivitasMingguan = mingguRange.map(({ label, mulai: mulaiHari, akhir: akhirHari }) => ({
+    label,
+    jumlah:
+      hitungDalamRentang(waktuKunjungan, mulaiHari, akhirHari) +
+      hitungDalamRentang(waktuOperasi, mulaiHari, akhirHari),
+    highlight: mulaiHari.getTime() === mulai.getTime(),
+  }));
+
+  res.json({ pasienAktif, operasiHariIni, konsulHariIni, aktivitasMingguan });
+});
+
+module.exports = router;

@@ -6,26 +6,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/authStore';
 import { colors, radius, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
-import { navigasiCards, pasienPrioritas, statistikMingguan } from '../mocks/homeMock';
+import { navigasiCards, pasienPrioritas } from '../mocks/homeMock';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useAnimatedHeaderFade } from '../hooks/useAnimatedHeaderFade';
 import type { MainTabParamList } from '../navigation/types';
-import { fetchPasienList } from '../api/pasien';
-import { fetchOperasiList } from '../api/operasi';
-import { fetchKunjunganList } from '../api/kunjungan';
-
-const RINGKASAN_FETCH_LIMIT = 100;
-
-function isHariIni(value: string) {
-  const d = new Date(value);
-  const now = new Date();
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  );
-}
+import { fetchStatistikDashboard } from '../api/dashboard';
+import type { AktivitasHarianMingguan } from '../api/types';
 
 type Props = BottomTabScreenProps<MainTabParamList, 'HomeTab'>;
 
@@ -54,23 +41,26 @@ export function HomeScreen({ navigation }: Props) {
 
   const [ringkasan, setRingkasan] = useState({ pasienAktif: 0, operasiHariIni: 0, konsulHariIni: 0 });
   const [ringkasanLoading, setRingkasanLoading] = useState(true);
+  const [aktivitasMingguan, setAktivitasMingguan] = useState<AktivitasHarianMingguan[]>([]);
 
   const { headerBackgroundColor, headerShadowOpacity, headerElevation } = useAnimatedHeaderFade(scrolled);
+
+  // Tinggi bar chart dinormalisasi relatif ke hari tersibuk minggu ini (bukan
+  // skala tetap) — jumlah mentah dari backend adalah gabungan Kunjungan +
+  // Operasi per hari, lihat dashboard.routes.js.
+  const maxAktivitasMingguan = Math.max(1, ...aktivitasMingguan.map((a) => a.jumlah));
 
   const loadRingkasan = useCallback(async () => {
     if (!token) return;
     setRingkasanLoading(true);
     try {
-      const [pasienRes, operasiRes, kunjunganRes] = await Promise.all([
-        fetchPasienList(token, { status: 'ACTIVE', limit: 1 }),
-        fetchOperasiList(token, { limit: RINGKASAN_FETCH_LIMIT }),
-        fetchKunjunganList(token, { limit: RINGKASAN_FETCH_LIMIT }),
-      ]);
+      const statistik = await fetchStatistikDashboard(token);
       setRingkasan({
-        pasienAktif: pasienRes.pagination.total,
-        operasiHariIni: operasiRes.data.filter((o) => isHariIni(o.tanggalOperasi)).length,
-        konsulHariIni: kunjunganRes.data.filter((k) => isHariIni(k.tanggalMasuk)).length,
+        pasienAktif: statistik.pasienAktif,
+        operasiHariIni: statistik.operasiHariIni,
+        konsulHariIni: statistik.konsulHariIni,
       });
+      setAktivitasMingguan(statistik.aktivitasMingguan);
     } catch {
       // Ringkasan bukan bagian kritikal halaman ini — biarkan nilai lama kalau gagal.
     } finally {
@@ -208,21 +198,21 @@ export function HomeScreen({ navigation }: Props) {
             Statistik Pasien Mingguan
           </Text>
           <View style={styles.chartCard}>
-            {statistikMingguan.map((d, i) => (
+            {aktivitasMingguan.map((d, i) => (
               <View key={i} style={styles.chartBarCol}>
                 <View style={styles.chartBarTrack}>
                   <View
                     style={[
                       styles.chartBarFill,
                       {
-                        height: `${d.persen}%`,
+                        height: `${(d.jumlah / maxAktivitasMingguan) * 100}%`,
                         backgroundColor: d.highlight ? colors.primary : `${colors.primary}33`,
                       },
                     ]}
                   />
                 </View>
                 <Text style={[styles.chartBarLabel, d.highlight && styles.chartBarLabelActive]}>
-                  {d.label}
+                  {d.label.charAt(0)}
                 </Text>
               </View>
             ))}

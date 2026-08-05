@@ -199,6 +199,24 @@ export type HasilLabDetail = {
   hasilLabItem: HasilLabItemApi[] | null;
 };
 
+export type AktivitasHarianMingguan = {
+  label: string;
+  jumlah: number;
+  highlight: boolean;
+};
+
+export type StatistikDashboard = {
+  pasienAktif: number;
+  operasiHariIni: number;
+  konsulHariIni: number;
+  // Gabungan jumlah Kunjungan + Operasi per hari, Senin-Minggu minggu
+  // berjalan WIB — 7 entri, urutan tetap.
+  aktivitasMingguan: AktivitasHarianMingguan[];
+  // Cuma muncul kalau akun yang login ADMIN — lihat dashboard.routes.js untuk
+  // alasan kenapa ADMIN selalu dapat 0 di sini, bukan agregat lintas-dokter.
+  adminCatatan?: string;
+};
+
 export type LoginResponse = {
   token: string;
   pengguna: {
