@@ -138,6 +138,85 @@ verifikasi backend di atas semuanya via curl langsung ke API, ditambah
 `npx tsc --noEmit` bersih di frontend, tapi belum ada smoke test di device
 beneran.
 
+## Modul: Audit Log — verifikasi menyeluruh (Hari 23, 5 Ags 2026)
+
+Eksekusi `docs/prompts/hari-23-audit-log-verifikasi.md`. Beda dari verifikasi
+Hari 10/12-13 di atas (yang cuma baca kode + cek row muncul): kali ini setiap
+write endpoint di-curl langsung ke backend lokal terhadap DB dev (Tailscale),
+lalu **isi** baris `AuditLog`-nya dibaca langsung dari DB lewat Prisma (bukan
+cuma cek "ada row atau tidak"). Data uji (1 `Operasi`, 1 `Notifikasi` hasil
+trigger) dihapus lagi setelah verifikasi; 4 baris `AuditLog` yang terbentuk
+dari request asli via API SENGAJA tidak dihapus (append-only).
+
+### 1. Cek statis — semua write handler vs `logAudit()`
+Grep `prisma.<model>.create/update/delete` di seluruh `backend/src/routes/*.routes.js`:
+- [x] `POST /api/operasi` → `logAudit()` terpasang
+- [x] `PATCH /api/operasi/:id` → `logAudit()` terpasang
+- [x] `DELETE /api/operasi/:id` → `logAudit()` terpasang
+- [x] `PATCH /api/notifikasi/:id/read` → `logAudit()` terpasang
+- [x] `pasien.routes.js`, `kunjungan.routes.js`, `lab.routes.js`,
+      `auth.routes.js` — nol write handler (`create`/`update`/`delete`),
+      konsisten sama status modul-modul itu yang read-only dari sisi dokter
+- [ ] **GAP ditemukan:** `prisma.notifikasi.create` di dalam
+      `PATCH /api/operasi/:id` (trigger `PERUBAHAN_JADWAL`,
+      `operasi.routes.js` baris ~329) TIDAK dipanggil `logAudit()`. Ini
+      write action beneran (bikin row `Notifikasi` baru), jadi secara
+      harfiah melanggar aturan CLAUDE.md #4. **Belum diperbaiki** — task ini
+      scope-nya verifikasi, bukan perbaikan, jadi dilaporkan dulu ke Arthuro
+      buat diputuskan: apakah trigger notifikasi otomatis perlu baris audit
+      sendiri, atau cukup ikut ter-cover baris UPDATE `Operasi`-nya (yang
+      sudah menangkap seluruh perubahan before/after). Dikonfirmasi hidup
+      lewat curl, bukan cuma baca kode: notifikasi baru benar-benar
+      terbentuk di DB, 0 baris `AuditLog` untuk `entityType: "Notifikasi"`
+      dengan `entityId` notifikasi itu.
+
+### 2. Verifikasi isi baris `AuditLog` (curl → backend lokal → DB dev)
+Login `admin`/`admin123` (ADMIN) dan `putra.tasdik`/`Sidokmais#2026` (DOKTER,
+`dokterId` terhubung ke `Kunjungan` uji). Semua PASS:
+- [x] `POST /api/operasi` → 1 baris `action="CREATE"`, `entityType="Operasi"`,
+      `entityId` cocok, `beforeData=null`, `afterData` berisi seluruh field
+      record baru, `actorId`/`actorRole` cocok akun ADMIN yang login
+- [x] `PATCH /api/operasi/:id` (ubah `tanggalOperasi`) → 1 baris
+      `action="UPDATE"`, `beforeData` & `afterData` SAMA-SAMA berisi seluruh
+      field (bukan cuma diff), `tanggalOperasi` beda antara before/after
+      sesuai perubahan yang dikirim
+- [x] `PATCH /api/notifikasi/:id/read` (pakai notifikasi hasil trigger di
+      atas) → 1 baris `action="UPDATE"`, `entityType="Notifikasi"`,
+      `beforeData.isRead=false`, `afterData.isRead=true`, `actorId`/
+      `actorRole` cocok akun DOKTER yang login (bukan ADMIN yang PATCH
+      operasinya)
+- [x] `DELETE /api/operasi/:id` → 1 baris `action="DELETE"`, `beforeData`
+      berisi record lengkap sebelum dihapus, `afterData=null`; record
+      `Operasi`-nya dikonfirmasi benar sudah hilang dari DB
+- [x] Semua `actorId` di atas dicocokkan manual ke `req.user.id` masing-masing
+      akun (bukan diasumsikan) — tidak ada yang salah tertukar
+
+### 3. Fault-tolerance `utils/auditLog.js`
+- [x] Baca kode: `try/catch` + `console.error`, TIDAK ada `throw` ulang ke
+      caller — kegagalan tulis `AuditLog` dipastikan tidak menggagalkan
+      response utama. Tidak disimulasikan gagal beneran (butuh matikan
+      koneksi DB di tengah request, dianggap tidak sepadan buat verifikasi
+      hari ini) — kode & pola ini juga sudah dipakai konsisten di trigger
+      `PERUBAHAN_JADWAL` (`operasi.routes.js`, try/catch + `console.error`
+      terpisah).
+
+### 4. `GET /api/me` — bukan write action
+- [x] Dikonfirmasi eksplisit: endpoint ini (`server.js`, "endpoint uji coba
+      RBAC") cuma `res.json(req.user)`, tidak ada `prisma.*.create/update/
+      delete` maupun `logAudit()` di dalamnya — memang seharusnya begitu,
+      bukan celah
+
+### Temuan sampingan (di luar scope inti, dicatat biar tidak hilang)
+- **Password seed ADMIN beda dari dokumentasi.** `docs/testing-manual.md`
+  (bagian "Sebelum mulai") dan `console.log` di `seed.js` sendiri
+  ("Akun login dummy (password sama untuk semua: Sidokmais#2026)")
+  menyatakan password sama untuk semua akun — TIDAK BENAR. `seed.js` bikin
+  `passwordHashAdmin` terpisah dari `hash("admin123", 10)`, cuma akun DOKTER
+  yang pakai `Sidokmais#2026`. Login `admin`/`Sidokmais#2026` GAGAL 401 saat
+  dicoba di verifikasi ini; `admin`/`admin123` baru berhasil. Belum
+  diperbaiki (di luar scope task ini), dilaporkan biar tidak ada yang
+  kejebak sama seperti sesi ini.
+
 ## Modul: Home, Profil Dokter, Data Pendapatan (frontend, UI-only)
 - [ ] Greeting Home & nama di Profil Dokter nunjukkin nama dokter yang beneran
       login (dari `authStore`), bukan teks statis "User"
