@@ -63,26 +63,38 @@ export function HasilLabListScreen({ route, navigation }: Props) {
   const filterAktif = dariTanggal !== null || sampaiTanggal !== null;
   const draftInvalid = Boolean(draftDari && draftSampai && draftDari > draftSampai);
 
-  const load = useCallback(async () => {
-    if (!token) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const result = await fetchHasilLabList(token, pasienId, {
-        limit: 50,
-        dariTanggal: dariTanggal ? toDateParam(dariTanggal) : undefined,
-        sampaiTanggal: sampaiTanggal ? toDateParam(sampaiTanggal) : undefined,
-      });
-      setItems(result.data);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Gagal memuat hasil lab');
-    } finally {
-      setLoading(false);
-    }
-  }, [token, pasienId, dariTanggal, sampaiTanggal]);
+  // `isCancelled` dicek lagi setelah tiap `await` supaya respons dari request
+  // basi (mis. ganti filter cepat-cepat, request lama baru resolve belakangan)
+  // tidak menimpa state dari request yang lebih baru.
+  const load = useCallback(
+    async (isCancelled: () => boolean) => {
+      if (!token) return;
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await fetchHasilLabList(token, pasienId, {
+          limit: 50,
+          dariTanggal: dariTanggal ? toDateParam(dariTanggal) : undefined,
+          sampaiTanggal: sampaiTanggal ? toDateParam(sampaiTanggal) : undefined,
+        });
+        if (isCancelled()) return;
+        setItems(result.data);
+      } catch (err) {
+        if (isCancelled()) return;
+        setError(err instanceof ApiError ? err.message : 'Gagal memuat hasil lab');
+      } finally {
+        if (!isCancelled()) setLoading(false);
+      }
+    },
+    [token, pasienId, dariTanggal, sampaiTanggal],
+  );
 
   useEffect(() => {
-    load();
+    let cancelled = false;
+    load(() => cancelled);
+    return () => {
+      cancelled = true;
+    };
   }, [load]);
 
   function openFilterModal() {
