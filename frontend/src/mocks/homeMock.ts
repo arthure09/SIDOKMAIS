@@ -1,16 +1,3 @@
-export type PasienPrioritas = {
-  id: string;
-  nama: string;
-  lokasi: string;
-  waktu: string;
-};
-
-export const pasienPrioritas: PasienPrioritas[] = [
-  { id: 'pp-1', nama: 'Tn. Ahmad Subarjo', lokasi: 'Ruang ICU - Bed 04', waktu: '09:45' },
-  { id: 'pp-2', nama: 'Ny. Siti Aminah', lokasi: 'Ruang OK 2 - Pre-Op', waktu: '11:00' },
-  { id: 'pp-3', nama: 'Tn. Budi Santoso', lokasi: 'Ruang OK 1 - In-Progress', waktu: '08:00' },
-];
-
 export type NavigasiCard = {
   id: string;
   label: string;

@@ -64,6 +64,71 @@ function hitungDalamRentang(waktuList, mulai, akhir) {
   }).length;
 }
 
+const JUMLAH_PASIEN_PRIORITAS = 3;
+
+// 3 jadwal (Operasi/Kunjungan) TERDEKAT ke depan buat "Pasien Prioritas" di
+// Home. Cuma status SCHEDULED yang dihitung "jadwal mendatang" — sengaja
+// tidak ikutkan ONGOING (kunjungan yang sudah berjalan tapi tanggalMasuk-nya
+// di masa lalu, belum ada preseden gimana itu harus diprioritaskan relatif
+// ke SCHEDULED lain) supaya urutannya konsisten cuma berdasar "makin dekat
+// makin prioritas". Ambil top-N dari MASING-MASING tabel dulu (bukan top-N
+// gabungan langsung di query), baru digabung+diurut+dipotong di JS — supaya
+// tetap benar walau top-N gabungan ternyata semuanya dari 1 tabel saja.
+async function getPasienPrioritas(aksesPasienDokter) {
+  const now = new Date();
+
+  const [kunjunganMendatang, operasiMendatang] = await Promise.all([
+    prisma.kunjungan.findMany({
+      where: { tanggalMasuk: { gte: now }, statusKunjungan: "SCHEDULED", ...aksesPasienDokter },
+      orderBy: { tanggalMasuk: "asc" },
+      take: JUMLAH_PASIEN_PRIORITAS,
+      select: {
+        id: true,
+        tanggalMasuk: true,
+        pasien: { select: { id: true, nama: true } },
+        ruangan: { select: { nama: true } },
+      },
+    }),
+    prisma.operasi.findMany({
+      where: { tanggalOperasi: { gte: now }, status: "SCHEDULED", kunjungan: aksesPasienDokter },
+      orderBy: { tanggalOperasi: "asc" },
+      take: JUMLAH_PASIEN_PRIORITAS,
+      select: {
+        id: true,
+        tanggalOperasi: true,
+        ruangan: { select: { nama: true } },
+        kunjungan: { select: { pasien: { select: { id: true, nama: true } } } },
+      },
+    }),
+  ]);
+
+  const kandidat = [
+    ...kunjunganMendatang.map((k) => ({
+      id: k.id,
+      jenis: "KONSULTASI",
+      pasienId: k.pasien.id,
+      nama: k.pasien.nama,
+      lokasi: `${k.ruangan.nama} — Konsultasi`,
+      waktu: k.tanggalMasuk,
+    })),
+    ...operasiMendatang.map((o) => ({
+      id: o.id,
+      jenis: "OPERASI",
+      pasienId: o.kunjungan.pasien.id,
+      nama: o.kunjungan.pasien.nama,
+      lokasi: `${o.ruangan.nama} — Operasi`,
+      waktu: o.tanggalOperasi,
+    })),
+  ];
+
+  kandidat.sort((a, b) => a.waktu.getTime() - b.waktu.getTime());
+
+  return kandidat.slice(0, JUMLAH_PASIEN_PRIORITAS).map(({ waktu, ...rest }) => ({
+    ...rest,
+    waktu: waktu.toISOString(),
+  }));
+}
+
 // GET /api/dashboard/statistik — ringkasan "Aktivitas Hari Ini" +
 // "Statistik Pasien Mingguan" di HomeScreen.
 //
@@ -77,6 +142,10 @@ function hitungDalamRentang(waktuList, mulai, akhir) {
 // statistikMingguan di homeMock.ts murni chart placeholder hardcoded
 // (sengaja, lihat docs/prompts/frontend-screens-figma-batch.md), belum
 // pernah dipetakan ke data asli.
+//
+// `pasienPrioritas` (keputusan Arthuro): 3 pasien dengan jadwal Operasi/
+// Kunjungan SCHEDULED terdekat ke depan — sebelumnya pasienPrioritas di
+// homeMock.ts juga chart placeholder hardcoded (3 nama fiktif).
 router.get("/statistik", async (req, res) => {
   const { role, dokterId } = req.user;
 
@@ -108,6 +177,7 @@ router.get("/statistik", async (req, res) => {
         jumlah: 0,
         highlight: i === hariIniIdx,
       })),
+      pasienPrioritas: [],
       adminCatatan:
         "Akun ADMIN tidak terikat ke satu Dokter, jadi statistik ini tidak relevan (selalu 0).",
     });
@@ -126,7 +196,7 @@ router.get("/statistik", async (req, res) => {
   const mingguMulai = mingguRange[0].mulai;
   const mingguAkhir = mingguRange[mingguRange.length - 1].akhir;
 
-  const [pasienAktif, operasiHariIni, konsulHariIni, kunjunganMinggu, operasiMinggu] =
+  const [pasienAktif, operasiHariIni, konsulHariIni, kunjunganMinggu, operasiMinggu, pasienPrioritas] =
     await Promise.all([
       prisma.dokterPasienAssignment.count({ where: { dokterId, status: "ACTIVE" } }),
       prisma.operasi.count({
@@ -151,6 +221,7 @@ router.get("/statistik", async (req, res) => {
         where: { tanggalOperasi: { gte: mingguMulai, lte: mingguAkhir }, kunjungan: aksesPasienDokter },
         select: { tanggalOperasi: true },
       }),
+      getPasienPrioritas(aksesPasienDokter),
     ]);
 
   const waktuKunjungan = kunjunganMinggu.map((k) => k.tanggalMasuk);
@@ -164,7 +235,7 @@ router.get("/statistik", async (req, res) => {
     highlight: mulaiHari.getTime() === mulai.getTime(),
   }));
 
-  res.json({ pasienAktif, operasiHariIni, konsulHariIni, aktivitasMingguan });
+  res.json({ pasienAktif, operasiHariIni, konsulHariIni, aktivitasMingguan, pasienPrioritas });
 });
 
 module.exports = router;

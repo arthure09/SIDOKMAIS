@@ -140,7 +140,7 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   useEffect(() => {
     if (!toggleItemWidth) return;
     Animated.spring(toggleIndicatorX, {
-      toValue: tab === 'KONSUL' ? toggleItemWidth : 0,
+      toValue: tab === 'OPERASI' ? toggleItemWidth : 0,
       useNativeDriver: true,
       friction: 8,
       tension: 60,
@@ -258,14 +258,14 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
               ]}
             />
           )}
-          <Pressable onPress={() => setTab('OPERASI')} style={styles.toggleButton}>
-            <Text style={[styles.toggleText, tab === 'OPERASI' && styles.toggleTextActive]}>
-              Operasi
-            </Text>
-          </Pressable>
           <Pressable onPress={() => setTab('KONSUL')} style={styles.toggleButton}>
             <Text style={[styles.toggleText, tab === 'KONSUL' && styles.toggleTextActive]}>
               Konsultasi
+            </Text>
+          </Pressable>
+          <Pressable onPress={() => setTab('OPERASI')} style={styles.toggleButton}>
+            <Text style={[styles.toggleText, tab === 'OPERASI' && styles.toggleTextActive]}>
+              Operasi
             </Text>
           </Pressable>
         </View>
@@ -470,7 +470,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     backgroundColor: colors.primary,
   },
-  toggleText: { fontSize: ms(12), fontWeight: '600', color: colors.onSurfaceVariant },
+  toggleText: { fontSize: ms(12), fontWeight: '800', color: colors.onSurfaceVariant },
   toggleTextActive: { color: colors.onPrimary },
   dateFilter: {
     flexDirection: 'row',

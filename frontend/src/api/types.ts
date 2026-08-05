@@ -205,6 +205,16 @@ export type AktivitasHarianMingguan = {
   highlight: boolean;
 };
 
+export type PasienPrioritasItem = {
+  id: string;
+  pasienId: string;
+  nama: string;
+  lokasi: string;
+  /** ISO datetime — jadwal Operasi/Kunjungan SCHEDULED, bisa hari ini atau beberapa hari ke depan. */
+  waktu: string;
+  jenis: 'OPERASI' | 'KONSULTASI';
+};
+
 export type StatistikDashboard = {
   pasienAktif: number;
   operasiHariIni: number;
@@ -212,6 +222,9 @@ export type StatistikDashboard = {
   // Gabungan jumlah Kunjungan + Operasi per hari, Senin-Minggu minggu
   // berjalan WIB — 7 entri, urutan tetap.
   aktivitasMingguan: AktivitasHarianMingguan[];
+  // 0-3 jadwal Operasi/Kunjungan SCHEDULED terdekat ke depan, diurutkan
+  // makin dekat makin dulu.
+  pasienPrioritas: PasienPrioritasItem[];
   // Cuma muncul kalau akun yang login ADMIN — lihat dashboard.routes.js untuk
   // alasan kenapa ADMIN selalu dapat 0 di sini, bukan agregat lintas-dokter.
   adminCatatan?: string;
