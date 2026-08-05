@@ -10,9 +10,11 @@ ke sini dengan **pemicu** yang jelas — apa yang harus terjadi supaya item ini
 bisa dilanjutkan. Item yang sudah selesai dipindahkan ke
 `docs/jurnal-pengerjaan.md`, jangan dihapus diam-diam dari sini.
 
-Terakhir diperbarui: **4 Agustus 2026 (Day 21)** — item 5 & 6 selesai, detail
-dipindah ke `docs/jurnal-pengerjaan.md` (entri Hari 21), baris di bawah
-ditinggalkan sesuai aturan file ini sendiri (lihat paragraf di atas).
+Terakhir diperbarui: **5 Agustus 2026 (Day 23)** — item 9 baru (gap audit log
+trigger notifikasi, ketemu saat verifikasi Hari 23). Item 5 & 6 selesai
+4 Agustus 2026 (Day 21), detail dipindah ke `docs/jurnal-pengerjaan.md`,
+baris di bawah ditinggalkan sesuai aturan file ini sendiri (lihat paragraf
+di atas).
 
 ---
 
@@ -28,6 +30,7 @@ ditinggalkan sesuai aturan file ini sendiri (lihat paragraf di atas).
 | ~~Arah flag abnormal~~ | ~~Untuk pasien pasca-kemoterapi, seharusnya lebih banyak RENDAH daripada TINGGI~~ | — | **SELESAI 4 Ags 2026** |
 | Migrasi backend ke TypeScript | Prioritas fitur; risiko merusak yang sudah jalan | — | Tidak dikerjakan |
 | Indikator mode Admin di UI | Akun demo adalah admin sehingga melihat data semua dokter; berpotensi disalahpahami saat demo | — | Minggu 4 |
+| Audit log trigger notifikasi `PERUBAHAN_JADWAL` | Notifikasi hasil trigger otomatis tidak tercatat ke `AuditLog` — dampak rendah, tapi harfiah melanggar CLAUDE.md #4 | Keputusan Arthuro | — |
 
 ---
 
@@ -178,6 +181,38 @@ Rencana perbaikan: penanda kecil di tampilan saat akun yang login berperan ADMIN
 (misalnya label "Mode Admin — menampilkan data seluruh dokter" di header).
 Perubahan tampilan saja, tidak menyentuh backend maupun logika hak akses.
 Dijadwalkan Minggu 4 bareng persiapan demo.
+
+### 9. Audit log untuk trigger notifikasi `PERUBAHAN_JADWAL`
+**Target: belum ditentukan · Menunggu: keputusan Arthuro**
+
+Ditemukan saat verifikasi audit log Hari 23
+(`docs/prompts/hari-23-audit-log-verifikasi.md`), dikonfirmasi hidup lewat
+curl — bukan cuma baca kode: `PATCH /api/operasi/:id` yang mengubah jadwal
+memicu `prisma.notifikasi.create()` (`operasi.routes.js` baris ~329) untuk
+bikin notifikasi `PERUBAHAN_JADWAL` ke dokter pemilik kunjungan, tapi write
+ini TIDAK dipanggil `logAudit()`. Notifikasinya beneran terbentuk di DB,
+sementara 0 baris `AuditLog` untuk `entityType: "Notifikasi"` dengan
+`entityId` itu.
+
+Secara harfiah ini melanggar CLAUDE.md aturan #4 ("semua write action...
+dicatat ke AuditLog"). Tapi dampaknya rendah: perubahan data yang memicunya
+(jadwal operasi) tetap kerekam lengkap lewat baris `UPDATE` `Operasi` yang
+sama (before/after lengkap, actor jelas) — yang "bolong" cuma notifikasi
+turunannya, isinya pun cuma pesan pemberitahuan buat dokter, bukan data
+medis/finansial sensitif. Bukan celah keamanan, murni soal kelengkapan
+pencatatan.
+
+Belum diperbaiki karena scope task Hari 23 murni verifikasi, bukan
+perbaikan. Butuh keputusan dulu: apakah notifikasi hasil trigger otomatis
+butuh baris audit sendiri (konsisten literal sama aturan #4), atau cukup
+dianggap ter-cover oleh baris UPDATE `Operasi` yang jadi penyebabnya. Juga
+relevan buat pola yang bakal dipakai chatbot nanti (aturan #5, wajib audit
+tiap write) — kalau polanya tidak diluruskan sekarang, berisiko ketiru ke
+fitur baru.
+
+Detail verifikasi: `docs/jurnal-pengerjaan.md` entri Hari 23,
+`docs/testing-manual.md` section "Modul: Audit Log — verifikasi menyeluruh
+(Hari 23, 5 Ags 2026)".
 
 ---
 
