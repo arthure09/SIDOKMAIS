@@ -133,7 +133,17 @@ di struktur database dan akan dipakai endpoint Day 18.
 **C1. Apakah benar seorang dokter boleh melihat semua hasil lab pasien yang
 ditugaskan kepadanya, termasuk hasil lab yang diminta oleh dokter lain?**
 
-- [ ] Benar — dokter penanggung jawab boleh melihat seluruh hasil lab pasiennya,
+**DIJAWAB/DIKONFIRMASI — 4 Agustus 2026 (Day 22).** Opsi pertama dipilih:
+dokter penanggung jawab boleh melihat seluruh hasil lab pasiennya, siapa pun
+yang meminta pemeriksaan itu. Basis akses `DokterPasienAssignment` (bukan
+`kunjungan.dokterId`) yang sejak Day 17 baru berupa asumsi, sekarang jadi
+keputusan resmi — dicatat langsung sebagai komentar di
+`backend/src/utils/aksesPasien.js` ("Keputusan sudah dikonfirmasi (Day 22,
+2026-08-04)"), dan basis yang sama itu sekarang dipakai konsisten di
+pasien/lab/kunjungan/operasi routes (lihat `docs/jurnal-pengerjaan.md` entri
+Hari 22).
+
+- [x] Benar — dokter penanggung jawab boleh melihat seluruh hasil lab pasiennya,
       siapa pun yang meminta pemeriksaan itu
 - [ ] Tidak — dokter hanya boleh melihat hasil lab dari pemeriksaan yang dia
       sendiri minta
@@ -154,9 +164,9 @@ Konsekuensi di struktur database: setiap hasil lab wajib punya `pasienId`,
 sedangkan `kunjunganId` boleh kosong, dan hak akses dibaca dari tabel penugasan
 dokter–pasien. Dokter peminta tetap dicatat, tapi sebagai informasi saja.
 
-**Kalau asumsi ini keliru, mohon dikoreksi sebelum 31 Juli.** Setelah endpoint
-Day 18 jadi, mengubahnya berarti mengubah struktur database dan seluruh
-pengetesan yang sudah lewat.
+~~Kalau asumsi ini keliru, mohon dikoreksi sebelum 31 Juli.~~ **Sudah
+dikonfirmasi 4 Agustus 2026 — asumsi ini benar, lihat catatan "DIJAWAB/
+DIKONFIRMASI" di atas.**
 
 **C2. Pertanyaan turunan:** apakah dokter boleh melihat hasil lab pasien yang
 penugasannya sudah berstatus selesai (bukan lagi pasien aktifnya)? Ini relevan
@@ -173,7 +183,7 @@ boleh melihatnya, atau membedakan hasil yang belum diverifikasi dokter patologi?
 
 | Butuh sebelum | Pertanyaan | Kalau belum terjawab |
 |---|---|---|
-| 31 Juli (Day 18) | **C1** — kebijakan hak akses | Endpoint dibangun di atas asumsi opsi pertama, dicatat sebagai risiko |
+| 31 Juli (Day 18) | **C1** — kebijakan hak akses | **Terjawab 4 Agustus 2026** — opsi pertama dikonfirmasi, lihat bagian C1 di atas |
 | 31 Juli (Day 18) | **B1** — nilai per parameter atau dokumen | Dibangun untuk nilai per parameter (struktur sudah ada) |
 | 1 Agustus (Day 19) | **B1 turunan** — perbandingan hasil sebelumnya | Tidak dikerjakan, ditunda |
 | Tidak mendesak | **B2** — unduh/bagikan | Tombol tidak dibuat |

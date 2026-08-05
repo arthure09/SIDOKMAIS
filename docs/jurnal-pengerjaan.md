@@ -477,9 +477,195 @@ baru.
 - Audit dokumentasi 6 klaim stale — lihat bagian "Koreksi dokumentasi" di
   bawah.
 
+### Hari 18 (Jum, 31 Jul) — Endpoint backend modul lab
+**Catatan tanggal:** dikerjakan bareng Hari 19 & 21 dalam satu commit/sesi
+tanggal 4 Agustus 2026 (`3dd8f02`, 09:31 WIB) — lihat "Catatan sesi gabungan"
+di bawah Hari 21 untuk kenapa 3 hari jadwal jadi 1 sesi eksekusi.
+
+`backend/src/routes/lab.routes.js` baru: `GET /api/lab` (list ringkasan hasil
+lab per pasien, wajib query `pasienId`, pagination `page`/`limit`, opsional
+filter `dariTanggal`/`sampaiTanggal` yang baru menyusul di Hari 22) dan
+`GET /api/lab/:id` (detail lengkap satu `PemeriksaanLab` + seluruh
+`hasilLabItem` terkait). Scoping akses pakai `dokterPunyaAksesPasien()` —
+berbasis `DokterPasienAssignment`, BUKAN `kunjungan.dokterId` — sesuai asumsi
+yang ditulis di `docs/pertanyaan-supervisor-modul-lab.md` bagian C1. Guard
+"Akun ini tidak terhubung ke data dokter" dipasang untuk role DOKTER yang
+`dokterId`-nya null (pola sama seperti `pasien.routes.js`). Response detail:
+`hasilLabItem` sengaja nullable (bukan array kosong) kalau order belum ada
+hasilnya — didokumentasikan sebagai komentar di kode karena belum
+dikonfirmasi Mas Fauzi apakah SIMRS asli simpan data terstruktur per-parameter
+atau cuma dokumen (PDF). Di-mount di `server.js`.
+
+### Hari 19 (Sab, 1 Ags) — Frontend modul lab
+Alur "Cari Hasil Lab" (pilih pasien → list ringkasan → detail parameter →
+lihat PDF) — 4 screen baru:
+- `PilihPasienHasilLabScreen` — pilih dari daftar pasien yang di-assign ke
+  dokter yang login.
+- `HasilLabListScreen` — list ringkasan `PemeriksaanLab` satu pasien.
+- `HasilLabDetailScreen` — detail parameter (`hasilLabItem`) satu pemeriksaan.
+- `LihatPdfLabScreen` — buka PDF lewat WebView; PDF-nya dummy statis
+  (`frontend/assets/dummy.pdf`), karena integrasi berkas PDF asli dari SIMRS
+  masih pending (lihat `docs/keputusan-tertunda.md` item 3).
+
+`frontend/src/api/lab.ts` (pola sama `api/pasien.ts`, pakai `apiFetch<T>()`)
++ tipe baru di `api/types.ts`. Home quick action "Cari Hasil Lab" (kartu id
+`hasillab`, ditambah 29 Jul tapi sebelumnya di-exclude dari
+`NAVIGABLE_CARD_IDS`) sekarang aktif, navigate ke `PasienTab` →
+`PilihPasienHasilLab`. `frontend/src/mocks/labMock.ts` (dibuat Hari 16)
+sekarang **0 importer** — alur di atas konsumsi endpoint asli dari awal,
+bukan migrasi dari mock. `npx tsc --noEmit` bersih.
+
+**Catatan supaya tidak tertukar:** ini alur BARU dan terpisah dari
+`DetailLaporanLabScreen` (screen dekoratif di tab Notifikasi, dibangun Hari
+11) — screen itu masih murni pakai `frontend/src/mocks/notifikasiMock.ts`
+(`laporanLabDetail`), **tidak ikut disambungkan** di sini walau namanya mirip.
+
+**Smoke test Expo Go / HP fisik: PASS.** Dikonfirmasi langsung oleh Arthuro
+5 Agustus 2026 — sebelumnya tidak ada jejak pengetesan device di commit/kode,
+jadi ini ditanyakan eksplisit alih-alih diasumsikan dari histori commit.
+
+### Hari 20 (Min, 2 Ags) — Dashboard Kinerja Dokter
+**Belum dikerjakan.** `git log` tidak menemukan satu pun commit yang
+menyinggung "dashboard" atau "kinerja" — tidak ada kode, desain, maupun
+progress lain yang tercatat. Ditulis apa adanya di sini (bukan di-skip diam-
+diam) supaya jurnal tidak menyesatkan, mengikuti prinsip yang sama dengan
+temuan Hari 21 di bawah (kualitas data yang sempat tidak konsisten tanpa
+tercatat jelas sebelumnya).
+
+### Hari 21 (Sen, 3 Ags) — Seed: kopling hematologi + arah flag pasca-kemoterapi
+Menyelesaikan item 5 & 6 di `docs/keputusan-tertunda.md` (dijadwalkan Day 21
+sejak 30 Jul) — `backend/prisma/seed.js`:
+- `PARAM_KORELASI_HB` (baris ~382) = `["Hemoglobin", "Hematokrit",
+  "Eritrosit"]`. `buildHematologiItems()` (baris ~451) menghitung SATU
+  `hbGroupSeverity` (abnormal?/arah/magnitude) per pasien, lalu memakainya
+  buat ketiga parameter itu lewat `buildSeverityDrivenItem()` (baris ~470) —
+  bukan diacak independen per parameter seperti sebelumnya. Leukosit &
+  Trombosit (beda lini sel darah) tetap independen lewat
+  `buildKuantitatifItem()`, tapi arahnya tetap ikut skew kemoterapi di bawah.
+- `riwayatKemoterapi` di-derive per pasien dari regex `/kemoterapi/i`
+  (`RIWAYAT_KEMOTERAPI_REGEX`) terhadap `Kunjungan.diagnosa` — tidak ada
+  field khusus riwayat kemoterapi di schema.
+- `pickArahAbnormal()`: kalau pasien punya riwayat kemoterapi dan parameter
+  punya opsi arah RENDAH, 85% arahnya RENDAH — mencerminkan sitopenia
+  pasca-kemo (Hb/leukosit/trombosit cenderung turun), bukan skew ke TINGGI
+  atau random 50/50 seperti sebelumnya.
+- `flag` tetap SELALU dihitung dari nilai vs rujukan yang sama dipakai
+  generate nilainya (tidak diacak terpisah) — properti ini sudah benar sejak
+  Hari 17, tidak berubah di sini.
+
+**Catatan sesi gabungan:** Hari 18, 19, dan 21 di atas — walau tercatat 3
+hari terpisah di jadwal (31 Jul, 1 Ags, 3 Ags) — kronologisnya semuanya masuk
+SATU commit (`3dd8f02`, Selasa 4 Agustus 2026 09:31 WIB), bukan 3 sesi kerja
+terpisah. Jadwal Day 18-21 mundur total dari tanggal aslinya dan baru
+dieksekusi 4 Agustus (kecuali Hari 20/Dashboard Kinerja yang tidak pernah
+dieksekusi sama sekali — lihat entrinya di atas).
+
 ## Minggu 4 — Hardening, Testing, Dokumentasi (4-10 Ags)
-Hari 22-28: belum dimulai. Scope: RBAC hardening, verifikasi audit log,
-integration testing, bug fixing (2 round), user documentation, final review.
+
+### Hari 22 (Sel, 4 Ags) — Filter tanggal, bug fix, RBAC hardening
+Dua commit terpisah, sama-sama 4 Agustus, sesudah sesi pagi Hari 18/19/21
+di atas.
+
+**`d1c6116` (12:04 WIB) — filter tanggal Hasil Lab + fix crash date picker +
+fix timezone WIB:**
+- Filter tanggal permintaan (dari/sampai) di `HasilLabListScreen` — pola
+  draft/apply lewat modal + tombol "Terapkan". Backend `GET /api/lab` terima
+  query `dariTanggal`/`sampaiTanggal`, difilter lewat `tanggalPermintaan`.
+  Dependency baru `@react-native-community/datetimepicker` 8.4.4.
+- Fix crash: `DateTimePicker` sebelumnya dikasih `value={new Date()}` inline
+  (timestamp baru tiap render), dikombinasikan dengan `onChange` yang belum
+  di-`useCallback` — kombinasi ini bikin re-layout native tanpa henti di iOS
+  (watchdog kill, tanpa error JS kelihatan) dan dialog Android menumpuk.
+  Diperbaiki: `fallbackDate` stabil lewat `useState`, `onChange` dibungkus
+  `useCallback`.
+- Fix timezone: `backend/src/routes/lab.routes.js` — frontend kirim
+  `dariTanggal`/`sampaiTanggal` sebagai `"YYYY-MM-DD"` (tanggal kalender
+  lokal WIB), tapi `Date.parse` membaca string tanpa jam sebagai UTC 00:00,
+  jadi batas hari meleset +7 jam. Diperbaiki pakai `WIB_OFFSET_MS` (baris
+  ~45) supaya batas hari jatuh tepat tengah malam WIB. Aplikasi diasumsikan
+  satu zona waktu (WIB) — dicatat eksplisit sebagai komentar kalau nanti
+  perlu per-user timezone.
+
+**`e13efbe` (14:48 WIB) — RBAC hardening (task resmi Day 22) + 2 perubahan
+lab tambahan:**
+- **RBAC hardening:** `dokterPunyaAksesPasien()` dipindah dari lokal
+  `lab.routes.js` ke util bersama `backend/src/utils/aksesPasien.js`, dipakai
+  juga di `kunjungan.routes.js` dan `operasi.routes.js` (list + detail) —
+  sebelumnya cuma dipakai `pasien.routes.js`/`lab.routes.js`. Efeknya: dokter
+  yang di-assign ke pasien lewat `DokterPasienAssignment` sekarang bisa lihat
+  kunjungan/operasi pasien itu walau `kunjungan.dokterId` tercatat dokter
+  lain. Guard "Akun ini tidak terhubung ke data dokter" (sebelumnya cuma di
+  `pasien.routes.js`/`lab.routes.js`) sekarang dipasang merata, termasuk di
+  `GET /api/kunjungan/:id` dan `GET /api/operasi/:id`. Basis akses ini
+  didokumentasikan sebagai "sudah dikonfirmasi (Day 22, 2026-08-04)" langsung
+  di komentar `aksesPasien.js` — lihat juga update terkait di
+  `docs/pertanyaan-supervisor-modul-lab.md` bagian C1.
+- `GET /api/operasi/:id` tidak lagi meng-`include` `pendapatan` (data
+  finansial `tarifTotal`/`jumlahDiterimaDokter`) — tidak dipakai frontend
+  sama sekali, sebelumnya ikut ter-embed tanpa perlu.
+- `backend/package.json`: `testPathIgnorePatterns` ditambah
+  `"\\.manual\\.js$"` supaya `verify-auth.manual.js` (script manual, bukan
+  test Jest) tidak lagi ikut ke-run `npm test`.
+- **Bukan bagian RBAC, dibundel commit yang sama:** `GET /api/lab` sekarang
+  cuma balikin pemeriksaan berstatus `COMPLETED` (sebelumnya exclude
+  `CANCELLED` doang, `PENDING` masih ikut muncul) — supaya list Hasil Lab
+  pasien cuma isi laporan yang memang sudah ada; badge/status di UI
+  (`STATUS_LABEL`, `bisaDilihat`, `statusText`) dicabut dari
+  `HasilLabListScreen` karena jadi tidak perlu lagi. `LihatPdfLabScreen`:
+  `FloatingTabBar` disembunyikan (slide-down) selagi screen ini fokus lewat
+  hook baru `useHideTabBar()` (`frontend/src/hooks/useHideTabBar.ts`) +
+  `tabBarStore.hidden`, balik lagi begitu blur — screen PDF full-bleed jadi
+  tidak ketutupan tab bar.
+
+**Review kode menyeluruh (`docs/prompts/review-kode-day-22-4-agustus-2026.md`):**
+dipicu laporan aplikasi keluar sendiri di filter tanggal Hasil Lab. Menelusuri
+kode sumber (bukan crash log — mesin pengembangan tidak punya `adb`/Xcode
+penuh, pengetesan device lewat Expo Go) menemukan akar masalah persis sama
+dengan yang sudah diperbaiki di commit `d1c6116` di atas: `value` picker jatuh
+ke `new Date()` inline (timestamp baru tiap render) dikombinasikan `onChange`
+tanpa `useCallback` — di iOS memicu re-layout native tanpa henti (watchdog
+kill), di Android numpuk dialog + promise menggantung (`DateTimePickerAndroid.
+open()` tidak ada penjaga dialog yang sudah terbuka). Turut mengonfirmasi versi
+`@react-native-community/datetimepicker` 8.4.4 sudah benar (persis
+`bundledNativeModules.json` Expo SDK 54) — dugaan awal soal versi salah
+gugur. Audit ini juga memetakan kode mati/struktur lewat pencarian importer,
+bukan cuma grep permukaan (satu kata kunci `scale` sempat terlihat dipakai di
+15 tempat, ternyata semuanya `Animated.Value`/`transform` lokal, bukan
+importer `theme/responsive.ts`).
+
+**Tindak lanjut audit — dikerjakan 5 Agustus 2026** (item "disarankan"/
+"opsional" dari dokumen review, ditunda satu hari dari Day 22):
+- Hapus kode mati nol-consumer: `frontend/src/mocks/labMock.ts` (89 baris),
+  dependency `react-native-vector-icons` + `expo-blur` (`npm uninstall`,
+  bukan cuma dicabut manual dari `package.json` — biar lockfile konsisten),
+  4 dari 6 export `frontend/src/theme/responsive.ts` (`verticalScale`, `wp`,
+  `hp` dihapus total; `scale` tetap ada tapi jadi fungsi privat karena
+  `moderateScale`/`ms` — satu-satunya export yang beneran dipakai (7 layar) —
+  butuh dia secara internal).
+- Penjaga respons basi di `HasilLabListScreen.tsx`: `load()` sekarang terima
+  `isCancelled(): boolean` (closure ke flag `cancelled` di `useEffect`, DICEK
+  ULANG setelah tiap `await` — bukan dikirim sebagai value biasa yang beku di
+  waktu pemanggilan), supaya ganti filter tanggal cepat-cepat tidak menampilkan
+  hasil dari request yang lebih lama.
+- `npx tsc --noEmit` diverifikasi ulang bersih setelah seluruh perubahan di
+  atas.
+- **Koreksi `CLAUDE.md`:** baris `PaperProvider` "tidak dilepas karena
+  berisiko dan tidak mendesak" diluruskan — audit ini membuktikan provider itu
+  nol consumer, jadi alasan sebenarnya cuma "tidak mendesak", bukan "berisiko".
+- **Belum dikerjakan dari dokumen review** (disengaja, bukan lupa — item ini
+  eksplisit ditandai "sengaja TIDAK dikerjakan" di dokumennya sendiri, bagian
+  9): konsolidasi 4 hook scroll yang tumpang tindih, `src/utils/date.ts`
+  buat `formatTanggal` yang ditulis ulang di banyak layar, layer state per
+  modul, pagination Hasil Lab di sisi klien, pelepasan `PaperProvider`.
+  Alasannya sama semua: refactor tanpa nambah fungsi di minggu yang tujuannya
+  stabilisasi, risiko regresi > manfaat dengan sisa waktu magang segini.
+- `docs/testing-manual.md` ditambah kasus tepi regresi (buka picker lalu
+  diamkan, pilih tanggal di batas hari, tombol X tidak ikut buka modal,
+  Reset draft tidak menembus pola apply, ganti filter cepat-cepat) — lihat
+  section "Modul: Hasil Lab (Day 18-22)" → "3. Regresi — review kode Day 22".
+
+Hari 23-28: belum dimulai. Sisa scope: verifikasi audit log, integration
+testing, bug fixing (2 round), user documentation, final review.
 
 ---
 
@@ -488,8 +674,14 @@ integration testing, bug fixing (2 round), user documentation, final review.
   dokumen rencana, masih pending keputusan supervisor
 - ~~Entity "Laporan Lab" belum ada modelnya di `schema.prisma`~~ — **selesai
   30 Jul 2026**: `PemeriksaanLab` + `HasilLabItem` masuk lewat migration
-  `20260730024026_add_lab_module`. `DetailLaporanLabScreen` masih pakai mock;
-  penyambungan ke data asli dijadwalkan Hari 19.
+  `20260730024026_add_lab_module`. **Koreksi 4 Agustus 2026:** Hari 19 TIDAK
+  menyambungkan `DetailLaporanLabScreen` ke data asli seperti rencana semula
+  — yang dibangun justru alur baru terpisah ("Cari Hasil Lab":
+  `PilihPasienHasilLabScreen`/`HasilLabListScreen`/`HasilLabDetailScreen`/
+  `LihatPdfLabScreen`, lihat entri Hari 19). `DetailLaporanLabScreen` (screen
+  dekoratif di tab Notifikasi) masih pakai
+  `frontend/src/mocks/notifikasiMock.ts` sampai sekarang, belum ada rencana
+  baru buat menyambungkannya.
 - Pertanyaan terbuka ke supervisor: format data klinis (ICD-10, No. RM), kebijakan
   data ke LLM pihak ketiga, handover pasca-magang. Khusus modul lab, daftar
   pertanyaan terstruktur ada di `docs/pertanyaan-supervisor-modul-lab.md`.

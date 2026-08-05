@@ -180,6 +180,73 @@ dari hasil fetch API.
 - [ ] **Pastikan tombol "Ubah Jadwal"/"Mulai Operasi" di Detail Jadwal SUDAH
       TIDAK ADA** — ini verifikasi langsung dari perbaikan item 1 & 2
 
+## Modul: Hasil Lab (Day 18-22)
+
+Endpoint: `GET /api/lab` (list ringkasan per pasien, wajib query `pasienId`,
+filter opsional `dariTanggal`/`sampaiTanggal`) dan `GET /api/lab/:id`
+(detail + `hasilLabItem`). Scoping akses pakai `dokterPunyaAksesPasien()`
+(`backend/src/utils/aksesPasien.js`), basis `DokterPasienAssignment` — bukan
+`kunjungan.dokterId`/`dokterPemintaId`. Frontend: alur "Cari Hasil Lab"
+(`PilihPasienHasilLabScreen` → `HasilLabListScreen` → `HasilLabDetailScreen`
+→ `LihatPdfLabScreen`). Lihat `docs/jurnal-pengerjaan.md` entri Hari 18-22
+untuk detail commit.
+
+### 1. Backend — `GET /api/lab` & `GET /api/lab/:id`
+- [ ] DOKTER dengan assignment ke pasien → 200, list/detail muncul
+- [ ] DOKTER TANPA assignment ke pasien → 403 ("Anda tidak memiliki akses ke
+      data pasien ini" / "...data pemeriksaan lab ini")
+- [ ] Basis akses beneran `DokterPasienAssignment`, bukan kunjungan/dokter
+      peminta — coba 2 akun DOKTER: order lab pasien diminta (`dokterPemintaId`)
+      oleh dokter A, tapi pasiennya di-assign juga ke dokter B → dokter B
+      tetap bisa lihat order itu
+- [ ] `GET /api/lab` tanpa query `pasienId` → 400
+- [ ] `GET /api/lab` cuma balikin status `COMPLETED` — order `PENDING`/
+      `CANCELLED` tidak muncul di list (behavior sejak commit `e13efbe`)
+- [ ] Filter `dariTanggal`/`sampaiTanggal` jalan benar setelah fix timezone —
+      batas hari jatuh tepat tengah malam WIB (bukan UTC), row di tepi
+      jendela tanggal tidak salah tersaring/terbuang
+- [ ] `hasilLabItem` di response detail bernilai `null` (bukan array kosong)
+      kalau order belum ada parameter hasilnya
+
+### 2. Frontend — alur "Cari Hasil Lab"
+- [x] `npx tsc --noEmit` bersih — diverifikasi ulang saat audit dokumentasi
+      5 Agustus 2026
+- [x] Smoke test Expo Go / HP fisik — **PASS**, dikonfirmasi langsung oleh
+      Arthuro 5 Agustus 2026 (device sungguhan, bukan cuma verifikasi kode)
+- [ ] Navigasi lengkap di device: `PilihPasienHasilLabScreen` →
+      `HasilLabListScreen` → `HasilLabDetailScreen` → `LihatPdfLabScreen`
+- [ ] Filter tanggal (modal draft/apply + tombol "Terapkan") jalan benar di
+      device, hasilnya konsisten sama backend
+- [ ] `DateTimePicker` tidak lagi bikin crash/hang (watchdog kill di iOS,
+      dialog menumpuk di Android) — regression check untuk fix
+      `fallbackDate`/`useCallback` di commit `d1c6116`
+- [ ] `FloatingTabBar` slide-hide begitu `LihatPdfLabScreen` fokus, balik
+      lagi (slide-up) begitu keluar dari screen itu
+
+### 3. Regresi — review kode Day 22
+Kasus tepi dari `docs/prompts/review-kode-day-22-4-agustus-2026.md` (bagian 6
+& 8), belum ada bukti pengetesan manual untuk baris-baris ini:
+- [ ] Buka picker "Dari" atau "Sampai" lalu **diamkan tanpa memilih tanggal**
+      beberapa saat (kondisi persis yang bikin crash sebelum fix — `value`
+      jatuh ke `fallbackDate` yang sekarang stabil, bukan `new Date()` baru
+      tiap render) → tidak crash/hang di iOS, tidak ada dialog Android yang
+      menumpuk
+- [ ] Pilih tanggal tepat di **batas awal hari** (00:00 WIB) dan **batas akhir
+      hari** (23:59 WIB) buat `dariTanggal`/`sampaiTanggal` → row dengan jam
+      di tepi jendela tidak salah tersaring/terbuang (regression check fix
+      timezone WIB_OFFSET_MS)
+- [ ] Tekan tombol "X" reset di filter bar (`dateFilter`) → filter langsung
+      ke-reset, TIDAK ikut membuka modal filter (regression check bug
+      Pressable bersarang, baris ~168 saat ini)
+- [ ] Tombol "Reset" di dalam modal filter → cuma bersihkan draft tanggal
+      (belum apply), filter yang sudah aktif TIDAK ikut berubah dan TIDAK
+      memicu fetch ulang selagi modal masih terbuka (regression check
+      `resetDraftFilter` vs `resetFilter`)
+- [ ] Ganti filter tanggal dengan cepat berturut-turut (submit beberapa kali
+      sebelum response pertama kembali) → list akhir yang tampil konsisten
+      sama filter terakhir, bukan hasil dari request yang lebih lama
+      (regression check stale-response guard `isCancelled()` di `load()`)
+
 ---
 
 ## Chatbot (Minggu 3) — in-scope vs out-of-scope

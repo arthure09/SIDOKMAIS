@@ -20,8 +20,11 @@ Fase saat ini: dummy data, backend independen — belum terintegrasi ke SIMRS pr
     ada satu pun komponen Paper yang dipakai di `frontend/src/`**.
     *Penyimpangan dari rencana awal* (rencana: "React Native Paper — tampilan
     profesional cepat tanpa desain custom"); dalam praktiknya desain custom
-    dari Figma yang dipakai. Provider tidak dilepas karena berisiko dan tidak
-    mendesak.
+    dari Figma yang dipakai. Provider tidak dilepas karena tidak mendesak —
+    **bukan** karena berisiko: audit kode Day 22 (4 Ags 2026) mengonfirmasi
+    `PaperProvider` nol consumer (tidak ada komponen yang mengambil apa pun
+    darinya), jadi melepasnya sebenarnya rendah risiko. Alasan sebenarnya
+    murni prioritas waktu, bukan takut ada yang rusak.
   - **HTTP client:** `fetch` native, dibungkus helper `apiFetch<T>()` di
     `frontend/src/api/client.ts`. **Bukan axios** — axios tidak ada di
     `frontend/package.json` dan tidak pernah dipakai.

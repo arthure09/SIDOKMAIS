@@ -10,7 +10,9 @@ ke sini dengan **pemicu** yang jelas — apa yang harus terjadi supaya item ini
 bisa dilanjutkan. Item yang sudah selesai dipindahkan ke
 `docs/jurnal-pengerjaan.md`, jangan dihapus diam-diam dari sini.
 
-Terakhir diperbarui: **30 Juli 2026 (Day 17)**
+Terakhir diperbarui: **4 Agustus 2026 (Day 21)** — item 5 & 6 selesai, detail
+dipindah ke `docs/jurnal-pengerjaan.md` (entri Hari 21), baris di bawah
+ditinggalkan sesuai aturan file ini sendiri (lihat paragraf di atas).
 
 ---
 
@@ -22,8 +24,8 @@ Terakhir diperbarui: **30 Juli 2026 (Day 17)**
 | Tombol cetak/bagikan hasil lab | Kebijakan data belum jelas | Jawaban supervisor pertanyaan B | — |
 | Integrasi file PDF asli dari SIMRS | Sumber file belum diketahui | Mas Fauzi | Pasca-magang |
 | Push notification (remote) | Expo Go tidak lagi mendukung push sejak SDK 53; butuh development build | Slot waktu Minggu 4 | Opsional |
-| Kopling parameter hematologi (Hb–Hematokrit–Eritrosit) | Kombinasi nilai saat ini tidak konsisten secara fisiologis | — | Day 21 |
-| Arah flag abnormal | Untuk pasien pasca-kemoterapi, seharusnya lebih banyak RENDAH daripada TINGGI | — | Day 21 |
+| ~~Kopling parameter hematologi (Hb–Hematokrit–Eritrosit)~~ | ~~Kombinasi nilai saat ini tidak konsisten secara fisiologis~~ | — | **SELESAI 4 Ags 2026** |
+| ~~Arah flag abnormal~~ | ~~Untuk pasien pasca-kemoterapi, seharusnya lebih banyak RENDAH daripada TINGGI~~ | — | **SELESAI 4 Ags 2026** |
 | Migrasi backend ke TypeScript | Prioritas fitur; risiko merusak yang sudah jalan | — | Tidak dikerjakan |
 | Indikator mode Admin di UI | Akun demo adalah admin sehingga melihat data semua dokter; berpotensi disalahpahami saat demo | — | Minggu 4 |
 
@@ -87,7 +89,15 @@ pertama. Kalau tidak, dilaporkan apa adanya sebagai batasan lingkungan
 pengembangan, bukan sebagai fitur gagal.
 
 ### 5. Kopling parameter hematologi (Hb – Hematokrit – Eritrosit)
-**Target: Day 21 · Menunggu: —**
+**SELESAI — 4 Agustus 2026 (Day 21).** Detail perbaikan:
+`docs/jurnal-pengerjaan.md` entri Hari 21. Ringkas: `buildHematologiItems()`
+di `backend/prisma/seed.js` sekarang menghitung satu `hbGroupSeverity` per
+pasien dan memakainya untuk Hemoglobin/Hematokrit/Eritrosit sekaligus lewat
+`buildSeverityDrivenItem()`, gantiin pengacakan independen per parameter.
+Baris di bawah ditinggalkan sesuai aturan pakai dokumen ini (lihat paragraf
+pembuka) — jangan dihapus.
+
+**Target awal: Day 21 · Menunggu: —**
 
 Di dalam tubuh manusia, Hemoglobin, Hematokrit, dan Eritrosit bergerak bersama —
 Hemoglobin rendah hampir selalu diikuti Hematokrit rendah. Di data contoh saat
@@ -104,7 +114,14 @@ Tidak menunggu siapa pun — murni butuh slot waktu. Dijadwalkan bareng item 6
 karena keduanya menyentuh fungsi yang sama di seed.
 
 ### 6. Arah nilai abnormal pada data contoh
-**Target: Day 21 · Menunggu: —**
+**SELESAI — 4 Agustus 2026 (Day 21).** Detail perbaikan:
+`docs/jurnal-pengerjaan.md` entri Hari 21. Ringkas: `pickArahAbnormal()` di
+`backend/prisma/seed.js` sekarang skew 85% ke RENDAH untuk parameter
+hematologi pada pasien dengan riwayat kemoterapi (di-derive dari regex
+`/kemoterapi/i` terhadap `Kunjungan.diagnosa`), gantiin random 50/50. Baris
+di bawah ditinggalkan sesuai aturan pakai dokumen ini — jangan dihapus.
+
+**Target awal: Day 21 · Menunggu: —**
 
 Sebaran tanda hasil per 30 Juli: RENDAH 3, NORMAL 56, TINGGI 8, ABNORMAL 8.
 Untuk populasi pasien RS Dharmais — banyak pasien pasca-kemoterapi, yang umumnya
