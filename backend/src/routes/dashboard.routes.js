@@ -85,7 +85,7 @@ async function getPasienPrioritas(aksesPasienDokter) {
       select: {
         id: true,
         tanggalMasuk: true,
-        pasien: { select: { id: true, nama: true } },
+        pasien: { select: { nama: true } },
         ruangan: { select: { nama: true } },
       },
     }),
@@ -97,7 +97,7 @@ async function getPasienPrioritas(aksesPasienDokter) {
         id: true,
         tanggalOperasi: true,
         ruangan: { select: { nama: true } },
-        kunjungan: { select: { pasien: { select: { id: true, nama: true } } } },
+        kunjungan: { select: { pasien: { select: { nama: true } } } },
       },
     }),
   ]);
@@ -106,7 +106,6 @@ async function getPasienPrioritas(aksesPasienDokter) {
     ...kunjunganMendatang.map((k) => ({
       id: k.id,
       jenis: "KONSULTASI",
-      pasienId: k.pasien.id,
       nama: k.pasien.nama,
       lokasi: `${k.ruangan.nama} — Konsultasi`,
       waktu: k.tanggalMasuk,
@@ -114,7 +113,6 @@ async function getPasienPrioritas(aksesPasienDokter) {
     ...operasiMendatang.map((o) => ({
       id: o.id,
       jenis: "OPERASI",
-      pasienId: o.kunjungan.pasien.id,
       nama: o.kunjungan.pasien.nama,
       lokasi: `${o.ruangan.nama} — Operasi`,
       waktu: o.tanggalOperasi,

@@ -68,12 +68,8 @@ export function HomeScreen({ navigation }: Props) {
         operasiHariIni: statistik.operasiHariIni,
         konsulHariIni: statistik.konsulHariIni,
       });
-      // Fallback ke [] kalau backend yang dihit belum punya field ini (mis.
-      // backend belum di-redeploy setelah frontend di-update) — biar
-      // HomeScreen gak crash (`.length`/`.map` of undefined), cuma tampil
-      // kosong sampai backend-nya disamakan.
-      setAktivitasMingguan(statistik.aktivitasMingguan ?? []);
-      setPasienPrioritas(statistik.pasienPrioritas ?? []);
+      setAktivitasMingguan(statistik.aktivitasMingguan);
+      setPasienPrioritas(statistik.pasienPrioritas);
     } catch {
       // Ringkasan bukan bagian kritikal halaman ini — biarkan nilai lama kalau gagal.
     } finally {

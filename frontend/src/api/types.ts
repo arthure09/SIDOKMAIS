@@ -207,7 +207,6 @@ export type AktivitasHarianMingguan = {
 
 export type PasienPrioritasItem = {
   id: string;
-  pasienId: string;
   nama: string;
   lokasi: string;
   /** ISO datetime — jadwal Operasi/Kunjungan SCHEDULED, bisa hari ini atau beberapa hari ke depan. */
