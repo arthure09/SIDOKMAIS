@@ -156,11 +156,30 @@ async function seedPasien(count) {
   return pasien;
 }
 
-async function seedAssignments(dokterList, pasienList) {
+const JUMLAH_PASIEN_DOKTER_UTAMA = 12;
+
+// `dokterUtama` (dokterList[0]) dijamin >=10 pasien ACTIVE — bukan gambling
+// lewat rentang acak 3-4 kayak dokter lain — supaya ada minimal 1 akun yang
+// selalu punya data "ramai" buat nge-tes dashboard Home (Ringkasan Aktivitas,
+// Pasien Prioritas) tanpa perlu roll ulang seed berkali-kali.
+async function seedAssignments(dokterList, pasienList, dokterUtama) {
   const assignments = [];
   const pasienSisa = [...pasienList];
 
+  const pilihanUtama = pickMany(pasienSisa, Math.min(JUMLAH_PASIEN_DOKTER_UTAMA, pasienSisa.length));
+  const pasienUtama = [];
+  for (const pasien of pilihanUtama) {
+    assignments.push(
+      await prisma.dokterPasienAssignment.create({
+        data: { dokterId: dokterUtama.id, pasienId: pasien.id, status: "ACTIVE" },
+      })
+    );
+    pasienUtama.push(pasien);
+    pasienSisa.splice(pasienSisa.indexOf(pasien), 1);
+  }
+
   for (const dokter of dokterList) {
+    if (dokter.id === dokterUtama.id) continue;
     const jumlah = faker.number.int({ min: 3, max: 4 });
     const pilihan = pickMany(pasienSisa, Math.min(jumlah, pasienSisa.length));
 
@@ -178,7 +197,68 @@ async function seedAssignments(dokterList, pasienList) {
     }
   }
 
-  return assignments;
+  return { assignments, pasienUtama };
+}
+
+// Jadwal Kunjungan/Operasi ke DEPAN (SCHEDULED, tanggal >= sekarang) buat
+// dokterUtama — seedKunjungan() lain di bawah cuma generate tanggal historis
+// (2026-06-01 s/d 2026-07-20), jadi tanpa ini GET /api/dashboard/statistik
+// (Ringkasan Aktivitas Hari Ini, Pasien Prioritas, Statistik Mingguan) selalu
+// kosong/nol — lihat dashboard.routes.js.
+async function seedJadwalMendatang(dokterUtama, pasienUtama, ruanganList) {
+  const poliRuangan = ruanganList.filter((r) => r.jenis === "POLI");
+  const okRuangan = ruanganList.filter((r) => r.jenis === "OK");
+  const now = new Date();
+
+  // Hari ini, besok, lusa, +4 hari, +6 hari — spread di dalam minggu berjalan
+  // supaya bar chart mingguan kebagian beberapa hari, bukan numpuk di 1 titik.
+  const HARI_OFFSET = [0, 1, 2, 4, 6];
+  const pasienJadwal = pickMany(pasienUtama, Math.min(HARI_OFFSET.length, pasienUtama.length));
+
+  const kunjungan = [];
+  const operasi = [];
+
+  for (let i = 0; i < pasienJadwal.length; i++) {
+    const pasien = pasienJadwal[i];
+    const perluOK = i < 2; // 2 dari 5 sekalian dapat jadwal Operasi
+    const jamMendatang = new Date(
+      now.getTime() + HARI_OFFSET[i] * 86_400_000 + faker.number.int({ min: 1, max: 6 }) * 3_600_000
+    );
+    const ruangan = perluOK ? pickOne(okRuangan) : pickOne(poliRuangan);
+
+    const k = await prisma.kunjungan.create({
+      data: {
+        pasienId: pasien.id,
+        dokterId: dokterUtama.id,
+        ruanganId: ruangan.id,
+        tanggalMasuk: jamMendatang,
+        tanggalKeluar: null,
+        diagnosa: pickOne(DIAGNOSA_CONTOH),
+        statusKunjungan: "SCHEDULED",
+        isPasienBaru: false,
+      },
+    });
+    kunjungan.push(k);
+
+    if (perluOK) {
+      operasi.push(
+        await prisma.operasi.create({
+          data: {
+            kunjunganId: k.id,
+            ruanganId: pickOne(okRuangan).id,
+            tanggalOperasi: jamMendatang,
+            jenisTindakan: pickOne(JENIS_TINDAKAN_NETRAL),
+            tim: [faker.person.fullName(), faker.person.fullName()],
+            status: "SCHEDULED",
+            catatanPreOp: "Pasien dalam kondisi stabil, siap tindakan.",
+            catatanPostOp: null,
+          },
+        })
+      );
+    }
+  }
+
+  return { kunjungan, operasi };
 }
 
 async function seedKunjungan(pasienList, dokterList, ruanganList) {
@@ -795,7 +875,7 @@ async function seedNotifikasi(dokterList) {
   return notifikasi;
 }
 
-async function seedPengguna(dokterList) {
+async function seedPengguna(dokterList, dokterUtama) {
   const passwordHashDefault = await bcrypt.hash("Sidokmais#2026", 10);
   const passwordHashAdmin = await bcrypt.hash("admin123", 10);
   const pengguna = [];
@@ -810,7 +890,11 @@ async function seedPengguna(dokterList) {
     })
   );
 
-  const dokterUntukLogin = pickMany(dokterList, 2);
+  // dokterUtama WAJIB salah satu akun login (bukan hasil random pick) — biar
+  // 12 pasien + jadwal mendatangnya (seedJadwalMendatang) beneran bisa dicek
+  // lewat login, bukan cuma ada di DB tapi gak ada akunnya.
+  const dokterLainnya = dokterList.filter((d) => d.id !== dokterUtama.id);
+  const dokterUntukLogin = [dokterUtama, pickOne(dokterLainnya)];
   const usernameTerpakai = new Set();
   for (const dokter of dokterUntukLogin) {
     const usernameDasar = dokter.nama
@@ -854,20 +938,24 @@ async function main() {
 
   const ruanganList = await seedRuangan();
   const dokterList = await seedDokter();
-  const pasienList = await seedPasien(18);
-  const assignments = await seedAssignments(dokterList, pasienList);
-  const kunjunganList = await seedKunjungan(pasienList, dokterList, ruanganList);
-  const operasiList = await seedOperasi(kunjunganList, ruanganList, pasienList);
+  const dokterUtama = dokterList[0];
+  const pasienList = await seedPasien(32);
+  const { assignments, pasienUtama } = await seedAssignments(dokterList, pasienList, dokterUtama);
+  const kunjunganListHistoris = await seedKunjungan(pasienList, dokterList, ruanganList);
+  const jadwalMendatang = await seedJadwalMendatang(dokterUtama, pasienUtama, ruanganList);
+  const kunjunganList = [...kunjunganListHistoris, ...jadwalMendatang.kunjungan];
+  const operasiListHistoris = await seedOperasi(kunjunganListHistoris, ruanganList, pasienList);
+  const operasiList = [...operasiListHistoris, ...jadwalMendatang.operasi];
   const penjaminList = await seedPenjamin();
-  const pendapatanList = await seedPendapatan(operasiList, penjaminList);
+  const pendapatanList = await seedPendapatan(operasiListHistoris, penjaminList);
   const { pemeriksaanLabList, totalHasilLabItem } = await seedPemeriksaanLab(
     pasienList,
-    kunjunganList,
+    kunjunganListHistoris,
     dokterList,
     assignments
   );
   const notifikasiList = await seedNotifikasi(dokterList);
-  const penggunaList = await seedPengguna(dokterList);
+  const penggunaList = await seedPengguna(dokterList, dokterUtama);
 
   console.log("\nSeed selesai. Ringkasan jumlah baris per tabel:");
   console.table({
@@ -890,6 +978,11 @@ async function main() {
     const namaDokter = p.dokterNamaUntukLog ? ` — ${p.dokterNamaUntukLog}` : "";
     console.log(`- ${p.username} (${p.role})${namaDokter}`);
   }
+
+  console.log(
+    `\nDokter utama (data "ramai"): ${dokterUtama.nama} — ${pasienUtama.length} pasien ACTIVE, ` +
+      `${jadwalMendatang.kunjungan.length} jadwal Kunjungan + ${jadwalMendatang.operasi.length} jadwal Operasi mendatang (SCHEDULED).`
+  );
 }
 
 main()
