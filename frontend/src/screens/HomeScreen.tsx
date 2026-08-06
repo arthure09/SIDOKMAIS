@@ -21,6 +21,10 @@ function formatWaktuPrioritas(iso: string) {
   return `${tanggal}, ${jam}`;
 }
 
+function formatTanggalHariIni() {
+  return new Date().toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 type Props = BottomTabScreenProps<MainTabParamList, 'HomeTab'>;
 
 const RINGKASAN_ROWS = [
@@ -37,7 +41,15 @@ const RINGKASAN_ROWS = [
 // 'chatbot' masih digeser keluar scope — tombolnya non-aktif dulu. 'hasillab'
 // diaktifkan Hari 19 (docs/prompts/prompts-day-21-18-19.md), arahnya ke layar
 // pilih pasien dulu (endpoint /api/lab discope per pasienId, bukan No. RM).
-const NAVIGABLE_CARD_IDS = new Set(['pasien', 'operasi', 'notifikasi', 'pendapatan', 'hasillab']);
+const NAVIGABLE_CARD_IDS = new Set(['pendapatan', 'hasillab']);
+
+// Tint per kartu quick action biar grid gak 3 lingkaran putih identik —
+// reuse warna yang udah ada di tempat lain, bukan warna baru.
+const NAVIGASI_TINTS: Record<string, string> = {
+  pendapatan: colors.tertiary,
+  hasillab: colors.primaryContainer,
+  chatbot: colors.outline,
+};
 
 export function HomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
@@ -68,8 +80,12 @@ export function HomeScreen({ navigation }: Props) {
         operasiHariIni: statistik.operasiHariIni,
         konsulHariIni: statistik.konsulHariIni,
       });
-      setAktivitasMingguan(statistik.aktivitasMingguan);
-      setPasienPrioritas(statistik.pasienPrioritas);
+      // Fallback ke [] kalau backend yang dihit belum punya field ini (mis.
+      // backend belum di-redeploy setelah frontend di-update) — biar
+      // HomeScreen gak crash (`.length`/`.map` of undefined), cuma tampil
+      // kosong sampai backend-nya disamakan.
+      setAktivitasMingguan(statistik.aktivitasMingguan ?? []);
+      setPasienPrioritas(statistik.pasienPrioritas ?? []);
     } catch {
       // Ringkasan bukan bagian kritikal halaman ini — biarkan nilai lama kalau gagal.
     } finally {
@@ -83,15 +99,6 @@ export function HomeScreen({ navigation }: Props) {
 
   function handleCardPress(id: string) {
     switch (id) {
-      case 'pasien':
-        navigation.navigate('PasienTab');
-        break;
-      case 'operasi':
-        navigation.navigate('OperasiTab');
-        break;
-      case 'notifikasi':
-        navigation.navigate('NotifikasiTab');
-        break;
       case 'pendapatan':
         navigation.navigate('ProfilTab', { screen: 'DataPendapatan' });
         break;
@@ -131,24 +138,25 @@ export function HomeScreen({ navigation }: Props) {
         scrollEventThrottle={scrollEventThrottle}
       >
         <View>
-          <Text style={styles.greeting}>Halo, dr. {dokterNama ?? 'Reza Auditore'}</Text>
+          <Text style={styles.dateEyebrow}>{formatTanggalHariIni()}</Text>
+          <Text style={styles.greeting}>
+            Halo, <Text style={styles.greetingName}>{dokterNama ?? 'dr. Reza Auditore'}</Text>
+          </Text>
           <Text style={styles.subtitle}>Semoga harimu menyenangkan.</Text>
         </View>
 
         <View style={styles.quickActionsSection}>
           <Text style={styles.summaryTitle}>Ringkasan Aktivitas Hari Ini</Text>
-          <View style={{ gap: spacing.gutter }}>
+          <View style={styles.statTileRow}>
             {RINGKASAN_ROWS.map((row) => (
-              <View key={row.key} style={styles.statRow}>
-                <View style={styles.statRowLeft}>
-                  <View style={[styles.statIconCircle, { backgroundColor: `${row.tint}1A` }]}>
-                    <MaterialIcons name={row.icon as never} size={22} color={row.tint} />
-                  </View>
-                  <Text style={styles.statLabel}>{row.label}</Text>
+              <View key={row.key} style={styles.statTile}>
+                <View style={[styles.statTileIconCircle, { backgroundColor: `${row.tint}1A` }]}>
+                  <MaterialIcons name={row.icon as never} size={18} color={row.tint} />
                 </View>
-                <Text style={[styles.statValue, { color: row.tint }]}>
+                <Text style={[styles.statTileValue, { color: row.tint }]}>
                   {ringkasanLoading ? '–' : ringkasan[row.key]}
                 </Text>
+                <Text style={styles.statTileLabel}>{row.label}</Text>
               </View>
             ))}
           </View>
@@ -156,16 +164,21 @@ export function HomeScreen({ navigation }: Props) {
           <View style={styles.grid}>
             {navigasiCards.map((card) => {
               const isNavigable = NAVIGABLE_CARD_IDS.has(card.id);
+              const tint = NAVIGASI_TINTS[card.id] ?? colors.primary;
               return (
                 <Pressable
                   key={card.id}
                   disabled={!isNavigable}
                   onPress={() => handleCardPress(card.id)}
-                  style={({ pressed }) => [styles.gridCard, pressed && styles.gridCardPressed]}
+                  style={({ pressed }) => [
+                    styles.gridCard,
+                    !isNavigable && styles.gridCardDisabled,
+                    pressed && styles.gridCardPressed,
+                  ]}
                 >
                   <View style={styles.gridIconWrap}>
-                    <View style={styles.gridIconCircle}>
-                      <MaterialIcons name={card.icon as never} size={32} color={colors.primary} />
+                    <View style={[styles.gridIconCircle, { shadowColor: tint }]}>
+                      <MaterialIcons name={card.icon as never} size={32} color={tint} />
                     </View>
                   </View>
                   <Text style={styles.gridLabel}>{card.label}</Text>
@@ -175,7 +188,7 @@ export function HomeScreen({ navigation }: Props) {
           </View>
         </View>
 
-        <View style={styles.summaryCard}>
+        <View style={styles.prioritySection}>
           <Text style={styles.summaryTitle}>Pasien Prioritas</Text>
           <View style={{ gap: spacing.base }}>
             {pasienPrioritas.length === 0 ? (
@@ -202,10 +215,10 @@ export function HomeScreen({ navigation }: Props) {
               ))
             )}
           </View>
+        </View>
 
-          <Text style={[styles.summaryTitle, { marginTop: spacing.gutter }]}>
-            Statistik Pasien Mingguan
-          </Text>
+        <View style={styles.chartSection}>
+          <Text style={styles.summaryTitle}>Statistik Pasien Mingguan</Text>
           <View style={styles.chartCard}>
             {aktivitasMingguan.map((d, i) => {
               // Lantai minimum 6% biar bar tetap keliatan (bukan hilang total
@@ -215,6 +228,9 @@ export function HomeScreen({ navigation }: Props) {
               const persen = Math.max((d.jumlah / maxAktivitasMingguan) * 100, 6);
               return (
                 <View key={i} style={styles.chartBarCol}>
+                  <View style={styles.chartBarValueSlot}>
+                    {d.highlight && <Text style={styles.chartBarValue}>{d.jumlah}</Text>}
+                  </View>
                   <View style={styles.chartBarTrack}>
                     <View
                       style={[
@@ -253,7 +269,16 @@ const styles = StyleSheet.create({
   headerLogo: { width: 112, height: 32 },
 
   content: { padding: spacing.marginMobile, paddingTop: 12, gap: 24, paddingBottom: 32 },
-  greeting: { fontSize: 24, fontWeight: '800', color: colors.deepTealDark },
+  dateEyebrow: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 4,
+  },
+  greeting: { fontSize: 24, fontWeight: '600', color: colors.deepTealDark },
+  greetingName: { fontSize: 24, fontWeight: '800', color: colors.primary },
   subtitle: { fontSize: 14, color: colors.onSurfaceVariant, marginTop: 4 },
 
   quickActionsSection: { gap: 20 },
@@ -270,6 +295,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   gridCardPressed: { opacity: 0.85, transform: [{ scale: 0.96 }] },
+  gridCardDisabled: { opacity: 0.45 },
   gridIconWrap: { position: 'relative' },
   gridIconCircle: {
     width: 80,
@@ -278,15 +304,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.backgroundWhite,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.15,
     shadowRadius: 10,
     elevation: 2,
   },
   gridLabel: { fontSize: 12, fontWeight: '600', color: colors.deepTealDark, textAlign: 'center' },
 
-  summaryCard: {
+  prioritySection: { gap: 16 },
+  chartSection: {
     backgroundColor: colors.surfaceSoft,
     borderRadius: radius.lg,
     padding: spacing.cardPadding,
@@ -294,24 +320,31 @@ const styles = StyleSheet.create({
   },
   summaryTitle: { fontSize: 20, fontWeight: '700', color: colors.deepTealDark, marginBottom: 4 },
 
-  statRow: {
+  statTileRow: { flexDirection: 'row', gap: spacing.gutter },
+  statTile: {
+    flex: 1,
     backgroundColor: colors.backgroundWhite,
     borderRadius: radius.sm,
-    padding: 18,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    padding: 14,
+    gap: 6,
+    alignItems: 'flex-start',
   },
-  statRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  statIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  statTileIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statLabel: { fontSize: 17, color: colors.onSurface },
-  statValue: { fontSize: 26, fontWeight: '800' },
+  statTileValue: { fontSize: 26, fontWeight: '800', marginLeft: 9 },
+  statTileLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.onSurfaceVariant,
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+    marginLeft: 4,
+  },
 
   priorityCard: {
     backgroundColor: colors.primaryContainer,
@@ -360,9 +393,11 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     justifyContent: 'space-between',
     gap: 8,
-    height: 140,
+    height: 156,
   },
-  chartBarCol: { flex: 1, alignItems: 'center', gap: 8, height: '100%' },
+  chartBarCol: { flex: 1, alignItems: 'center', gap: 4, height: '100%' },
+  chartBarValueSlot: { height: 16, justifyContent: 'flex-end' },
+  chartBarValue: { fontSize: 11, fontWeight: '800', color: colors.primary },
   chartBarTrack: { flex: 1, width: '100%', justifyContent: 'flex-end' },
   chartBarFill: { width: '100%', borderTopLeftRadius: 4, borderTopRightRadius: 4 },
   chartBarLabel: { fontSize: 10, color: colors.outline },
