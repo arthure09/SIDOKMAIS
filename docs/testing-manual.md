@@ -217,6 +217,67 @@ Login `admin`/`admin123` (ADMIN) dan `putra.tasdik`/`Sidokmais#2026` (DOKTER,
   diperbaiki (di luar scope task ini), dilaporkan biar tidak ada yang
   kejebak sama seperti sesi ini.
 
+## Modul: Dashboard Home (Statistik + Pasien Prioritas) — verifikasi live, 6 Ags 2026
+
+Eksekusi `docs/prompts/verifikasi-bagian-b-statistik-home.md`. `GET
+/api/dashboard/statistik` (`backend/src/routes/dashboard.routes.js`, commit
+`ad0e86c`+`ae8c77a`+`05da44c`) di-curl langsung ke backend lokal (`npm run
+dev`) terhadap DB dev (Tailscale `100.109.84.118`), tiap angka dicocokkan
+manual ke query Prisma independen — pola sama Hari 10/12-13/23. Login 2 akun
+DOKTER hasil seed (`putra.tasdik`, `agus.nugraha`) + `admin`/`admin123`.
+
+### 1. `pasienAktif` vs `COUNT DokterPasienAssignment ACTIVE`
+- [x] `putra.tasdik` — API `2`, query manual `COUNT WHERE dokterId=<id> AND
+      status='ACTIVE'` juga `2`
+- [x] `agus.nugraha` — API `2`, query manual juga `2`
+
+### 2. `operasiHariIni`/`konsulHariIni`/`aktivitasMingguan` — baseline
+Seed data historis (`Operasi`/`Kunjungan` semuanya Jun-Jul 2026, 0 record di
+masa depan) — baseline seharusnya nol semua:
+- [x] `operasiHariIni`/`konsulHariIni` API `0`/`0`, cocok `COUNT` manual
+- [x] `aktivitasMingguan` API 7 hari semua `jumlah:0`, `highlight` cuma di
+      Kamis (hari ini, 6 Ags), cocok `COUNT` manual per rentang hari
+- [x] `pasienPrioritas` API `[]`, cocok — 0 `Operasi`/`Kunjungan` `SCHEDULED`
+      dengan tanggal >= sekarang di seed
+
+### 3. Kasus tepi timezone (23:00-01:00 WIB) — PALING KRITIKAL
+Dibuat 2 `Kunjungan` uji sengaja di tanggal UTC yang sama tapi beda tanggal
+kalender WIB, lalu dihapus lagi setelah dites:
+- A `tanggalMasuk=2026-08-06T16:30:00Z` = 23:30 WIB **Kamis** 6 Ags
+- B `tanggalMasuk=2026-08-06T17:30:00Z` = 00:30 WIB **Jumat** 7 Ags
+
+Dicocokkan independen pakai `Intl.DateTimeFormat('id-ID', { timeZone:
+'Asia/Jakarta' })` (bukan reuse fungsi WIB yang sedang dites) → A = "Kamis, 6
+Agustus 23.30", B = "Jumat, 7 Agustus 00.30".
+
+- [x] `konsulHariIni` `0→1` — cuma A yang terhitung "hari ini", B (walau di
+      tanggal UTC yang sama) TIDAK ikut kehitung
+- [x] `aktivitasMingguan` Kamis `0→1` (cuma A), Jumat `0→1` (cuma B) — tidak
+      ketuker, tidak double-count
+- [x] `pasienPrioritas` isinya `[A, B]` terurut A dulu (lebih dekat ke
+      sekarang)
+- [x] Setelah 2 record dihapus, endpoint balik ke baseline persis
+      (`konsulHariIni:0`, `pasienPrioritas:[]`)
+
+### 4. Role `ADMIN`
+- [x] Response persis `{ pasienAktif:0, operasiHariIni:0, konsulHariIni:0,
+      aktivitasMingguan:[...semua jumlah:0], pasienPrioritas:[], adminCatatan:
+      "Akun ADMIN tidak terikat ke satu Dokter, jadi statistik ini tidak
+      relevan (selalu 0)." }` — tidak crash, tidak ada agregat lintas-dokter
+
+### 5. Dokter tanpa assignment aktif
+Disimulasikan: 2 `DokterPasienAssignment` ACTIVE milik `putra.tasdik`
+di-flip sementara ke `COMPLETED` lewat Prisma langsung (bukan bikin akun
+baru), lalu direvert balik setelah dites:
+- [x] `pasienAktif` API `0`, HTTP `200`, tidak exception (bukan crash karena
+      `count` kosong)
+- [x] Setelah direvert ke `ACTIVE`, `pasienAktif` balik ke `2`
+
+### Hasil
+Tidak ada bug ditemukan — semua PASS termasuk kasus tepi timezone yang
+paling rawan salah. Tidak ada perubahan kode (`dashboard.routes.js`/
+`HomeScreen.tsx`) dari verifikasi ini.
+
 ## Modul: Home, Profil Dokter, Data Pendapatan (frontend, UI-only)
 - [ ] Greeting Home & nama di Profil Dokter nunjukkin nama dokter yang beneran
       login (dari `authStore`), bukan teks statis "User"

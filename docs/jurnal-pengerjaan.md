@@ -725,6 +725,98 @@ Hari 24-28: belum dimulai. Sisa scope: integration testing, bug fixing
 temuan hari ini: keputusan soal audit log trigger `PERUBAHAN_JADWAL`, dan
 koreksi password seed ADMIN di dokumentasi.)
 
+### Catatan lanjutan 5 Ags 2026 — Endpoint statistik dashboard Home + Pasien Prioritas (Bagian B, di luar jadwal aslinya)
+Sesudah Hari 23 (audit log, pagi — lihat entri di atas) selesai, lanjut ke
+"Bagian B — Statistik Home" dari `docs/prompts/prompt-gabungan-3-fitur.md`.
+Tidak ada di jadwal Minggu 4 CLAUDE.md, tapi secara substansi mengisi
+kebutuhan "Dashboard Kinerja Dokter" yang tertunda dari Hari 20 (lihat
+catatan silang di entri 6 Ags di bawah). 2 commit sore harinya:
+
+- `ad0e86c` (11:48) — `GET /api/dashboard/statistik` versi inti:
+  `pasienAktif`, `operasiHariIni`, `konsulHariIni`, `aktivitasMingguan`.
+  Mengganti mekanisme lama di frontend (fetch list dengan
+  `RINGKASAN_FETCH_LIMIT=100` lalu filter+hitung di client, yang undercounted
+  kalau dokter punya >100 operasi/kunjungan) dengan `COUNT` langsung di DB.
+  Scoping akses pasien pola sama `operasi.routes.js`/`kunjungan.routes.js`
+  pasca-hardening Day 22 (`OR: [{dokterId}, {pasien.assignments.some}]`).
+  Rentang tanggal dikonversi ke kalender WIB (`getRentangHariIniWIB`/
+  `getRentangMingguIniWIB`, offset UTC+7 tetap/tidak DST-aware). ADMIN dapat
+  semua `0` + `adminCatatan` penjelas — keputusan desain eksplisit (endpoint
+  scoped "statistik SAYA sebagai dokter yang login"), bukan agregat
+  lintas-dokter.
+- `ae8c77a` (15:53) — nambah `pasienPrioritas` (3 jadwal Operasi/Kunjungan
+  `SCHEDULED` terdekat ke depan, top-N per tabel digabung+disortir+dipotong
+  di JS) + rapi-rapi UI: hapus badge notifikasi merah & tombol bel di Home
+  (tab Notifikasi sudah dipindah ke akses lewat bel di header), empty-state
+  buat `pasienPrioritas` kosong, lantai minimum 6% di bar chart mingguan
+  supaya bar tidak hilang total waktu `jumlah:0`.
+
+Kode dikonfirmasi bersih secara statis sebelum lanjut ke verifikasi live
+(`npx tsc --noEmit` pass, pola scoping akses konsisten) — verifikasi live
+terhadap DB dev baru menyusul besoknya, lihat entri 6 Ags di bawah.
+
+**Susulan 6 Agustus:** `05da44c` — hapus field `pasienId` (dipilih di query
+Prisma + dialirkan sampai tipe frontend tapi tidak pernah dibaca, kartu
+prioritas di Home tidak tappable) dan fallback `?? []` yang menjaga skenario
+deploy-skew FE/BE yang tidak mungkin terjadi di proyek ini (satu checkout
+docker-compose, FE+BE selalu jalan bareng) — hasil `/ponytail-review`
+terhadap diff `ad0e86c`+`ae8c77a`.
+
+### Catatan lanjutan 6 Ags 2026 — Verifikasi Bagian B (Statistik Home)
+Eksekusi `docs/prompts/verifikasi-bagian-b-statistik-home.md` — verifikasi
+live endpoint yang dibangun 5 Agustus (entri di atas).
+
+**Setup:** backend lokal (`npm run dev`) terhubung ke DB dev via Tailscale
+`100.109.84.118`, pola sama Hari 10/12-13/23. Login 2 akun DOKTER hasil seed
+(`putra.tasdik`, `agus.nugraha`) + `admin`/`admin123`.
+
+**Semua 5 item Task 1 PASS:**
+1. `pasienAktif` — cocok ke `COUNT DokterPasienAssignment ACTIVE` buat kedua
+   akun DOKTER (masing-masing 2, dicek manual lewat query Prisma terpisah).
+2. `operasiHariIni`/`konsulHariIni`/`aktivitasMingguan` — baseline semua 0
+   (seed data historis, Jun-Jul 2026, tidak ada yang jatuh di rentang
+   "hari ini"/minggu berjalan 6 Ags 2026), cocok dengan `COUNT` manual per
+   hari. `pasienPrioritas` baseline `[]` (0 jadwal SCHEDULED masa depan di
+   seed) — juga cocok.
+3. **Kasus tepi timezone (paling kritikal):** dibuat 2 `Kunjungan` uji —
+   A `2026-08-06T16:30:00Z` (23:30 WIB Kamis) dan B
+   `2026-08-06T17:30:00Z` (00:30 WIB Jumat) — sengaja dipilih supaya sama-sama
+   di tanggal UTC yang sama (6 Ags) tapi beda tanggal kalender WIB, persis
+   celah yang paling gampang salah kalau ada kode yang diam-diam pakai
+   boundary UTC. Hasil: `konsulHariIni` 0→1 (cuma A), `aktivitasMingguan`
+   Kamis 0→1 + Jumat 0→1 (masing-masing cuma dapat 1 record, bukan 2-2 atau
+   ketuker), `pasienPrioritas` isinya [A, B] terurut A dulu. Dicocokkan
+   independen pakai `Intl.DateTimeFormat('id-ID', { timeZone: 'Asia/Jakarta'
+   })` (bukan reuse fungsi yang sama dites) — hasilnya identik: A = "Kamis,
+   6 Agustus 23.30", B = "Jumat, 7 Agustus 00.30". Data uji dihapus lagi
+   setelah verifikasi, dicek balik ke baseline (`konsulHariIni`→0,
+   `pasienPrioritas`→`[]`).
+4. Sebagai `admin` — response persis `{ pasienAktif:0, operasiHariIni:0,
+   konsulHariIni:0, pasienPrioritas:[], adminCatatan: "..." }`, tidak crash,
+   tidak ada agregat lintas-dokter.
+5. Dokter tanpa assignment aktif — di-simulasikan dengan flip sementara 2
+   assignment ACTIVE milik `putra.tasdik` jadi COMPLETED (bukan bikin akun
+   baru), hit endpoint → `pasienAktif:0`, HTTP 200, tidak exception. Direvert
+   balik ke ACTIVE setelah dicek, dikonfirmasi `pasienAktif` balik ke 2.
+
+Tidak ada bug ditemukan — kodenya sesuai spek termasuk di kasus tepi yang
+paling rawan. Detail lengkap (query pembanding, response curl mentah): lihat
+`docs/testing-manual.md` section "Modul: Dashboard Home (Statistik + Pasien
+Prioritas)".
+
+**Silang-referensi entri Hari 20** ("Dashboard Kinerja Dokter — Belum
+dikerjakan", lihat di atas): entri itu TETAP BENAR secara harfiah — tidak
+ada kode yang dikerjakan tanggal 2 Agustus sesuai jadwal aslinya. Tapi
+kebutuhannya secara substansi sudah terisi lewat jalur lain: `pasienAktif`/
+`operasiHariIni`/`konsulHariIni`/`aktivitasMingguan`/`pasienPrioritas` di
+atas adalah "Bagian B — Statistik Home" dari
+`docs/prompts/prompt-gabungan-3-fitur.md`, dikerjakan 5 Agustus (3 hari
+setelah jadwal Hari 20 aslinya, sebagai bagian sesi gabungan bukan hari
+terpisah). Widget "grafik performa" yang lebih visual (kalau itu yang
+dimaksud "Dashboard Kinerja" aslinya) masih belum ada — dicatat di sini
+supaya pembaca jurnal tidak salah simpul "Hari 20 beneran belum ada apa-apa"
+padahal sebagian besar angkanya sudah tersedia & terverifikasi hidup.
+
 ---
 
 ## Catatan lintas-hari yang masih terbuka
