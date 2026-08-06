@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
-import { ActivityIndicator, Animated, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,7 +28,7 @@ const STATUS_FILTERS: { label: string; value: AssignmentStatus | undefined }[] =
 
 const STATUS_BADGE: Record<AssignmentStatus, { label: string; bg: string; fg: string }> = {
   ACTIVE: { label: 'AKTIF', bg: colors.primary, fg: colors.onPrimary },
-  COMPLETED: { label: 'SELESAI', bg: colors.tertiaryFixed, fg: colors.onTertiaryFixed },
+  COMPLETED: { label: 'SELESAI', bg: colors.deepTealDark, fg: colors.onPrimary },
 };
 
 function formatTanggal(value: string | null) {
@@ -61,6 +61,7 @@ export function PasienListScreen({ navigation }: Props) {
   const [status, setStatus] = useState<AssignmentStatus | undefined>(undefined);
   const [items, setItems] = useState<PasienListItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -76,9 +77,9 @@ export function PasienListScreen({ navigation }: Props) {
     [onDockScroll, onTopButtonScroll],
   );
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!token) return;
-    setLoading(true);
+    if (!opts?.silent) setLoading(true);
     setError(null);
     try {
       const result = await fetchPasienList(token, { search, status, page: 1, limit: 50 });
@@ -86,12 +87,18 @@ export function PasienListScreen({ navigation }: Props) {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Gagal memuat data pasien');
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, [token, search, status]);
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load({ silent: true });
+    setRefreshing(false);
   }, [load]);
 
   return (
@@ -163,6 +170,9 @@ export function PasienListScreen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={scrollEventThrottle}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+          }
           renderItem={({ item }) => {
             const badge = STATUS_BADGE[item.status];
             return (
@@ -285,7 +295,7 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: colors.backgroundWhite,
-    borderRadius: 24,
+    borderRadius: radius.md,
     padding: spacing.cardPadding,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 8 },

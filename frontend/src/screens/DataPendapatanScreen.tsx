@@ -1,5 +1,5 @@
-import { useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -45,6 +45,16 @@ export function DataPendapatanScreen({ navigation }: Props) {
   const [sumber, setSumber] = useState('Semua');
   const [openFilter, setOpenFilter] = useState<FilterKey | null>(null);
   const [anchorRect, setAnchorRect] = useState<AnchorRect | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Data pendapatan masih murni mock (belum ada endpoint), jadi "refresh" di
+  // sini cuma re-affirm data yang sama — disimulasikan biar gesture pull-to-
+  // refresh tetap konsisten dengan screen lain. Ganti ke fetch asli kalau
+  // modul Pendapatan sudah tersambung backend.
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 500);
+  }, []);
 
   const anchorRefs = useRef<Record<FilterKey, View | null>>({
     BULAN: null,
@@ -118,6 +128,9 @@ export function DataPendapatanScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={scrollEventThrottle}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+        }
       >
         <View style={styles.summaryCard}>
           <View>
@@ -286,7 +299,7 @@ const styles = StyleSheet.create({
 
   summaryCard: {
     backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
     padding: spacing.cardPadding,
     gap: 20,
     shadowColor: colors.primary,
@@ -367,7 +380,8 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, color: colors.onSurfaceVariant },
   trxCard: {
     backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: radius.sm,
+    borderRadius: radius.md,
+    overflow: 'hidden',
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',

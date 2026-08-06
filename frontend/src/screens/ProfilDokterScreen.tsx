@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +14,11 @@ import { fetchPasienList } from '../api/pasien';
 
 type Props = NativeStackScreenProps<ProfilStackParamList, 'ProfilDokter'>;
 
+// Cuma 'pendapatan' yang punya tujuan navigasi nyata (lihat handleMenuPress).
+// Item lain ditampilkan non-tappable + "Segera hadir" daripada kelihatan
+// kayak bisa ditap (chevron) tapi diem aja pas ditekan.
+const AVAILABLE_MENU_IDS = new Set(['pendapatan']);
+
 export function ProfilDokterScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
@@ -22,9 +27,10 @@ export function ProfilDokterScreen({ navigation }: Props) {
   const token = useAuthStore((s) => s.token);
   const logout = useAuthStore((s) => s.logout);
   const nama = pengguna?.dokter?.nama ?? 'dr. Reza Auditore';
-  const spesialisasi = pengguna?.dokter?.spesialisasi ?? 'Spesialis Kelamin';
+  const spesialisasi = pengguna?.dokter?.spesialisasi ?? 'Spesialisasi belum tersedia';
 
   const [pasienAktif, setPasienAktif] = useState<number | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const loadPasienAktif = useCallback(async () => {
     if (!token) return;
@@ -38,6 +44,12 @@ export function ProfilDokterScreen({ navigation }: Props) {
 
   useEffect(() => {
     loadPasienAktif();
+  }, [loadPasienAktif]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadPasienAktif();
+    setRefreshing(false);
   }, [loadPasienAktif]);
 
   function handleLogout() {
@@ -64,15 +76,24 @@ export function ProfilDokterScreen({ navigation }: Props) {
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={scrollEventThrottle}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+        }
       >
         <View style={styles.heroCard}>
-          <View style={styles.heroAvatar}>
-            <MaterialIcons name="person" size={48} color={colors.primary} />
-          </View>
-          <Text style={styles.heroNama}>{nama}</Text>
-          <View style={styles.spesialisasiPill}>
-            <MaterialIcons name="medical-services" size={16} color={colors.primary} />
-            <Text style={styles.spesialisasiText}>{spesialisasi}</Text>
+          <View style={styles.heroBody}>
+            <View style={styles.heroAvatar}>
+              <MaterialIcons name="person" size={36} color={colors.primary} />
+            </View>
+            <View style={styles.heroInfo}>
+              <Text style={styles.heroNama} numberOfLines={2}>
+                {nama}
+              </Text>
+              <View style={styles.spesialisasiRow}>
+                <MaterialIcons name="medical-services" size={13} color={colors.primary} />
+                <Text style={styles.spesialisasiText}>{spesialisasi}</Text>
+              </View>
+            </View>
           </View>
         </View>
 
@@ -84,36 +105,47 @@ export function ProfilDokterScreen({ navigation }: Props) {
           <View style={styles.statCard}>
             <Text style={styles.statValue}>{statsProfil.tahunPengalaman}</Text>
             <Text style={styles.statLabel}>Tahun Pengalaman</Text>
+            <Text style={styles.statDemoLabel}>Contoh</Text>
           </View>
         </View>
 
         <View style={styles.settingsCard}>
-          {settingsMenu.map((item, index) => (
-            <Pressable
-              key={item.id}
-              onPress={() => handleMenuPress(item.id)}
-              style={({ pressed }) => [
-                styles.settingsRow,
-                index < settingsMenu.length - 1 && styles.settingsRowBorder,
-                pressed && styles.settingsRowPressed,
-              ]}
-            >
-              <View style={styles.settingsRowLeft}>
-                <View style={styles.settingsIconCircle}>
-                  <MaterialIcons name={item.icon as never} size={20} color={colors.primary} />
-                </View>
-                <Text style={styles.settingsLabel}>{item.label}</Text>
+          {settingsMenu.map((item, index) => {
+            const isAvailable = AVAILABLE_MENU_IDS.has(item.id);
+            return (
+              <View key={item.id}>
+                <Pressable
+                  disabled={!isAvailable}
+                  onPress={() => handleMenuPress(item.id)}
+                  style={({ pressed }) => [
+                    styles.settingsRow,
+                    !isAvailable && styles.settingsRowDisabled,
+                    pressed && styles.settingsRowPressed,
+                  ]}
+                >
+                  <View style={styles.settingsRowLeft}>
+                    <View style={styles.settingsIconCircle}>
+                      <MaterialIcons name={item.icon as never} size={20} color={colors.primary} />
+                    </View>
+                    <Text style={styles.settingsLabel}>{item.label}</Text>
+                  </View>
+                  {isAvailable ? (
+                    <MaterialIcons name="chevron-right" size={22} color={colors.outline} />
+                  ) : (
+                    <Text style={styles.settingsSoonText}>Segera hadir</Text>
+                  )}
+                </Pressable>
+                {index < settingsMenu.length - 1 && <View style={styles.settingsDivider} />}
               </View>
-              <MaterialIcons name="chevron-right" size={22} color={colors.outline} />
-            </Pressable>
-          ))}
+            );
+          })}
         </View>
 
         <Pressable
           onPress={handleLogout}
           style={({ pressed }) => [styles.logoutButton, pressed && styles.logoutButtonPressed]}
         >
-          <MaterialIcons name="logout" size={20} color={colors.onError} />
+          <MaterialIcons name="logout" size={20} color={colors.error} />
           <Text style={styles.logoutText}>Keluar Akun</Text>
         </Pressable>
       </ScrollView>
@@ -126,64 +158,66 @@ const styles = StyleSheet.create({
   header: { backgroundColor: colors.background },
   content: { padding: spacing.marginMobile, gap: spacing.gutter, paddingBottom: 32 },
 
+  // Hero didesain kayak badge identitas (avatar rata kiri + nama/spesialisasi
+  // di sampingnya) — sengaja BUKAN kartu profil centered+pill generik, dan
+  // sengaja gak pakai motif pill lagi (udah dipakai di mana-mana di app ini:
+  // search/filter/status chip).
   heroCard: {
     backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: 24,
-    padding: 24,
-    alignItems: 'center',
-    gap: 12,
+    borderRadius: radius.md,
     shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.22,
+    shadowRadius: 16,
+    elevation: 6,
   },
+  heroBody: { flexDirection: 'row', alignItems: 'center', gap: 16, padding: 20 },
   heroAvatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
+    width: 72,
+    height: 72,
+    borderRadius: 18,
     backgroundColor: colors.surfaceSoft,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroNama: { fontSize: 24, fontWeight: '800', color: colors.onBackground, textAlign: 'center' },
-  spesialisasiPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: `${colors.primary}1A`,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: radius.full,
+  heroInfo: { flex: 1, gap: 4 },
+  heroNama: { fontSize: 19, fontWeight: '800', color: colors.onBackground },
+  spesialisasiRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  spesialisasiText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.primary,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  spesialisasiText: { fontSize: 12, fontWeight: '600', color: colors.primary },
 
   statsGrid: { flexDirection: 'row', gap: spacing.base },
   statCard: {
     flex: 1,
     backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: 24,
-    paddingVertical: 20,
+    borderRadius: radius.sm,
+    paddingVertical: 12,
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
     shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 5,
   },
-  statValue: { fontSize: 28, fontWeight: '800', color: colors.onBackground },
-  statLabel: { fontSize: 12, color: colors.onSurfaceVariant, textAlign: 'center' },
+  statValue: { fontSize: 26, fontWeight: '800', color: colors.onBackground },
+  statLabel: { fontSize: 13, fontWeight: '600', color: colors.onSurfaceVariant, textAlign: 'center' },
+  statDemoLabel: { fontSize: 10, fontWeight: '600', fontStyle: 'italic', color: colors.outline },
 
   settingsCard: {
     backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: 24,
+    borderRadius: radius.md,
     overflow: 'hidden',
     shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 1,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.2,
+    shadowRadius: 14,
+    elevation: 5,
   },
   settingsRow: {
     flexDirection: 'row',
@@ -191,8 +225,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 20,
   },
-  settingsRowBorder: { borderBottomWidth: 1, borderBottomColor: colors.surfaceVariant },
+  settingsDivider: { height: 1, backgroundColor: colors.surfaceVariant, marginHorizontal: 20 },
+  settingsRowDisabled: { opacity: 0.5 },
   settingsRowPressed: { backgroundColor: colors.surfaceSoft },
+  settingsSoonText: { fontSize: 11, fontWeight: '600', fontStyle: 'italic', color: colors.outline },
   settingsRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   settingsIconCircle: {
     width: 40,
@@ -209,10 +245,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 16,
+    paddingVertical: 14,
     borderRadius: radius.full,
-    backgroundColor: colors.error,
+    borderWidth: 1,
+    borderColor: colors.errorContainer,
+    backgroundColor: 'transparent',
   },
-  logoutButtonPressed: { backgroundColor: colors.onErrorContainer },
-  logoutText: { fontSize: 12, fontWeight: '600', letterSpacing: 0.5, color: colors.onError },
+  logoutButtonPressed: { backgroundColor: colors.errorContainer },
+  logoutText: { fontSize: 12, fontWeight: '600', letterSpacing: 0.5, color: colors.error },
 });

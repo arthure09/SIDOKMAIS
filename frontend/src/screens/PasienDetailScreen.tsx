@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,7 +18,7 @@ type IconName = React.ComponentProps<typeof MaterialIcons>['name'];
 
 const ASSIGNMENT_BADGE: Record<AssignmentStatus, { label: string; bg: string; fg: string }> = {
   ACTIVE: { label: 'AKTIF', bg: colors.primary, fg: colors.onPrimary },
-  COMPLETED: { label: 'SELESAI', bg: colors.tertiaryFixed, fg: colors.onTertiaryFixed },
+  COMPLETED: { label: 'SELESAI', bg: colors.deepTealDark, fg: colors.onPrimary },
 };
 
 const KUNJUNGAN_ICON: Record<StatusKunjungan, IconName> = {
@@ -65,6 +65,7 @@ export function PasienDetailScreen({ route, navigation }: Props) {
   const { onScroll, scrollEventThrottle, scrolled } = useHeaderScrollShadow();
   const [detail, setDetail] = useState<PasienDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -90,6 +91,20 @@ export function PasienDetailScreen({ route, navigation }: Props) {
     return () => {
       cancelled = true;
     };
+  }, [token, pasienId]);
+
+  const onRefresh = useCallback(async () => {
+    if (!token) return;
+    setRefreshing(true);
+    try {
+      const result = await fetchPasienDetail(token, pasienId);
+      setDetail(result);
+      setError(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Gagal memuat detail pasien');
+    } finally {
+      setRefreshing(false);
+    }
   }, [token, pasienId]);
 
   const header = (
@@ -136,6 +151,9 @@ export function PasienDetailScreen({ route, navigation }: Props) {
         contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
         onScroll={onScroll}
         scrollEventThrottle={scrollEventThrottle}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+        }
       >
         {/* Hero: info pasien */}
         <View style={styles.heroCard}>

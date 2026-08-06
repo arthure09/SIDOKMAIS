@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Animated, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -60,6 +60,14 @@ const TIPE_META: Record<NotifikasiTipe, { kategori: DisplayKategori; judul: stri
   PERUBAHAN_JADWAL: { kategori: 'Jadwal', judul: 'Perubahan Jadwal', icon: 'event-busy' },
 };
 
+// Tint per kategori (reuse token yang udah ada, bukan hex baru) — biar filter
+// kategori kebaca cepat dari warna, pola sama kayak NAVIGASI_TINTS di Home.
+const KATEGORI_TINT: Record<DisplayKategori, string> = {
+  Lab: colors.primaryContainer,
+  'Pasien Baru': colors.primary,
+  Jadwal: colors.tertiaryContainer,
+};
+
 const FILTERS: { label: string; value: DisplayKategori | 'Semua' }[] = [
   { label: 'Semua', value: 'Semua' },
   { label: 'Hasil Lab', value: 'Lab' },
@@ -107,15 +115,16 @@ export function NotifikasiScreen({ navigation }: Props) {
   const [filter, setFilter] = useState<DisplayKategori | 'Semua'>('Semua');
   const [apiItems, setApiItems] = useState<NotifikasiItemApi[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // LAB_DEMO_ITEM dikecualikan dari markNotifikasiRead (bukan entity asli, lihat
   // komentar di atas) — status baca-nya dilacak lokal aja biar titik unread-nya
   // ilang begitu dibuka, tanpa nyoba nulis ke /api/notifikasi.
   const [labDemoRead, setLabDemoRead] = useState(LAB_DEMO_ITEM?.isRead ?? false);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!token) return;
-    setLoading(true);
+    if (!opts?.silent) setLoading(true);
     setError(null);
     try {
       const result = await fetchNotifikasiList(token, { page: 1, limit: 50 });
@@ -123,12 +132,18 @@ export function NotifikasiScreen({ navigation }: Props) {
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Gagal memuat notifikasi');
     } finally {
-      setLoading(false);
+      if (!opts?.silent) setLoading(false);
     }
   }, [token]);
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await load({ silent: true });
+    setRefreshing(false);
   }, [load]);
 
   const items = [
@@ -226,6 +241,9 @@ export function NotifikasiScreen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={scrollEventThrottle}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+          }
         >
           <View style={{ gap: spacing.gutter }}>
             {items.map((item) => (
@@ -254,8 +272,18 @@ export function NotifikasiScreen({ navigation }: Props) {
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={styles.cardTopRow}>
-                    <View style={styles.kategoriPill}>
-                      <Text style={styles.kategoriPillText}>{item.kategori}</Text>
+                    <View style={styles.cardTopLeft}>
+                      <View
+                        style={[
+                          styles.kategoriPill,
+                          { backgroundColor: `${KATEGORI_TINT[item.kategori]}1A` },
+                        ]}
+                      >
+                        <Text style={[styles.kategoriPillText, { color: KATEGORI_TINT[item.kategori] }]}>
+                          {item.kategori}
+                        </Text>
+                      </View>
+                      {item.isDemo && <Text style={styles.demoLabel}>Contoh</Text>}
                     </View>
                     <Text style={styles.waktuText}>{item.waktu}</Text>
                   </View>
@@ -312,7 +340,7 @@ const styles = StyleSheet.create({
 
   card: {
     backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: ms(24),
+    borderRadius: ms(radius.md),
     padding: ms(20),
     flexDirection: 'row',
     gap: ms(16),
@@ -354,13 +382,14 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: ms(4),
   },
+  cardTopLeft: { flexDirection: 'row', alignItems: 'center', gap: ms(6) },
   kategoriPill: {
-    backgroundColor: colors.surfaceVariant,
     paddingHorizontal: ms(8),
     paddingVertical: ms(2),
     borderRadius: ms(6),
   },
-  kategoriPillText: { fontSize: ms(10), fontWeight: '700', color: colors.primary },
+  kategoriPillText: { fontSize: ms(10), fontWeight: '700' },
+  demoLabel: { fontSize: ms(10), fontWeight: '600', fontStyle: 'italic', color: colors.outline },
   waktuText: { fontSize: ms(11), color: colors.outline },
   dokterNamaText: { fontSize: ms(12), fontWeight: '600', color: colors.primary, marginBottom: ms(2) },
   judul: { fontSize: ms(16), fontWeight: '700', color: colors.onBackground, marginBottom: ms(4) },

@@ -6,6 +6,7 @@ import {
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
+  RefreshControl,
   ScrollView,
   StyleSheet,
   View,
@@ -76,9 +77,9 @@ const OPERASI_STATUS_META: Record<
   OperasiStatus,
   { label: string; icon: string; bg: string; fg: string }
 > = {
-  IN_PROGRESS: { label: 'Berlangsung', icon: 'sync', bg: '#a3a900', fg: '#393b00' },
+  IN_PROGRESS: { label: 'Berlangsung', icon: 'sync', bg: colors.tertiaryContainer, fg: colors.onTertiaryContainer },
   SCHEDULED: { label: 'Terjadwal', icon: 'schedule', bg: colors.primaryContainer, fg: colors.onPrimaryContainer },
-  COMPLETED: { label: 'Selesai', icon: 'check-circle', bg: '#0D3D3B', fg: colors.onPrimary },
+  COMPLETED: { label: 'Selesai', icon: 'check-circle', bg: colors.deepTealDark, fg: colors.onPrimary },
   CANCELLED: { label: 'Batal', icon: 'cancel', bg: colors.errorContainer, fg: colors.onErrorContainer },
 };
 
@@ -86,9 +87,9 @@ const KUNJUNGAN_STATUS_META: Record<
   StatusKunjungan,
   { label: string; icon: string; bg: string; fg: string }
 > = {
-  ONGOING: { label: 'Berlangsung', icon: 'sync', bg: '#a3a900', fg: '#393b00' },
+  ONGOING: { label: 'Berlangsung', icon: 'sync', bg: colors.tertiaryContainer, fg: colors.onTertiaryContainer },
   SCHEDULED: { label: 'Terjadwal', icon: 'schedule', bg: colors.primaryContainer, fg: colors.onPrimaryContainer },
-  COMPLETED: { label: 'Selesai', icon: 'check-circle', bg: '#0D3D3B', fg: colors.onPrimary },
+  COMPLETED: { label: 'Selesai', icon: 'check-circle', bg: colors.deepTealDark, fg: colors.onPrimary },
   CANCELLED: { label: 'Batal', icon: 'cancel', bg: colors.errorContainer, fg: colors.onErrorContainer },
 };
 
@@ -157,10 +158,11 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   const [kunjunganLoading, setKunjunganLoading] = useState(true);
   const [kunjunganError, setKunjunganError] = useState<string | null>(null);
   const kunjunganLoaded = useRef(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const loadOperasi = useCallback(async () => {
+  const loadOperasi = useCallback(async (opts?: { silent?: boolean }) => {
     if (!token) return;
-    setOperasiLoading(true);
+    if (!opts?.silent) setOperasiLoading(true);
     setOperasiError(null);
     try {
       const result = await fetchOperasiList(token, { page: 1, limit: 50 });
@@ -168,13 +170,13 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
     } catch (err) {
       setOperasiError(err instanceof ApiError ? err.message : 'Gagal memuat jadwal operasi');
     } finally {
-      setOperasiLoading(false);
+      if (!opts?.silent) setOperasiLoading(false);
     }
   }, [token]);
 
-  const loadKunjungan = useCallback(async () => {
+  const loadKunjungan = useCallback(async (opts?: { silent?: boolean }) => {
     if (!token) return;
-    setKunjunganLoading(true);
+    if (!opts?.silent) setKunjunganLoading(true);
     setKunjunganError(null);
     try {
       const result = await fetchKunjunganList(token, { page: 1, limit: 50 });
@@ -182,7 +184,7 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
     } catch (err) {
       setKunjunganError(err instanceof ApiError ? err.message : 'Gagal memuat jadwal konsultasi');
     } finally {
-      setKunjunganLoading(false);
+      if (!opts?.silent) setKunjunganLoading(false);
     }
   }, [token]);
 
@@ -196,6 +198,17 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
       loadKunjungan();
     }
   }, [tab, loadKunjungan]);
+
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    if (tab === 'KONSUL') {
+      kunjunganLoaded.current = true;
+      await loadKunjungan({ silent: true });
+    } else {
+      await loadOperasi({ silent: true });
+    }
+    setRefreshing(false);
+  }, [tab, loadKunjungan, loadOperasi]);
 
   function handleOperasiPress(item: OperasiListItem) {
     if (item.status === 'CANCELLED') return;
@@ -249,25 +262,31 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
           },
         ]}
       >
-        <View style={styles.toggle} onLayout={onToggleLayout}>
-          {toggleItemWidth > 0 && (
-            <Animated.View
-              style={[
-                styles.toggleIndicator,
-                { width: toggleItemWidth, transform: [{ translateX: toggleIndicatorX }] },
-              ]}
-            />
-          )}
-          <Pressable onPress={() => setTab('KONSUL')} style={styles.toggleButton}>
-            <Text style={[styles.toggleText, tab === 'KONSUL' && styles.toggleTextActive]}>
-              Konsultasi
-            </Text>
-          </Pressable>
-          <Pressable onPress={() => setTab('OPERASI')} style={styles.toggleButton}>
-            <Text style={[styles.toggleText, tab === 'OPERASI' && styles.toggleTextActive]}>
-              Operasi
-            </Text>
-          </Pressable>
+        <View style={styles.toggleGroup}>
+          <View style={styles.dateFilter}>
+            <MaterialIcons name="calendar-month" size={14} color={colors.onSurfaceVariant} />
+            <Text style={styles.dateFilterText}>Hari Ini, {formatHariIni()}</Text>
+          </View>
+          <View style={styles.toggle} onLayout={onToggleLayout}>
+            {toggleItemWidth > 0 && (
+              <Animated.View
+                style={[
+                  styles.toggleIndicator,
+                  { width: toggleItemWidth, transform: [{ translateX: toggleIndicatorX }] },
+                ]}
+              />
+            )}
+            <Pressable onPress={() => setTab('KONSUL')} style={styles.toggleButton}>
+              <Text style={[styles.toggleText, tab === 'KONSUL' && styles.toggleTextActive]}>
+                Konsultasi
+              </Text>
+            </Pressable>
+            <Pressable onPress={() => setTab('OPERASI')} style={styles.toggleButton}>
+              <Text style={[styles.toggleText, tab === 'OPERASI' && styles.toggleTextActive]}>
+                Operasi
+              </Text>
+            </Pressable>
+          </View>
         </View>
         <View style={styles.searchWrapper}>
           <MaterialIcons name="search" size={20} color={colors.primary} />
@@ -283,10 +302,6 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
               <MaterialIcons name="close" size={18} color={colors.onSurfaceVariant} />
             </Pressable>
           )}
-        </View>
-        <View style={styles.dateFilter}>
-          <MaterialIcons name="calendar-month" size={20} color={colors.primary} />
-          <Text style={styles.dateFilterText}>Hari Ini, {formatHariIni()}</Text>
         </View>
         <ScrollView
           horizontal
@@ -336,6 +351,9 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
             showsVerticalScrollIndicator={false}
             onScroll={handleScroll}
             scrollEventThrottle={scrollEventThrottle}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+            }
           >
             {filteredKunjunganItems.map((item) => {
               const meta = KUNJUNGAN_STATUS_META[item.statusKunjungan];
@@ -401,6 +419,9 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
           scrollEventThrottle={scrollEventThrottle}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+          }
         >
           {filteredOperasiItems.map((item) => {
             const meta = OPERASI_STATUS_META[item.status];
@@ -454,6 +475,10 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   headerArea: { padding: spacing.marginMobile, paddingBottom: ms(4), gap: ms(8) },
+  // dateFilter + toggle digabung 1 kelompok (gap rapat) biar headerArea cuma
+  // punya 3 "band" (toggleGroup, search, filter chip), bukan 4 baris rata —
+  // tanggal jadi caption yang nempel ke toggle, bukan baris independen sendiri.
+  toggleGroup: { gap: ms(4) },
   toggle: {
     flexDirection: 'row',
     backgroundColor: colors.surfaceVariant,
@@ -475,14 +500,10 @@ const styles = StyleSheet.create({
   dateFilter: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: ms(10),
-    backgroundColor: colors.surfaceSoft,
-    borderRadius: radius.full,
-    paddingHorizontal: ms(16),
-    paddingVertical: ms(7),
-    width: '100%',
+    gap: ms(6),
+    paddingHorizontal: ms(4),
   },
-  dateFilterText: { fontSize: ms(14), color: colors.onSurface },
+  dateFilterText: { fontSize: ms(12), fontWeight: '600', color: colors.onSurfaceVariant },
 
   searchWrapper: {
     flexDirection: 'row',
@@ -497,7 +518,13 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, fontSize: ms(14), color: colors.onSurface, paddingVertical: 0 },
 
   statusFilterScroll: { marginHorizontal: -spacing.marginMobile },
-  statusFilterRow: { flexDirection: 'row', gap: ms(8), paddingHorizontal: spacing.marginMobile },
+  statusFilterRow: {
+    flexDirection: 'row',
+    flexGrow: 1,
+    justifyContent: 'center',
+    gap: ms(8),
+    paddingHorizontal: spacing.marginMobile,
+  },
   statusFilterChip: {
     paddingHorizontal: ms(14),
     paddingVertical: ms(6),
@@ -517,7 +544,7 @@ const styles = StyleSheet.create({
   listContent: { padding: spacing.marginMobile, paddingTop: ms(8), gap: spacing.gutter },
   card: {
     backgroundColor: colors.backgroundWhite,
-    borderRadius: ms(24),
+    borderRadius: ms(radius.md),
     padding: spacing.cardPadding,
     gap: ms(16),
     shadowColor: colors.primary,

@@ -12,5 +12,5 @@ export type NavigasiCard = {
 export const navigasiCards: NavigasiCard[] = [
   { id: 'pendapatan', label: 'Data Pendapatan', icon: 'payments' },
   { id: 'hasillab', label: 'Cari Hasil Lab', icon: 'biotech' },
-  { id: 'chatbot', label: 'Chatbot', icon: 'smart-toy' },
+  { id: 'radiologi', label: 'Cek Hasil Radiologi', icon: 'scanner' },
 ];
