@@ -47,21 +47,22 @@ const RINGKASAN_ROWS = [
   { key: 'konsulHariIni' as const, label: 'Konsultasi Hari Ini', icon: 'chat-bubble', tint: colors.primary },
 ];
 
-// 'radiologi' belum ada modulnya sama sekali (gak ada entity/endpoint di
-// backend) — tombolnya non-aktif dulu, sama kayak 'chatbot' sebelumnya.
+// 'radiologi' belum ada modulnya sendiri (gak ada entity/endpoint di
+// backend) — dieduk ke alur 'hasillab' yang sudah ada (endpoint /api/lab
+// discope per pasienId) sampai ada modul radiologi beneran.
 // 'hasillab' diaktifkan Hari 19 (docs/prompts/prompts-day-21-18-19.md),
-// arahnya ke layar pilih pasien dulu (endpoint /api/lab discope per
-// pasienId, bukan No. RM). 'kalender' (Bagian A, docs/prompts/bagian-a-
-// kalender-pribadi-dokter.md) satu-satunya aksi tulis yang aman buat dokter
-// di app ini — datanya milik dokter sendiri, bukan data klinis sync SIMRS.
-const NAVIGABLE_CARD_IDS = new Set(['pendapatan', 'hasillab', 'kalender']);
+// arahnya ke layar pilih pasien dulu. 'kalender' (Bagian A, docs/prompts/
+// bagian-a-kalender-pribadi-dokter.md) satu-satunya aksi tulis yang aman
+// buat dokter di app ini — datanya milik dokter sendiri, bukan data klinis
+// sync SIMRS.
+const NAVIGABLE_CARD_IDS = new Set(['pendapatan', 'hasillab', 'radiologi', 'kalender']);
 
 // Tint per kartu quick action biar grid gak 4 lingkaran putih identik —
 // reuse warna yang udah ada di tempat lain, bukan warna baru.
 const NAVIGASI_TINTS: Record<string, string> = {
   pendapatan: colors.tertiary,
   hasillab: colors.primaryContainer,
-  radiologi: colors.outline,
+  radiologi: colors.tertiaryContainer,
   kalender: colors.secondary,
 };
 
@@ -76,6 +77,7 @@ export function HomeScreen({ navigation }: Props) {
   const [ringkasan, setRingkasan] = useState({ pasienAktif: 0, operasiHariIni: 0, konsulHariIni: 0 });
   const [ringkasanLoading, setRingkasanLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [menuViewMode, setMenuViewMode] = useState<'grid' | 'list'>('grid');
   const [aktivitasMingguan, setAktivitasMingguan] = useState<AktivitasHarianMingguan[]>([]);
   const [pasienPrioritas, setPasienPrioritas] = useState<PasienPrioritasItem[]>([]);
 
@@ -134,6 +136,7 @@ export function HomeScreen({ navigation }: Props) {
         navigation.navigate('ProfilTab', { screen: 'DataPendapatan', initial: false });
         break;
       case 'hasillab':
+      case 'radiologi':
         navigation.navigate('PasienTab', { screen: 'PilihPasienHasilLab', initial: false });
         break;
       case 'kalender':
@@ -208,35 +211,75 @@ export function HomeScreen({ navigation }: Props) {
           </View>
 
           <View>
-            <Text style={styles.summaryTitle}>Akses Cepat</Text>
+            <Text style={styles.summaryTitle}>Menu</Text>
             <Text style={styles.sectionSubtitle}>Fitur tambahan di luar navigasi utama</Text>
           </View>
           <View style={styles.gridSection}>
-            <View style={styles.grid}>
-              {navigasiCards.map((card) => {
-                const isNavigable = NAVIGABLE_CARD_IDS.has(card.id);
-                const tint = NAVIGASI_TINTS[card.id] ?? colors.primary;
-                return (
-                  <Pressable
-                    key={card.id}
-                    disabled={!isNavigable}
-                    onPress={() => handleCardPress(card.id)}
-                    style={({ pressed }) => [
-                      styles.gridCard,
-                      !isNavigable && styles.gridCardDisabled,
-                      pressed && styles.gridCardPressed,
-                    ]}
-                  >
-                    <View style={styles.gridIconWrap}>
-                      <View style={[styles.gridIconCircle, { shadowColor: tint }]}>
-                        <MaterialIcons name={card.icon as never} size={32} color={tint} />
-                      </View>
-                    </View>
-                    <Text style={styles.gridLabel}>{card.label}</Text>
-                  </Pressable>
-                );
-              })}
+            <View style={styles.viewToggleRow}>
+              <Pressable
+                onPress={() => setMenuViewMode((m) => (m === 'grid' ? 'list' : 'grid'))}
+                style={styles.viewToggleButton}
+                hitSlop={8}
+              >
+                <MaterialIcons
+                  name={menuViewMode === 'grid' ? 'view-list' : 'grid-view'}
+                  size={18}
+                  color={colors.onSurfaceVariant}
+                />
+              </Pressable>
             </View>
+            {menuViewMode === 'grid' ? (
+              <View style={styles.grid}>
+                {navigasiCards.map((card) => {
+                  const isNavigable = NAVIGABLE_CARD_IDS.has(card.id);
+                  const tint = NAVIGASI_TINTS[card.id] ?? colors.primary;
+                  return (
+                    <Pressable
+                      key={card.id}
+                      disabled={!isNavigable}
+                      onPress={() => handleCardPress(card.id)}
+                      style={({ pressed }) => [
+                        styles.gridCard,
+                        !isNavigable && styles.gridCardDisabled,
+                        pressed && styles.gridCardPressed,
+                      ]}
+                    >
+                      <View style={styles.gridIconWrap}>
+                        <View style={[styles.gridIconCircle, { shadowColor: tint }]}>
+                          <MaterialIcons name={card.icon as never} size={32} color={tint} />
+                        </View>
+                      </View>
+                      <Text style={styles.gridLabel}>{card.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ) : (
+              <View style={styles.list}>
+                {navigasiCards.map((card) => {
+                  const isNavigable = NAVIGABLE_CARD_IDS.has(card.id);
+                  const tint = NAVIGASI_TINTS[card.id] ?? colors.primary;
+                  return (
+                    <Pressable
+                      key={card.id}
+                      disabled={!isNavigable}
+                      onPress={() => handleCardPress(card.id)}
+                      style={({ pressed }) => [
+                        styles.listRow,
+                        !isNavigable && styles.gridCardDisabled,
+                        pressed && styles.gridCardPressed,
+                      ]}
+                    >
+                      <View style={[styles.listIconCircle, { shadowColor: tint }]}>
+                        <MaterialIcons name={card.icon as never} size={20} color={tint} />
+                      </View>
+                      <Text style={styles.listLabel}>{card.label}</Text>
+                      <MaterialIcons name="chevron-right" size={20} color={colors.outline} />
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
           </View>
         </View>
 
@@ -363,6 +406,33 @@ const styles = StyleSheet.create({
     borderRadius: radius.lg,
     padding: spacing.cardPadding,
   },
+  viewToggleRow: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8 },
+  viewToggleButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: colors.backgroundWhite,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  list: { gap: spacing.gutter },
+  listRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: colors.backgroundWhite,
+    borderRadius: radius.sm,
+    padding: 12,
+  },
+  listIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: `${colors.primary}1A`,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listLabel: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.deepTealDark },
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
