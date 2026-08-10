@@ -204,6 +204,21 @@ export function PasienDetailScreen({ route, navigation }: Props) {
           </View>
         </View>
 
+        {/* Akses cepat: Hasil Lab pasien ini */}
+        <Pressable
+          onPress={() => navigation.navigate('HasilLabList', { pasienId: detail.id, nama: detail.nama })}
+          style={({ pressed }) => [styles.labLinkCard, pressed && styles.labLinkCardPressed]}
+        >
+          <View style={styles.labLinkIcon}>
+            <MaterialIcons name="biotech" size={22} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.labLinkTitle}>Hasil Lab</Text>
+            <Text style={styles.labLinkSubtitle}>Lihat riwayat pemeriksaan laboratorium</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={22} color={colors.outline} />
+        </Pressable>
+
         {/* Riwayat kunjungan */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Riwayat Kunjungan</Text>
@@ -372,6 +387,28 @@ const styles = StyleSheet.create({
     color: colors.onSurface,
     textAlign: 'right',
   },
+
+  labLinkCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.base,
+    backgroundColor: colors.surfaceContainerLowest,
+    borderRadius: radius.sm,
+    padding: spacing.cardPadding,
+    borderWidth: 1,
+    borderColor: colors.surfaceVariant,
+  },
+  labLinkCardPressed: { opacity: 0.9, transform: [{ scale: 0.98 }] },
+  labLinkIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: colors.surfaceSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  labLinkTitle: { fontSize: 16, fontWeight: '700', color: colors.onSurface },
+  labLinkSubtitle: { fontSize: 13, color: colors.onSurfaceVariant, marginTop: 2 },
 
   section: { marginTop: spacing.base },
   sectionTitle: {
