@@ -817,6 +817,74 @@ dimaksud "Dashboard Kinerja" aslinya) masih belum ada — dicatat di sini
 supaya pembaca jurnal tidak salah simpul "Hari 20 beneran belum ada apa-apa"
 padahal sebagian besar angkanya sudah tersedia & terverifikasi hidup.
 
+### Catatan lanjutan 6 Ags 2026 — Pull-to-refresh 7 layar, konsistensi warna/radius, rapikan sapaan Home
+
+Sesi lanjutan hari yang sama (setelah verifikasi Bagian B di atas), lewat
+permintaan langsung Arthuro di chat — di luar item Hari 24 ("Integration
+testing") yang belum mulai.
+
+**1. Pull-to-refresh native di 7 layar** — Home, Daftar Pasien, Jadwal
+Operasi/Konsul, Notifikasi, Detail Pasien, Profil Dokter, Data Pendapatan.
+Pakai `RefreshControl` bawaan React Native, bukan library baru. Perubahan
+kuncinya: fungsi `load()`/`loadOperasi()`/`loadKunjungan()` yang tadinya
+selalu `setLoading(true)` (nge-swap seluruh list jadi spinner penuh layar
+tiap refresh) sekarang nerima opsi `{ silent?: boolean }` — pull-to-refresh
+manggil mode silent biar list-nya tetap kelihatan pas spinner native muncul
+di atas. `PasienDetailScreen` dikasih fungsi refresh terpisah dari effect
+mount awalnya, biar guard `cancelled` (proteksi race condition pas ganti
+pasien cepat) gak ikut kebongkar. `DataPendapatanScreen` (masih murni mock,
+belum ada endpoint) dapat refresh simulasi 500ms — kosmetik doang, placeholder
+sampai modul Pendapatan tersambung backend.
+
+**2. Konsistensi token warna & radius** ikut ke-commit bareng (sudah ada di
+working tree sebelum sesi chat ini mulai): badge status "SELESAI" di
+`PasienListScreen`/`PasienDetailScreen` yang tadinya `colors.tertiaryFixed`
+(kuning) disamakan ke `colors.deepTealDark`; warna status "Berlangsung"/
+"Selesai" di `JadwalOperasiKonsulScreen` yang tadinya hex mentah (`#a3a900`,
+`#0D3D3B`) diganti token (`colors.tertiaryContainer`, `colors.deepTealDark`);
+radius kartu yang sebelumnya angka mentah (`24`) atau `radius.sm` tersebar di
+beberapa screen disatukan lewat token baru `radius.md: 24` di `colors.ts`.
+Filter kategori di `NotifikasiScreen` juga dapat tint warna per kategori
+(`KATEGORI_TINT`) — sebelumnya semua kategori satu warna pill yang sama.
+
+**3. Redesain kecil `ProfilDokterScreen`** — hero card diubah dari layout
+avatar-tengah+pill jadi badge identitas (avatar rata kiri, nama+spesialisasi
+di sampingnya), fallback teks spesialisasi yang sebelumnya salah ketik
+"Spesialis Kelamin" dibetulkan jadi "Spesialisasi belum tersedia". Menu
+pengaturan yang belum ada tujuan navigasinya sekarang tampil non-tappable +
+label "Segera hadir" (cuma menu Pendapatan yang aktif) — biar gak kelihatan
+bisa ditap tapi diem aja pas ditekan. Tombol "Keluar Akun" diganti dari solid
+merah jadi outline.
+
+**4. Home dirapikan lebih lanjut.** Jarak judul→card di section "Ringkasan
+Aktivitas Hari Ini"/"Akses Cepat" yang pakai `gap: 20` (beda dari "Pasien
+Prioritas"/"Statistik Mingguan" yang `gap: 16`) disamakan ke 16. Sapaan nama
+dokter dirapikan: nama dokter disimpan lengkap sama gelar dalam satu string
+(`"dr. Nama, Sp.B(K) Onk"`), sebelumnya seluruhnya masuk heading besar-bold
+`Halo, {nama}` — gelar panjang bikin kata terakhir jatuh sendirian ke baris
+ke-2 (kelihatan berantakan, dilaporkan Arthuro pakai screenshot). Dipisah
+pakai `splitGelar()` (potong di koma pertama): nama tetap di heading besar,
+gelar turun jadi caption kecil terpisah (uppercase, letter-spacing) — reuse
+persis pola `spesialisasiText` yang sudah ada di `ProfilDokterScreen`. Tanda
+seru ditambah di belakang nama ("Halo, dr. Putra Tasdik!") atas permintaan
+langsung.
+
+**5. Referensi animasi loading — belum diimplementasi.** Arthuro minta ganti
+`<ActivityIndicator>` generik dengan animasi lain, tapi minta lihat referensi
+dulu sebelum dikerjakan. Dibuat 3 kandidat bertema monitor vital pasien
+(Vital Line/EKG, Pulse Ring, Cross Trace) di halaman Artifact terpisah biar
+motion-nya bisa dibandingkan langsung. Channel 1 & 3 butuh dependency baru
+`react-native-svg` (Arthuro sudah `npm install` duluan — kelihatan dari
+`package.json`/`package-lock.json`, walau kodenya sendiri belum dipakai di
+manapun); Channel 2 (Pulse Ring) zero-dependency, cukup `View`+`Animated`
+bawaan RN. **Belum ada keputusan channel mana yang dipakai**, jadi
+`<ActivityIndicator>` di 5 layar itu masih yang lama, belum diganti.
+
+**Commit & push:** `11ab7d4` — digabung 1 commit, dipush ke `origin/main`
+tanpa perlu override HTTP (`c72d37b..11ab7d4`). Ikut kebawa perubahan lain
+yang sudah pending sebelum sesi ini mulai: rename menu Home `chatbot` →
+`radiologi` (`homeMock.ts`) dan dependency `react-native-svg` di atas.
+
 ---
 
 ## Catatan lintas-hari yang masih terbuka
