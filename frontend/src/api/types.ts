@@ -229,6 +229,27 @@ export type StatistikDashboard = {
   adminCatatan?: string;
 };
 
+export type TipeCatatanKalender = 'REMINDER' | 'BLOCKING' | 'PRIBADI';
+
+export type CatatanKalenderItem = {
+  id: string;
+  dokterId: string;
+  tanggal: string;
+  waktu: string | null;
+  judul: string;
+  catatan: string | null;
+  tipe: TipeCatatanKalender;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CatatanKalenderListResponse = {
+  data: CatatanKalenderItem[];
+  // Cuma muncul kalau akun yang login ADMIN — kalender pribadi tidak
+  // berlaku buat akun yang tidak terikat ke satu Dokter, lihat kalender.routes.js.
+  adminCatatan?: string;
+};
+
 export type LoginResponse = {
   token: string;
   pengguna: {

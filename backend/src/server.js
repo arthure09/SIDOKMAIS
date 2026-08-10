@@ -10,6 +10,7 @@ const kunjunganRoutes = require("./routes/kunjungan.routes");
 const notifikasiRoutes = require("./routes/notifikasi.routes");
 const labRoutes = require("./routes/lab.routes");
 const dashboardRoutes = require("./routes/dashboard.routes");
+const kalenderRoutes = require("./routes/kalender.routes");
 const authenticate = require("./middleware/auth.middleware");
 const authorize = require("./middleware/rbac.middleware");
 
@@ -30,6 +31,7 @@ app.use("/api/kunjungan", authenticate, authorize("DOKTER", "ADMIN"), kunjunganR
 app.use("/api/notifikasi", authenticate, authorize("DOKTER", "ADMIN"), notifikasiRoutes);
 app.use("/api/lab", authenticate, authorize("DOKTER", "ADMIN"), labRoutes);
 app.use("/api/dashboard", authenticate, authorize("DOKTER", "ADMIN"), dashboardRoutes);
+app.use("/api/kalender", authenticate, authorize("DOKTER", "ADMIN"), kalenderRoutes);
 
 // Endpoint uji coba RBAC (bukan endpoint produksi) — echo req.user apa
 // adanya untuk verifikasi visual bahwa authenticate + authorize sudah benar.

@@ -51,15 +51,18 @@ const RINGKASAN_ROWS = [
 // backend) — tombolnya non-aktif dulu, sama kayak 'chatbot' sebelumnya.
 // 'hasillab' diaktifkan Hari 19 (docs/prompts/prompts-day-21-18-19.md),
 // arahnya ke layar pilih pasien dulu (endpoint /api/lab discope per
-// pasienId, bukan No. RM).
-const NAVIGABLE_CARD_IDS = new Set(['pendapatan', 'hasillab']);
+// pasienId, bukan No. RM). 'kalender' (Bagian A, docs/prompts/bagian-a-
+// kalender-pribadi-dokter.md) satu-satunya aksi tulis yang aman buat dokter
+// di app ini — datanya milik dokter sendiri, bukan data klinis sync SIMRS.
+const NAVIGABLE_CARD_IDS = new Set(['pendapatan', 'hasillab', 'kalender']);
 
-// Tint per kartu quick action biar grid gak 3 lingkaran putih identik —
+// Tint per kartu quick action biar grid gak 4 lingkaran putih identik —
 // reuse warna yang udah ada di tempat lain, bukan warna baru.
 const NAVIGASI_TINTS: Record<string, string> = {
   pendapatan: colors.tertiary,
   hasillab: colors.primaryContainer,
   radiologi: colors.outline,
+  kalender: colors.secondary,
 };
 
 export function HomeScreen({ navigation }: Props) {
@@ -123,6 +126,9 @@ export function HomeScreen({ navigation }: Props) {
         break;
       case 'hasillab':
         navigation.navigate('PasienTab', { screen: 'PilihPasienHasilLab' });
+        break;
+      case 'kalender':
+        navigation.navigate('ProfilTab', { screen: 'CatatanKalender' });
         break;
     }
   }

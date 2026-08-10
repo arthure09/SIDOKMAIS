@@ -47,4 +47,5 @@ export type NotifikasiStackParamList = {
 export type ProfilStackParamList = {
   ProfilDokter: undefined;
   DataPendapatan: undefined;
+  CatatanKalender: undefined;
 };

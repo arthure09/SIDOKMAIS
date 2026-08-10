@@ -62,6 +62,12 @@ enum FlagHasilLab {
   ABNORMAL
 }
 
+enum TipeCatatanKalender {
+  REMINDER
+  BLOCKING
+  PRIBADI
+}
+
 model Dokter {
   id           String   @id @default(uuid())
   nip          String   @unique
@@ -72,11 +78,12 @@ model Dokter {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  penggunaAkun   Pengguna?
-  assignments    DokterPasienAssignment[]
-  kunjungan      Kunjungan[]
-  notifikasi     Notifikasi[]
-  pemeriksaanLab PemeriksaanLab[]
+  penggunaAkun    Pengguna?
+  assignments     DokterPasienAssignment[]
+  kunjungan       Kunjungan[]
+  notifikasi      Notifikasi[]
+  pemeriksaanLab  PemeriksaanLab[]
+  catatanKalender CatatanKalender[]
 }
 
 model Pasien {
@@ -261,6 +268,28 @@ model HasilLabItem {
   pemeriksaanLab PemeriksaanLab @relation(fields: [pemeriksaanLabId], references: [id], onDelete: Cascade)
 
   @@index([pemeriksaanLabId])
+}
+
+// Kalender pribadi dokter — murni milik dokter yang membuatnya, tidak ada
+// relasi ke Pasien/Kunjungan/Operasi sama sekali (read-only modul lain tetap
+// tidak berubah). `waktu` sengaja String "HH:mm" polos, bukan DateTime —
+// ini jam dinding pengingat, bukan instant yang perlu ikut konversi
+// WIB_OFFSET_MS seperti `tanggal` (lihat kalender.routes.js).
+model CatatanKalender {
+  id        String              @id @default(uuid())
+  dokterId  String
+  tanggal   DateTime
+  waktu     String?
+  judul     String
+  catatan   String?
+  tipe      TipeCatatanKalender
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+
+  dokter Dokter @relation(fields: [dokterId], references: [id], onDelete: Cascade)
+
+  @@index([dokterId])
+  @@index([tanggal])
 }
 
 // Audit generik wajib untuk semua write action manual/chatbot (CLAUDE.md aturan #4).
