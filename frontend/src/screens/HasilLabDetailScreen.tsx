@@ -9,8 +9,8 @@ import { useAuthStore } from '../store/authStore';
 import { colors, radius, shadows, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
 import type { FlagHasilLab, HasilLabDetail, StatusPemeriksaanLab } from '../api/types';
-import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useHeaderScrollShadow } from '../hooks/useHeaderScrollShadow';
+import { useHideTabBar } from '../hooks/useHideTabBar';
 import type { PasienStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<PasienStackParamList, 'HasilLabDetail'>;
@@ -43,7 +43,7 @@ export function HasilLabDetailScreen({ route, navigation }: Props) {
   const { pemeriksaanLabId } = route.params;
   const token = useAuthStore((s) => s.token);
   const insets = useSafeAreaInsets();
-  const tabBarClearance = useTabBarClearance();
+  useHideTabBar();
   const { onScroll, scrollEventThrottle, scrolled } = useHeaderScrollShadow();
   const [detail, setDetail] = useState<HasilLabDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -107,7 +107,7 @@ export function HasilLabDetailScreen({ route, navigation }: Props) {
     <View style={styles.container}>
       {header}
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.gutter }]}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={scrollEventThrottle}

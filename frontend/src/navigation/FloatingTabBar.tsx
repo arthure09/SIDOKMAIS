@@ -94,7 +94,11 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
       // +24 ekstra biar shadow (shadowRadius 12, shadowOffset -4) ikut nggak
       // kelihatan sisa nyembul pas tab bar disembunyikan.
       toValue: hidden ? TAB_BAR_HEIGHT + insets.bottom + 24 : 0,
-      duration: 240,
+      // 200ms, dekat sama durasi 'fade' scene transition bottom-tabs (150ms,
+      // lihat MainTabNavigator) — sebelumnya 240ms bikin bar masih nyelesaiin
+      // slide-down lama setelah scene-nya sendiri sudah settle, kerasa dua
+      // gerakan gak nyambung alih-alih satu transisi.
+      duration: 200,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();

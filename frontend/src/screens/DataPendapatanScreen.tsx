@@ -6,8 +6,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, shadows, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
 import { ringkasanPendapatan, transaksiPendapatan, type JenisTransaksi } from '../mocks/pendapatanMock';
-import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
+import { useHideTabBar } from '../hooks/useHideTabBar';
+import { goBackToHome } from '../navigation/goBackToHome';
 import type { ProfilStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<ProfilStackParamList, 'DataPendapatan'>;
@@ -36,7 +37,7 @@ const DROPDOWN_WIDTH = 180;
 
 export function DataPendapatanScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
-  const tabBarClearance = useTabBarClearance();
+  useHideTabBar();
   const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
   const { width: windowWidth } = useWindowDimensions();
 
@@ -113,7 +114,7 @@ export function DataPendapatanScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top }, scrolled && shadows.header]}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+        <Pressable onPress={() => goBackToHome(navigation)} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
         </Pressable>
         <View style={styles.headerTitleWrap}>
@@ -124,7 +125,7 @@ export function DataPendapatanScreen({ navigation }: Props) {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.gutter }]}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={scrollEventThrottle}

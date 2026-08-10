@@ -10,8 +10,9 @@ import { colors, radius, shadows, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
 import { TextInput } from '../components/TextInput';
 import type { PasienListItem } from '../api/types';
-import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useHeaderScrollShadow } from '../hooks/useHeaderScrollShadow';
+import { useHideTabBar } from '../hooks/useHideTabBar';
+import { goBackToHome } from '../navigation/goBackToHome';
 import type { PasienStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<PasienStackParamList, 'PilihPasienHasilLab'>;
@@ -26,7 +27,7 @@ function initials(nama: string) {
 
 export function PilihPasienHasilLabScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
-  const tabBarClearance = useTabBarClearance();
+  useHideTabBar();
   const { onScroll, scrollEventThrottle, scrolled } = useHeaderScrollShadow();
   const token = useAuthStore((s) => s.token);
   const [searchInput, setSearchInput] = useState('');
@@ -61,7 +62,7 @@ export function PilihPasienHasilLabScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top }, scrolled && shadows.header]}>
-        <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+        <Pressable onPress={() => goBackToHome(navigation)} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>
@@ -102,7 +103,7 @@ export function PilihPasienHasilLabScreen({ navigation }: Props) {
         <FlatList
           data={items}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
+          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + spacing.gutter }]}
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={scrollEventThrottle}

@@ -28,8 +28,9 @@ import { fetchOperasiList } from '../api/operasi';
 import { fetchKunjunganList } from '../api/kunjungan';
 import { useAuthStore } from '../store/authStore';
 import type { CatatanKalenderItem, KunjunganListItem, OperasiListItem, TipeCatatanKalender } from '../api/types';
-import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
+import { useHideTabBar } from '../hooks/useHideTabBar';
+import { goBackToHome } from '../navigation/goBackToHome';
 import type { ProfilStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<ProfilStackParamList, 'CatatanKalender'>;
@@ -118,7 +119,7 @@ const TIPE_META: Record<TipeCatatanKalender, { label: string; icon: keyof typeof
 
 export function CatatanKalenderScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
-  const tabBarClearance = useTabBarClearance();
+  useHideTabBar();
   const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
   const token = useAuthStore((s) => s.token);
   const isDokter = useAuthStore((s) => s.pengguna?.role === 'DOKTER');
@@ -328,7 +329,7 @@ export function CatatanKalenderScreen({ navigation }: Props) {
 
   const header = (
     <View style={[styles.header, { paddingTop: insets.top }, scrolled && shadows.header]}>
-      <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
+      <Pressable onPress={() => goBackToHome(navigation)} style={styles.backButton}>
         <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
       </Pressable>
       <View style={styles.headerTitleWrap}>
@@ -358,7 +359,7 @@ export function CatatanKalenderScreen({ navigation }: Props) {
       {header}
 
       <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: tabBarClearance + 72 }]}
+        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.gutter + 72 }]}
         showsVerticalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={scrollEventThrottle}
@@ -494,7 +495,7 @@ export function CatatanKalenderScreen({ navigation }: Props) {
 
       <Pressable
         onPress={openCreateForm}
-        style={[styles.fab, { bottom: tabBarClearance }]}
+        style={[styles.fab, { bottom: insets.bottom + spacing.gutter }]}
         hitSlop={4}
       >
         <MaterialIcons name="add" size={26} color={colors.onPrimary} />

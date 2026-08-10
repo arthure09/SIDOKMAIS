@@ -11,8 +11,8 @@ import { colors, radius, shadows, spacing } from '../theme/colors';
 import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
 import type { HasilLabRingkasan } from '../api/types';
-import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useHeaderScrollShadow } from '../hooks/useHeaderScrollShadow';
+import { useHideTabBar } from '../hooks/useHideTabBar';
 import type { PasienStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<PasienStackParamList, 'HasilLabList'>;
@@ -40,7 +40,7 @@ export function HasilLabListScreen({ route, navigation }: Props) {
   const { pasienId, nama } = route.params;
   const token = useAuthStore((s) => s.token);
   const insets = useSafeAreaInsets();
-  const tabBarClearance = useTabBarClearance();
+  useHideTabBar();
   const { onScroll, scrollEventThrottle, scrolled } = useHeaderScrollShadow();
   const [items, setItems] = useState<HasilLabRingkasan[]>([]);
   const [loading, setLoading] = useState(true);
@@ -321,7 +321,7 @@ export function HasilLabListScreen({ route, navigation }: Props) {
         <FlatList
           data={items}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
+          contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + spacing.gutter }]}
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={scrollEventThrottle}

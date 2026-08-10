@@ -12,7 +12,11 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 export function MainTabNavigator() {
   return (
     <Tab.Navigator
-      screenOptions={{ headerShown: false }}
+      // Default bottom-tabs adalah 'none' (potong instan tanpa transisi) —
+      // tile Akses Cepat di Home lompat ke tab lain (mis. ProfilTab), jadi
+      // tanpa ini kelihatan patah. 'fade' cross-dissolve 150ms bawaan library,
+      // gak nambah animasi custom baru.
+      screenOptions={{ headerShown: false, animation: 'fade' }}
       tabBar={(props) => <FloatingTabBar {...props} />}
     >
       <Tab.Screen name="HomeTab" component={HomeScreen} />
