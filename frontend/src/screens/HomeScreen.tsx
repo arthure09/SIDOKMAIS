@@ -120,15 +120,24 @@ export function HomeScreen({ navigation }: Props) {
   }, [loadRingkasan]);
 
   function handleCardPress(id: string) {
+    // `initial: false` di semua case ini penting: tanpanya, navigasi ke
+    // screen yang BUKAN initialRouteName tab tujuan (pertama kali tab itu
+    // dikunjungi) bikin React Navigation ganti seluruh state stack tab
+    // tujuan jadi cuma berisi screen itu sendiri (root aslinya, mis.
+    // ProfilDokter/PasienList, gak pernah ke-push). Akibatnya tombol
+    // "kembali" gak punya apa-apa buat di-pop di dalam stack itu dan
+    // nembus balik ke tab asal (Home), dan tab tujuan jadi rusak setelahnya.
+    // `initial: false` memastikan root screen tab tujuan tetap ke-push dulu,
+    // screen target di-push di atasnya — back stack normal.
     switch (id) {
       case 'pendapatan':
-        navigation.navigate('ProfilTab', { screen: 'DataPendapatan' });
+        navigation.navigate('ProfilTab', { screen: 'DataPendapatan', initial: false });
         break;
       case 'hasillab':
-        navigation.navigate('PasienTab', { screen: 'PilihPasienHasilLab' });
+        navigation.navigate('PasienTab', { screen: 'PilihPasienHasilLab', initial: false });
         break;
       case 'kalender':
-        navigation.navigate('ProfilTab', { screen: 'CatatanKalender' });
+        navigation.navigate('ProfilTab', { screen: 'CatatanKalender', initial: false });
         break;
     }
   }
