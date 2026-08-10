@@ -885,6 +885,137 @@ tanpa perlu override HTTP (`c72d37b..11ab7d4`). Ikut kebawa perubahan lain
 yang sudah pending sebelum sesi ini mulai: rename menu Home `chatbot` →
 `radiologi` (`homeMock.ts`) dan dependency `react-native-svg` di atas.
 
+### Hari 24-27 (Kam 6 Ags – Min 9 Ags) — Tidak ada progres
+Tidak ada commit maupun perubahan uncommitted di repo pada rentang ini —
+dikonfirmasi langsung ke Arthuro: memang tidak ada progres, bukan kerjaan yang
+lupa ke-commit. Item rencana Hari 24 (Integration testing), Hari 25 (Bug
+fixing round 1), Hari 26 (Bug fixing round 2 + regression testing), dan
+Hari 27 (User documentation) di `CLAUDE.md` **belum dikerjakan**, bukan
+"selesai tanpa jejak".
+
+### Hari 28 (Sen, 10 Ags) — Kalender pribadi dokter (Bagian A), fix navigasi tab, sembunyikan tab bar layar Akses Cepat, debug 500 error Prisma Client basi
+
+Di luar jadwal aslinya ("Final review, wrap-up") — 3 commit pagi/siang
+membangun fitur baru, ditutup 1 sesi debug sore yang dipicu laporan bug
+langsung dari Arthuro.
+
+**`81324d5` (10:37 WIB) — kalender pribadi dokter (Bagian A):**
+- Entity baru `CatatanKalender` (`id`, `dokterId`, `tanggal`, `waktu`,
+  `judul`, `catatan`, `tipe`) + enum `TipeCatatanKalender`
+  (REMINDER/BLOCKING/PRIBADI), migration
+  `20260810031147_add_kalender_module`. Beda dari seluruh entity lain di
+  schema: **tidak** ada relasi ke Pasien/Kunjungan/Operasi sama sekali — ini
+  murni catatan pribadi dokter, satu-satunya modul di app yang jadi write
+  action penuh oleh dokter sendiri (bukan view-only hasil sync SIMRS, lihat
+  komentar `NAVIGABLE_CARD_IDS` di `HomeScreen.tsx`).
+- Kolom `waktu` sengaja `String` "HH:mm" polos, bukan `DateTime` — ini jam
+  dinding pengingat, bukan instant yang perlu ikut konversi `WIB_OFFSET_MS`
+  seperti kolom `tanggal` (komentar eksplisit di `schema.prisma`).
+- Endpoint `backend/src/routes/kalender.routes.js` (baru, 246 baris):
+  `GET /api/kalender?dari&sampai` (filter rentang tanggal, geser ke UTC lewat
+  `WIB_OFFSET_MS` sama seperti `lab.routes.js`/`dashboard.routes.js`), `POST`,
+  `PATCH /:id` (partial update), `DELETE /:id`. `dokterId` selalu dari JWT
+  (`req.user`), tidak pernah dari body/params. Branch ADMIN ikut pola
+  `dashboard.routes.js`: `GET` balikin list kosong + `adminCatatan` penjelas,
+  `POST`/`PATCH`/`DELETE` 403 — akun ADMIN tidak terikat satu Dokter jadi
+  "kalender pribadi milik siapa" tidak masuk akal buat akun itu. Catatan
+  milik dokter lain sengaja dibalikin **404** (bukan 403) di `PATCH`/`DELETE`,
+  reuse pola `notifikasi.routes.js` `PATCH /:id/read`, supaya endpoint tidak
+  bocorin ID valid milik dokter lain. Semua write (CREATE/UPDATE/DELETE)
+  tercatat ke `AuditLog` (aturan #4 `CLAUDE.md`).
+- Frontend: `CatatanKalenderScreen.tsx` (baru, 828 baris) nested di
+  `ProfilStackNavigator` — month grid manual 6×7 (`buildMonthGrid`), dengan
+  layer read-only jadwal Operasi/Kunjungan ditumpuk di atas catatan pribadi
+  (dibaca lewat `fetchOperasiList`/`fetchKunjunganList` yang sudah ada, cuma
+  ditampilkan bukan ditulis — konsisten aturan #1 read-only Operasi/
+  Konsultasi). Tile baru "Tambah Pengingat" ditambah ke grid Akses Cepat Home
+  (`homeMock.ts`, `NAVIGABLE_CARD_IDS`, tint `colors.secondary`).
+
+**`68aa652` (11:20 WIB) — fix bug navigasi `initial:false`:**
+- Bug: `navigation.navigate({tab, screen})` tanpa opsi `initial:false`, kalau
+  `screen` tujuan BUKAN `initialRouteName` tab itu dan tab itu baru pertama
+  kali dikunjungi, mengganti **seluruh state stack** tab tujuan jadi cuma
+  berisi screen itu sendiri — root aslinya (`ProfilDokter`/`PasienList`)
+  tidak pernah ke-push. Akibatnya tombol "kembali" tidak punya apa-apa buat
+  di-*pop* di dalam stack itu, nembus balik ke Home, dan tab tujuan jadi
+  rusak buat sisa sesi (navigasi berikutnya ke tab yang sama juga ikut kena).
+- Ditemukan lewat laporan bug Arthuro sendiri di tile "Tambah Pengingat"
+  (fitur baru commit sebelumnya) — ditelusuri ternyata bug lama yang sama
+  juga sudah menimpa **"Data Pendapatan" dan "Cari Hasil Lab"**, 3 dari 3
+  tile Akses Cepat yang ada, bukan cuma yang baru dibuat.
+- Fix: `initial: false` ditambah ke ketiga `navigation.navigate()` call di
+  `HomeScreen.handleCardPress`, dengan komentar penjelas di kode kenapa opsi
+  ini penting (bukan cuma silent fix).
+
+**`d6926c2` (11:43 WIB) — sembunyikan tab bar + smooth transition di layar Akses Cepat:**
+- 3 screen yang cuma bisa diakses lewat tile Akses Cepat Home (Data
+  Pendapatan, Kalender Pribadi, alur Cari Hasil Lab) sekarang sembunyikan
+  `FloatingTabBar` lewat `useHideTabBar()` — hook yang sudah ada dari Hari 22
+  buat `LihatPdfLabScreen`, dipakai ulang bukan dibuat baru — plus bottom
+  padding disesuaikan supaya tidak lagi menyisakan ruang kosong bekas tab bar
+  yang sudah hilang.
+- Cross-tab transition: `MainTabNavigator` pakai `animation: 'fade'` bawaan
+  `bottom-tabs` v7 (default sebelumnya `'none'`, potong instan tanpa
+  transisi), dipadukan durasi *hide* `FloatingTabBar` 240ms→200ms biar
+  nyambung mulus sama fade 150ms-nya.
+- Tombol kembali di 3 entry-screen itu diarahkan eksplisit ke Home lewat
+  helper baru `goBackToHome()` (`frontend/src/navigation/goBackToHome.ts`),
+  bukan `goBack()` biasa — kalau pakai `goBack()`, itu bakal *pop* ke root
+  stack tab tujuan (`ProfilDokter`/`PasienList`) yang tidak pernah sengaja
+  dikunjungi user, sisi lain dari celah yang sama dengan bug `initial:false`
+  di atas. Screen turunan **di dalam** alur (`HasilLabList`/`Detail`/
+  `LihatPdf`) tetap pakai `goBack()` normal, karena mereka memang bagian
+  stack yang sengaja dikunjungi bertahap.
+
+**Sesi debug sore — kalender tidak bisa simpan/lihat jadwal, 500 "Terjadi kesalahan pada server":**
+
+Dilaporkan Arthuro lewat chat sesudah 3 commit di atas dites di device.
+Diagnosis dituntun jarak jauh — koneksi ke DB dev (laptop Windows/WSL2 di
+Surabaya, diakses lewat Tailscale) tidak tersedia dari lingkungan kerja ini,
+jadi seluruh command dijalankan langsung oleh Arthuro di WSL2 dan hasilnya
+ditempel ke chat.
+
+1. **Hipotesis awal — migration belum ter-*deploy* (salah).**
+   `backend/Dockerfile` cuma menjalankan `npx prisma generate` saat image
+   *build*, tidak pernah `migrate deploy` otomatis — dicurigai migration
+   `20260810031147_add_kalender_module` (baru dibuat commit `81324d5`) belum
+   ter-*apply* ke database. Dicek `docker compose exec app npx prisma
+   migrate status` → **"Database schema is up to date!"**, tabelnya sudah
+   ada. Hipotesis ini gugur.
+2. **Hipotesis kedua — Prisma Client basi di container (benar).** Petunjuk
+   yang mengarah ke sini: response time error yang dicatat `morgan` cuma
+   ~2ms — terlalu cepat buat request yang sempat menyentuh DB remote lewat
+   Tailscale, jadi errornya pasti meledak sinkron di JavaScript sebelum
+   request sempat jalan. Log asli (`docker compose logs --tail=50 app`
+   — sebelumnya cuma kelihatan baris akses `morgan`, bukan
+   `console.error(err)`-nya karena scroll belum ke atas) mengonfirmasi:
+   `TypeError: Cannot read properties of undefined (reading 'create')` di
+   `kalender.routes.js:155` dan `(reading 'findMany')` di baris 132 —
+   `prisma.catatanKalender` sendiri `undefined`.
+3. **Akar masalah:** `docker-compose.yml` mem-bind-mount `.:/usr/src/app`
+   (source code ikut ter-update tiap `git pull`), tapi `node_modules`
+   di-*exclude* lewat volume anonim terpisah
+   (`- /usr/src/app/node_modules`) — pola standar Docker+Node buat
+   menghindari bentrok native module host vs container. `npx prisma
+   generate` cuma jalan sekali, waktu image di-*build*. Jadi `git pull` yang
+   membawa model `CatatanKalender` baru ke `schema.prisma` **tidak**
+   otomatis meregenerasi `@prisma/client` di `node_modules` — client yang
+   jalan di container masih versi lama yang belum kenal model itu sama
+   sekali.
+4. **Fix:** `docker compose exec app npx prisma generate` (dikonfirmasi
+   sukses — `grep -c catatanKalender node_modules/.prisma/client/index.d.ts`
+   → 64 match) lalu `docker compose up -d --force-recreate app` (lebih pasti
+   daripada `restart` biasa). Dites ulang dari app — sudah tidak error.
+
+**Dicatat buat ke depan (belum diperbaiki):** `docker compose restart app`
+**tidak cukup** setiap kali `schema.prisma` berubah — harus `npx prisma
+generate` (dan `migrate deploy` kalau ada migration baru) dulu, baru
+restart/recreate container, karena `node_modules` container adalah volume
+terpisah yang tidak ikut `git pull`. `README.md` sudah mencatat langkah
+`migrate deploy` tapi belum menyebutkan `prisma generate` ulang setelah
+`git pull` — ditawarkan ke Arthuro buat ditambahkan ke README atau diwire ke
+start command container, belum ada keputusan sampai catatan ini ditulis.
+
 ---
 
 ## Catatan lintas-hari yang masih terbuka
@@ -905,6 +1036,12 @@ yang sudah pending sebelum sesi ini mulai: rename menu Home `chatbot` →
   pertanyaan terstruktur ada di `docs/pertanyaan-supervisor-modul-lab.md`.
 - Hal-hal yang sengaja ditunda (bukan terlupa) dicatat di
   `docs/keputusan-tertunda.md`.
+- **Docker/Prisma Client basi setelah `git pull`** (ditemukan Hari 28,
+  10 Ags): `node_modules` container adalah volume terpisah dari bind mount
+  source code, jadi perubahan `schema.prisma` butuh `npx prisma generate`
+  manual di dalam container (`docker compose exec app npx prisma generate`)
+  sebelum restart/recreate, tidak otomatis ikut `git pull`. Belum diputuskan
+  apa didokumentasikan di README atau diwire ke start command container.
 
 ---
 
