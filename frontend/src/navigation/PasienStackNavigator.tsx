@@ -5,19 +5,13 @@ import { PilihPasienHasilLabScreen } from '../screens/PilihPasienHasilLabScreen'
 import { HasilLabListScreen } from '../screens/HasilLabListScreen';
 import { HasilLabDetailScreen } from '../screens/HasilLabDetailScreen';
 import { LihatPdfLabScreen } from '../screens/LihatPdfLabScreen';
-import { colors } from '../theme/colors';
 import type { PasienStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<PasienStackParamList>();
 
 export function PasienStackNavigator() {
   return (
-    <Stack.Navigator
-      screenOptions={{
-        headerTintColor: colors.primary,
-        headerStyle: { backgroundColor: colors.background },
-      }}
-    >
+    <Stack.Navigator>
       <Stack.Screen name="PasienList" component={PasienListScreen} options={{ headerShown: false }} />
       <Stack.Screen
         name="PasienDetail"

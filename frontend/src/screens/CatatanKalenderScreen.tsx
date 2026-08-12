@@ -30,7 +30,7 @@ import { useAuthStore } from '../store/authStore';
 import type { CatatanKalenderItem, KunjunganListItem, OperasiListItem, TipeCatatanKalender } from '../api/types';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useHideTabBar } from '../hooks/useHideTabBar';
-import { goBackToHome } from '../navigation/goBackToHome';
+import { useMenuBack } from '../navigation/useMenuBack';
 import type { ProfilStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<ProfilStackParamList, 'CatatanKalender'>;
@@ -111,13 +111,16 @@ function dateToTimeString(d: Date) {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-const TIPE_META: Record<TipeCatatanKalender, { label: string; icon: keyof typeof MaterialIcons.glyphMap; color: string }> = {
+// Diekspor karena HomeScreen menampilkan ringkasan pengingat yang sama —
+// dipakai bareng biar label/ikon/warna tipe gak kembar dua tempat lalu geser.
+export const TIPE_META: Record<TipeCatatanKalender, { label: string; icon: keyof typeof MaterialIcons.glyphMap; color: string }> = {
   REMINDER: { label: 'Pengingat', icon: 'notifications', color: colors.primary },
   BLOCKING: { label: 'Blokir Waktu', icon: 'block', color: colors.error },
   PRIBADI: { label: 'Pribadi', icon: 'person', color: colors.secondary },
 };
 
-export function CatatanKalenderScreen({ navigation }: Props) {
+export function CatatanKalenderScreen({ navigation, route }: Props) {
+  const goBack = useMenuBack(navigation, route.params?.fromHome);
   const insets = useSafeAreaInsets();
   useHideTabBar();
   const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
@@ -329,7 +332,7 @@ export function CatatanKalenderScreen({ navigation }: Props) {
 
   const header = (
     <View style={[styles.header, { paddingTop: insets.top }, scrolled && shadows.header]}>
-      <Pressable onPress={() => goBackToHome(navigation)} style={styles.backButton}>
+      <Pressable onPress={goBack} style={styles.backButton}>
         <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
       </Pressable>
       <View style={styles.headerTitleWrap}>

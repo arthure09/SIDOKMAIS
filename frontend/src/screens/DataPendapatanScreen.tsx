@@ -8,7 +8,7 @@ import { Text } from '../components/Text';
 import { ringkasanPendapatan, transaksiPendapatan, type JenisTransaksi } from '../mocks/pendapatanMock';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useHideTabBar } from '../hooks/useHideTabBar';
-import { goBackToHome } from '../navigation/goBackToHome';
+import { useMenuBack } from '../navigation/useMenuBack';
 import type { ProfilStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<ProfilStackParamList, 'DataPendapatan'>;
@@ -35,7 +35,8 @@ const SUMBER_OPTIONS = ['Semua', ...new Set(transaksiPendapatan.map((t) => t.sum
 
 const DROPDOWN_WIDTH = 180;
 
-export function DataPendapatanScreen({ navigation }: Props) {
+export function DataPendapatanScreen({ navigation, route }: Props) {
+  const goBack = useMenuBack(navigation, route.params?.fromHome);
   const insets = useSafeAreaInsets();
   useHideTabBar();
   const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
@@ -114,7 +115,7 @@ export function DataPendapatanScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top }, scrolled && shadows.header]}>
-        <Pressable onPress={() => goBackToHome(navigation)} style={styles.backButton}>
+        <Pressable onPress={goBack} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
         </Pressable>
         <View style={styles.headerTitleWrap}>

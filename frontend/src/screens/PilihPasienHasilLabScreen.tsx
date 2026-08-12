@@ -12,7 +12,7 @@ import { TextInput } from '../components/TextInput';
 import type { PasienListItem } from '../api/types';
 import { useHeaderScrollShadow } from '../hooks/useHeaderScrollShadow';
 import { useHideTabBar } from '../hooks/useHideTabBar';
-import { goBackToHome } from '../navigation/goBackToHome';
+import { useMenuBack } from '../navigation/useMenuBack';
 import type { PasienStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<PasienStackParamList, 'PilihPasienHasilLab'>;
@@ -25,7 +25,8 @@ function initials(nama: string) {
     .join('');
 }
 
-export function PilihPasienHasilLabScreen({ navigation }: Props) {
+export function PilihPasienHasilLabScreen({ navigation, route }: Props) {
+  const goBack = useMenuBack(navigation, route.params?.fromHome);
   const insets = useSafeAreaInsets();
   useHideTabBar();
   const { onScroll, scrollEventThrottle, scrolled } = useHeaderScrollShadow();
@@ -62,7 +63,7 @@ export function PilihPasienHasilLabScreen({ navigation }: Props) {
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top }, scrolled && shadows.header]}>
-        <Pressable onPress={() => goBackToHome(navigation)} style={styles.backButton}>
+        <Pressable onPress={goBack} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>

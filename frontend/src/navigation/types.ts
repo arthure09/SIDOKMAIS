@@ -14,10 +14,17 @@ export type MainTabParamList = {
   ProfilTab: NavigatorScreenParams<ProfilStackParamList> | undefined;
 };
 
+/**
+ * Dikirim tile Menu di Home ke screen yang juga punya pintu masuk lain di dalam
+ * tab-nya sendiri, supaya tombol "kembali" tahu harus balik ke Home atau `goBack()`
+ * normal. Lihat `useMenuBack`.
+ */
+export type MenuEntryParams = { fromHome?: boolean };
+
 export type PasienStackParamList = {
   PasienList: undefined;
   PasienDetail: { pasienId: string; nama: string };
-  PilihPasienHasilLab: undefined;
+  PilihPasienHasilLab: MenuEntryParams | undefined;
   HasilLabList: { pasienId: string; nama: string };
   HasilLabDetail: { pemeriksaanLabId: string };
   LihatPdfLab: { namaLaporan: string; tanggal: string };
@@ -46,6 +53,6 @@ export type NotifikasiStackParamList = {
 
 export type ProfilStackParamList = {
   ProfilDokter: undefined;
-  DataPendapatan: undefined;
-  CatatanKalender: undefined;
+  DataPendapatan: MenuEntryParams | undefined;
+  CatatanKalender: MenuEntryParams | undefined;
 };
