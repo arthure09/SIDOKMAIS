@@ -1,17 +1,13 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
+const { parsePagination, parseDokterIdFilter } = require("../utils/queryParams");
 
 const router = express.Router();
 
 const ASSIGNMENT_STATUSES = ["ACTIVE", "COMPLETED"];
-const DEFAULT_LIMIT = 10;
-const MAX_LIMIT = 100;
 
 // Parsing & validasi query params list pasien. Return { errors, values } —
 // errors non-kosong berarti request tidak valid (caller balikin 400).
-// `dokterId` cuma diterima kalau role ADMIN (dipakai buat filter lintas
-// dokter) — DOKTER tidak pernah boleh nge-override filter kepemilikannya
-// sendiri lewat query, sama seperti operasi.routes.js.
 function parseListQuery(query, role) {
   const errors = [];
 
@@ -26,28 +22,12 @@ function parseListQuery(query, role) {
     }
   }
 
-  let page = 1;
-  if (query.page !== undefined) {
-    page = Number(query.page);
-    if (!Number.isInteger(page) || page < 1) {
-      errors.push("page harus bilangan bulat >= 1");
-    }
-  }
+  const pagination = parsePagination(query);
+  errors.push(...pagination.errors);
 
-  let limit = DEFAULT_LIMIT;
-  if (query.limit !== undefined) {
-    limit = Number(query.limit);
-    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
-      errors.push(`limit harus bilangan bulat antara 1 dan ${MAX_LIMIT}`);
-    }
-  }
+  const dokterId = parseDokterIdFilter(query, role);
 
-  let dokterId;
-  if (role === "ADMIN" && typeof query.dokterId === "string" && query.dokterId.trim() !== "") {
-    dokterId = query.dokterId.trim();
-  }
-
-  return { errors, values: { search, status, page, limit, dokterId } };
+  return { errors, values: { search, status, page: pagination.page, limit: pagination.limit, dokterId } };
 }
 
 // Untuk daftar pasienId, ambil kunjungan terakhir (tanggalMasuk <= now, paling

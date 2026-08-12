@@ -1,39 +1,28 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
 const { logAudit } = require("../utils/auditLog");
+const { parseTanggalAwalWIB, parseTanggalAkhirWIB, rentangHariWIB } = require("../utils/wib");
 
 const router = express.Router();
 
 const TIPE_CATATAN = ["REMINDER", "BLOCKING", "PRIBADI"];
 const WAKTU_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-// Sama seperti lab.routes.js/dashboard.routes.js — aplikasi ini diasumsikan
-// satu zona waktu (WIB, UTC+7), belum ada per-user timezone. `dari`/`sampai`
-// dikirim frontend sebagai "YYYY-MM-DD" (tanggal kalender lokal device),
-// digeser ke rentang instant UTC yang mencakup satu hari kalender WIB penuh.
-const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
-
+// `dari`/`sampai` dikirim frontend sebagai "YYYY-MM-DD" (tanggal kalender
+// lokal device, WIB) — lihat utils/wib.js.
 function parseListQuery(query) {
   const errors = [];
 
   let dari;
   if (query.dari !== undefined && query.dari !== "") {
-    const parsed = typeof query.dari === "string" ? Date.parse(query.dari) : NaN;
-    if (Number.isNaN(parsed)) {
-      errors.push("dari harus tanggal yang valid (format YYYY-MM-DD)");
-    } else {
-      dari = new Date(parsed - WIB_OFFSET_MS);
-    }
+    dari = parseTanggalAwalWIB(query.dari);
+    if (!dari) errors.push("dari harus tanggal yang valid (format YYYY-MM-DD)");
   }
 
   let sampai;
   if (query.sampai !== undefined && query.sampai !== "") {
-    const parsed = typeof query.sampai === "string" ? Date.parse(query.sampai) : NaN;
-    if (Number.isNaN(parsed)) {
-      errors.push("sampai harus tanggal yang valid (format YYYY-MM-DD)");
-    } else {
-      sampai = new Date(parsed - WIB_OFFSET_MS + 24 * 60 * 60 * 1000 - 1);
-    }
+    sampai = parseTanggalAkhirWIB(query.sampai);
+    if (!sampai) errors.push("sampai harus tanggal yang valid (format YYYY-MM-DD)");
   }
 
   if (dari && sampai && dari > sampai) {
@@ -53,12 +42,8 @@ function validateBody(body, { partial }) {
       errors.push("tanggal wajib berupa tanggal ISO yang valid");
     } else {
       // Dinormalisasi ke tengah malam WIB (bukan instant apa adanya) supaya
-      // konsisten dibandingkan dengan rentang dari/sampai di parseListQuery,
-      // sama seperti pola tanggalPermintaan di lab.routes.js.
-      const wib = new Date(parsed + WIB_OFFSET_MS);
-      data.tanggal = new Date(
-        Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), wib.getUTCDate()) - WIB_OFFSET_MS
-      );
+      // konsisten dibandingkan dengan rentang dari/sampai di parseListQuery.
+      data.tanggal = rentangHariWIB(new Date(parsed)).mulai;
     }
   }
 

@@ -1,35 +1,14 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
+const { WIB_OFFSET_MS, rentangDariTengahMalamWIB, rentangHariWIB } = require("../utils/wib");
 
 const router = express.Router();
 
-// Aplikasi ini diasumsikan satu zona waktu (WIB, UTC+7) — belum ada per-user
-// timezone, pola sama seperti WIB_OFFSET_MS di lab.routes.js.
-const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
-
 const HARI_LABEL = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
 
-// Tengah malam WIB (instant UTC absolut, lihat `tengahMalamWIB` di bawah)
-// dikonversi jadi rentang [mulai, akhir] satu hari kalender WIB penuh, supaya
-// bisa dibandingkan langsung ke kolom DateTime di Postgres (yang disimpan
-// sebagai instant UTC). Pola konversi ini sama persis dengan
-// dariTanggal/sampaiTanggal di lab.routes.js.
-function rentangDariTengahMalamWIB(tengahMalamWIB) {
-  return {
-    mulai: new Date(tengahMalamWIB - WIB_OFFSET_MS),
-    akhir: new Date(tengahMalamWIB - WIB_OFFSET_MS + 24 * 60 * 60 * 1000 - 1),
-  };
-}
-
-// Rentang "hari ini" menurut kalender WIB. `now` (waktu server, UTC) digeser
-// maju 7 jam dulu supaya getUTCFullYear/Month/Date yang dibaca adalah
-// tanggal kalender WIB, baru tengah malam WIB itu dikonversi balik lewat
-// rentangDariTengahMalamWIB.
+// Rentang "hari ini" menurut kalender WIB.
 function getRentangHariIniWIB() {
-  const now = new Date();
-  const wib = new Date(now.getTime() + WIB_OFFSET_MS);
-  const tengahMalamWIB = Date.UTC(wib.getUTCFullYear(), wib.getUTCMonth(), wib.getUTCDate());
-  return rentangDariTengahMalamWIB(tengahMalamWIB);
+  return rentangHariWIB(new Date());
 }
 
 // 7 rentang harian (Senin..Minggu) untuk minggu kalender WIB berjalan —

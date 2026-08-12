@@ -1,11 +1,10 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
 const { dokterPunyaAksesPasien } = require("../utils/aksesPasien");
+const { parsePagination } = require("../utils/queryParams");
+const { parseTanggalAwalWIB, parseTanggalAkhirWIB } = require("../utils/wib");
 
 const router = express.Router();
-
-const DEFAULT_LIMIT = 10;
-const MAX_LIMIT = 100;
 
 function parseListQuery(query) {
   const errors = [];
@@ -15,21 +14,9 @@ function parseListQuery(query) {
     errors.push("pasienId wajib diisi");
   }
 
-  let page = 1;
-  if (query.page !== undefined) {
-    page = Number(query.page);
-    if (!Number.isInteger(page) || page < 1) {
-      errors.push("page harus bilangan bulat >= 1");
-    }
-  }
-
-  let limit = DEFAULT_LIMIT;
-  if (query.limit !== undefined) {
-    limit = Number(query.limit);
-    if (!Number.isInteger(limit) || limit < 1 || limit > MAX_LIMIT) {
-      errors.push(`limit harus bilangan bulat antara 1 dan ${MAX_LIMIT}`);
-    }
-  }
+  const pagination = parsePagination(query);
+  errors.push(...pagination.errors);
+  const { page, limit } = pagination;
 
   // dariTanggal/sampaiTanggal dikirim frontend sebagai "YYYY-MM-DD" — tanggal
   // kalender LOKAL device (lewat getFullYear/getMonth/getDate di toDateParam),
@@ -37,31 +24,17 @@ function parseListQuery(query) {
   // dipakai apa adanya batasnya meleset sebesar offset timezone pengguna (mis.
   // +7 jam buat WIB) — bukan cuma kosmetik, karena tanggalPermintaan punya jam
   // sungguhan (seed pakai randomDateBetween), jadi baris di tepi jendela bisa
-  // salah ikut tersaring atau salah terbuang.
-  //
-  // Aplikasi ini diasumsikan satu zona waktu (WIB, UTC+7) — belum ada
-  // per-user timezone. Kalau nanti perlu lebih benar, frontend harus kirim
-  // offset device eksplisit, bukan asumsi WIB di sini.
-  const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
-
+  // salah ikut tersaring atau salah terbuang. Lihat utils/wib.js.
   let dariTanggal;
   if (query.dariTanggal !== undefined && query.dariTanggal !== "") {
-    const parsed = typeof query.dariTanggal === "string" ? Date.parse(query.dariTanggal) : NaN;
-    if (Number.isNaN(parsed)) {
-      errors.push("dariTanggal harus tanggal yang valid (format YYYY-MM-DD)");
-    } else {
-      dariTanggal = new Date(parsed - WIB_OFFSET_MS);
-    }
+    dariTanggal = parseTanggalAwalWIB(query.dariTanggal);
+    if (!dariTanggal) errors.push("dariTanggal harus tanggal yang valid (format YYYY-MM-DD)");
   }
 
   let sampaiTanggal;
   if (query.sampaiTanggal !== undefined && query.sampaiTanggal !== "") {
-    const parsed = typeof query.sampaiTanggal === "string" ? Date.parse(query.sampaiTanggal) : NaN;
-    if (Number.isNaN(parsed)) {
-      errors.push("sampaiTanggal harus tanggal yang valid (format YYYY-MM-DD)");
-    } else {
-      sampaiTanggal = new Date(parsed - WIB_OFFSET_MS + 24 * 60 * 60 * 1000 - 1);
-    }
+    sampaiTanggal = parseTanggalAkhirWIB(query.sampaiTanggal);
+    if (!sampaiTanggal) errors.push("sampaiTanggal harus tanggal yang valid (format YYYY-MM-DD)");
   }
 
   if (dariTanggal && sampaiTanggal && dariTanggal > sampaiTanggal) {
