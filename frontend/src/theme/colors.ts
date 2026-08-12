@@ -31,6 +31,28 @@ export const colors = {
   tertiary: '#5f6200',
 };
 
+/**
+ * Aksen ikon tile Menu di HomeScreen, dipakai di atas tray `primary` (#006a65).
+ *
+ * Keempatnya sengaja disusun sebagai ramp ANALOG 160°-209° — masih tetangga hue
+ * `primary` (177°), jadi berwarna tanpa menabrak palet. Ini pelajaran dari
+ * percobaan sebelumnya yang memakai lime #c8ce22: hue-nya 62°, meleset 115° dari
+ * tray, dan langsung terasa tabrakan.
+ *
+ * Kontras terhadap tray: mint 4.10:1, teal 3.64:1, cyan 3.58:1, sky 3.63:1 —
+ * semuanya lewat ambang 3:1 WCAG untuk komponen non-teks, dan rentangnya rapat
+ * supaya tidak ada satu tile yang bobot visualnya lebih berat dari yang lain.
+ *
+ * Urutan ramp mengikuti urutan baca grid 2x2, jadi warnanya menyapu hijau→biru
+ * melintasi grid, bukan acak.
+ */
+export const menuAccent = {
+  mint: '#7fe0c0',
+  teal: '#4fd6cc',
+  cyan: '#62cfea',
+  sky: '#9ac7f0',
+};
+
 export const spacing = {
   base: 8,
   marginMobile: 20,
