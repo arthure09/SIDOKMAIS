@@ -6,7 +6,26 @@
 const { PrismaClient } = require("@prisma/client");
 const { fakerID_ID: faker } = require("@faker-js/faker");
 
+const { setJamWIB, keHariKerjaWIB } = require("../src/utils/wib");
+
 const prisma = new PrismaClient();
+
+// Poliklinik 08:00-15:30, operasi elektif mulai 08:00-13:00 (WIB).
+// faker.date.* menghasilkan instant acak sepanjang 24 jam — tanpa dinormalisasi
+// muncul konsultasi jam 01.31 dini hari dan jadwal di akhir pekan.
+const SLOT_POLI = [8, 9, 10, 11, 13, 14, 15];
+const SLOT_OPERASI = [8, 9, 10, 11, 13];
+
+// Ganti jam `date` ke salah satu slot, menit kelipatan 15 supaya terlihat
+// seperti jadwal betulan. Tanggalnya TIDAK digeser.
+function keSlotJam(date, slots) {
+  return setJamWIB(date, pickOne(slots), pickOne([0, 15, 30, 45]));
+}
+
+// keSlotJam + geser ke hari kerja terdekat kalau jatuh di akhir pekan.
+function keSlotJadwal(date, slots) {
+  return keSlotJam(keHariKerjaWIB(date), slots);
+}
 
 const KUNJUNGAN_TARGET = 50;
 const OPERASI_TARGET = 20;
@@ -116,13 +135,15 @@ async function seedKunjungan(assignments, ruanganList) {
     let tanggalKeluar;
 
     if (isFuture) {
-      tanggalMasuk = faker.date.soon({ days: 14, refDate: today });
+      tanggalMasuk = keSlotJadwal(faker.date.soon({ days: 14, refDate: today }), SLOT_POLI);
       status = "SCHEDULED";
       tanggalKeluar = null;
     } else {
-      tanggalMasuk = faker.date.recent({ days: 60, refDate: today });
+      tanggalMasuk = keSlotJadwal(faker.date.recent({ days: 60, refDate: today }), SLOT_POLI);
       status = faker.datatype.boolean(0.85) ? "COMPLETED" : "CANCELLED";
-      tanggalKeluar = faker.date.soon({ days: 1, refDate: tanggalMasuk });
+      // Konsultasi poli selesai di hari yang sama, 30-90 menit setelah masuk —
+      // bukan faker.date.soon 1 hari yang bisa mendarat di dini hari besoknya.
+      tanggalKeluar = new Date(tanggalMasuk.getTime() + pickOne([30, 45, 60, 90]) * 60000);
     }
 
     const record = await prisma.kunjungan.create({
@@ -175,9 +196,12 @@ async function seedOperasi(kunjunganMeta, ruanganList) {
     const kunjungan = chosenFuture[i].record;
     // 2 record pertama sengaja dipaksa H-1 / H-2 dari hari ini, buat testing reminder.
     let tanggalOperasi;
-    if (i === 0) tanggalOperasi = addDays(today, 1);
-    else if (i === 1) tanggalOperasi = addDays(today, 2);
-    else tanggalOperasi = faker.date.soon({ days: 14, refDate: kunjungan.tanggalMasuk });
+    // 2 record pertama jaraknya dari hari ini harus tetap persis H-1/H-2, jadi
+    // cuma jamnya yang dirapikan — tanpa geser hari kerja yang bisa menghapus
+    // jarak itu (mis. besok Sabtu akan ditarik mundur ke hari ini).
+    if (i === 0) tanggalOperasi = keSlotJam(addDays(today, 1), SLOT_OPERASI);
+    else if (i === 1) tanggalOperasi = keSlotJam(addDays(today, 2), SLOT_OPERASI);
+    else tanggalOperasi = keSlotJadwal(faker.date.soon({ days: 14, refDate: kunjungan.tanggalMasuk }), SLOT_OPERASI);
 
     operasi.push(
       await prisma.operasi.create({
@@ -210,7 +234,7 @@ async function seedOperasi(kunjunganMeta, ruanganList) {
         data: {
           kunjunganId: kunjungan.id,
           ruanganId: pickOne(okRuangan).id,
-          tanggalOperasi: kunjungan.tanggalMasuk,
+          tanggalOperasi: keSlotJadwal(kunjungan.tanggalMasuk, SLOT_OPERASI),
           jenisTindakan: pickOne(JENIS_TINDAKAN_LIST),
           tim: [faker.person.fullName(), faker.person.fullName()],
           status,

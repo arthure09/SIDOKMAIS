@@ -43,10 +43,37 @@ function rentangHariWIB(instant) {
   return rentangDariTengahMalamWIB(tengahMalamWIB);
 }
 
+// Hari dalam seminggu menurut kalender WIB (0=Minggu ... 6=Sabtu). Pakai
+// getUTCDay setelah digeser +7 jam, bukan getDay, supaya tidak ikut timezone
+// mesin yang menjalankan (server/container biasanya UTC).
+function hariWIB(instant) {
+  return new Date(instant.getTime() + WIB_OFFSET_MS).getUTCDay();
+}
+
+// Instant baru pada tanggal kalender WIB yang sama dengan `instant`, tapi
+// jam:menit WIB diganti. Dipakai untuk menaruh jadwal dummy di jam yang masuk
+// akal — faker.date.* menghasilkan waktu acak sepanjang 24 jam, termasuk dini
+// hari, yang untuk poliklinik/operasi jelas keliru.
+function setJamWIB(instant, jam, menit = 0) {
+  return new Date(rentangHariWIB(instant).mulai.getTime() + jam * 3600000 + menit * 60000);
+}
+
+// Geser mundur ke Jumat kalau `instant` jatuh di Sabtu/Minggu WIB. Poliklinik
+// dan jadwal operasi elektif tidak berjalan di akhir pekan.
+function keHariKerjaWIB(instant) {
+  const hari = hariWIB(instant);
+  if (hari === 6) return new Date(instant.getTime() - 24 * 3600000); // Sabtu -> Jumat
+  if (hari === 0) return new Date(instant.getTime() - 2 * 24 * 3600000); // Minggu -> Jumat
+  return instant;
+}
+
 module.exports = {
   WIB_OFFSET_MS,
   parseTanggalAwalWIB,
   parseTanggalAkhirWIB,
   rentangDariTengahMalamWIB,
   rentangHariWIB,
+  hariWIB,
+  setJamWIB,
+  keHariKerjaWIB,
 };
