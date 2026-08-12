@@ -14,12 +14,7 @@ import { fetchPasienList } from '../api/pasien';
 
 type Props = NativeStackScreenProps<ProfilStackParamList, 'ProfilDokter'>;
 
-// Cuma 'pendapatan' yang punya tujuan navigasi nyata (lihat handleMenuPress).
-// Item lain ditampilkan non-tappable + "Segera hadir" daripada kelihatan
-// kayak bisa ditap (chevron) tapi diem aja pas ditekan.
-const AVAILABLE_MENU_IDS = new Set(['pendapatan']);
-
-export function ProfilDokterScreen({ navigation }: Props) {
+export function ProfilDokterScreen({}: Props) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
   const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
@@ -57,14 +52,6 @@ export function ProfilDokterScreen({ navigation }: Props) {
       { text: 'Batal', style: 'cancel' },
       { text: 'Keluar', style: 'destructive', onPress: logout },
     ]);
-  }
-
-  function handleMenuPress(id: string) {
-    if (id === 'pendapatan') {
-      navigation.navigate('DataPendapatan');
-    }
-    // Item lain (Pengaturan Notifikasi, Tentang Aplikasi, Keamanan Akun) belum
-    // ada tujuan navigasinya di batch ini — statis dulu.
   }
 
   return (
@@ -109,36 +96,25 @@ export function ProfilDokterScreen({ navigation }: Props) {
           </View>
         </View>
 
+        {/* Setelah "Data Pendapatan" pindah sepenuhnya ke kartu menu di Home,
+            tidak ada satu pun item di sini yang punya tujuan navigasi. Jadi
+            barisnya View biasa + "Segera hadir", bukan Pressable yang disabled —
+            tidak ada yang bisa ditekan untuk sekarang. */}
         <View style={styles.settingsCard}>
-          {settingsMenu.map((item, index) => {
-            const isAvailable = AVAILABLE_MENU_IDS.has(item.id);
-            return (
-              <View key={item.id}>
-                <Pressable
-                  disabled={!isAvailable}
-                  onPress={() => handleMenuPress(item.id)}
-                  style={({ pressed }) => [
-                    styles.settingsRow,
-                    !isAvailable && styles.settingsRowDisabled,
-                    pressed && styles.settingsRowPressed,
-                  ]}
-                >
-                  <View style={styles.settingsRowLeft}>
-                    <View style={styles.settingsIconCircle}>
-                      <MaterialIcons name={item.icon as never} size={20} color={colors.primary} />
-                    </View>
-                    <Text style={styles.settingsLabel}>{item.label}</Text>
+          {settingsMenu.map((item, index) => (
+            <View key={item.id}>
+              <View style={[styles.settingsRow, styles.settingsRowDisabled]}>
+                <View style={styles.settingsRowLeft}>
+                  <View style={styles.settingsIconCircle}>
+                    <MaterialIcons name={item.icon as never} size={20} color={colors.primary} />
                   </View>
-                  {isAvailable ? (
-                    <MaterialIcons name="chevron-right" size={22} color={colors.outline} />
-                  ) : (
-                    <Text style={styles.settingsSoonText}>Segera hadir</Text>
-                  )}
-                </Pressable>
-                {index < settingsMenu.length - 1 && <View style={styles.settingsDivider} />}
+                  <Text style={styles.settingsLabel}>{item.label}</Text>
+                </View>
+                <Text style={styles.settingsSoonText}>Segera hadir</Text>
               </View>
-            );
-          })}
+              {index < settingsMenu.length - 1 && <View style={styles.settingsDivider} />}
+            </View>
+          ))}
         </View>
 
         <Pressable
@@ -227,7 +203,6 @@ const styles = StyleSheet.create({
   },
   settingsDivider: { height: 1, backgroundColor: colors.surfaceVariant, marginHorizontal: 20 },
   settingsRowDisabled: { opacity: 0.5 },
-  settingsRowPressed: { backgroundColor: colors.surfaceSoft },
   settingsSoonText: { fontSize: 11, fontWeight: '600', fontStyle: 'italic', color: colors.outline },
   settingsRowLeft: { flexDirection: 'row', alignItems: 'center', gap: 16 },
   settingsIconCircle: {

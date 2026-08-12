@@ -12,12 +12,10 @@ export type SettingsMenuItem = {
   icon: string;
 };
 
-// "Data Pendapatan" gak ada di antara 3 item Settings List versi Figma yang dikirim
-// (isinya Pengaturan Notifikasi / Tentang Aplikasi / Keamanan Akun) — tapi Screen 3
-// (Data Pendapatan) cuma bisa diakses lewat menu di sini per docs/prompts batch ini,
-// jadi ditambahkan sebagai item pertama.
+// Balik ke 3 item Settings List versi Figma. "Data Pendapatan" sempat ditaruh di
+// sini waktu Home belum punya kartu menunya; sekarang sudah ada (navigasiCards di
+// homeMock.ts), jadi entri di sini cuma jalan kedua ke screen yang sama.
 export const settingsMenu: SettingsMenuItem[] = [
-  { id: 'pendapatan', label: 'Data Pendapatan', icon: 'payments' },
   { id: 'notifikasi', label: 'Pengaturan Notifikasi', icon: 'notifications-active' },
   { id: 'tentang', label: 'Tentang Aplikasi', icon: 'info' },
   { id: 'keamanan', label: 'Keamanan Akun', icon: 'security' },
