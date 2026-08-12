@@ -5,6 +5,7 @@ const authorize = require("../middleware/rbac.middleware");
 const { logAudit } = require("../utils/auditLog");
 const { dokterPunyaAksesPasien } = require("../utils/aksesPasien");
 const { parsePagination, parseDokterIdFilter } = require("../utils/queryParams");
+const { OPERASI, KUNJUNGAN, terapkanStatusEfektif, whereStatusEfektif } = require("../utils/statusJadwal");
 
 const router = express.Router();
 
@@ -44,8 +45,11 @@ router.get("/", async (req, res) => {
 
   const { status, page, limit, dokterId } = values;
 
+  // Filter status menyeleksi berdasar status EFEKTIF (lihat utils/statusJadwal.js),
+  // bukan status tersimpan — kalau tidak, record yang tampil "Selesai" karena
+  // harinya sudah lewat malah tidak ikut waktu difilter "Selesai".
   const where = {
-    ...(status && { status }),
+    ...(status ? whereStatusEfektif(status, OPERASI) : {}),
   };
 
   if (role === "DOKTER") {
@@ -87,7 +91,7 @@ router.get("/", async (req, res) => {
   ]);
 
   res.json({
-    data: operasi,
+    data: operasi.map((o) => terapkanStatusEfektif(o, OPERASI)),
     pagination: {
       page,
       limit,
@@ -392,7 +396,13 @@ router.get("/:id", async (req, res) => {
     }
   }
 
-  res.json(operasi);
+  // Kunjungan yang ter-embed ikut diturunkan statusnya — kalau tidak, layar
+  // detail operasi bisa menampilkan konsultasi induknya "Terjadwal" padahal di
+  // daftar Konsultasi record yang sama sudah tampil "Selesai".
+  res.json({
+    ...terapkanStatusEfektif(operasi, OPERASI),
+    kunjungan: terapkanStatusEfektif(operasi.kunjungan, KUNJUNGAN),
+  });
 });
 
 module.exports = router;

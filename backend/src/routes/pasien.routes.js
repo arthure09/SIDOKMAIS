@@ -1,6 +1,7 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
 const { parsePagination, parseDokterIdFilter } = require("../utils/queryParams");
+const { KUNJUNGAN, statusEfektif } = require("../utils/statusJadwal");
 
 const router = express.Router();
 
@@ -185,7 +186,10 @@ router.get("/:id", async (req, res) => {
       tanggalMasuk: k.tanggalMasuk,
       tanggalKeluar: k.tanggalKeluar,
       diagnosa: k.diagnosa,
-      statusKunjungan: k.statusKunjungan,
+      // Diturunkan dari tanggal, sama seperti daftar Konsultasi — supaya
+      // riwayat di detail pasien tidak menampilkan status yang bertentangan
+      // dengan record yang sama di layar Jadwal.
+      statusKunjungan: statusEfektif(k.tanggalMasuk, k.statusKunjungan, KUNJUNGAN),
       isPasienBaru: k.isPasienBaru,
       ruangan: k.ruangan,
       dokter: k.dokter,

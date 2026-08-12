@@ -2,6 +2,7 @@ const express = require("express");
 const prisma = require("../lib/prisma");
 const { dokterPunyaAksesPasien } = require("../utils/aksesPasien");
 const { parsePagination, parseDokterIdFilter } = require("../utils/queryParams");
+const { KUNJUNGAN, terapkanStatusEfektif, whereStatusEfektif } = require("../utils/statusJadwal");
 
 const router = express.Router();
 
@@ -45,8 +46,10 @@ router.get("/", async (req, res) => {
 
   const { status, page, limit, dokterId } = values;
 
+  // Filter menyeleksi berdasar status EFEKTIF, bukan status tersimpan —
+  // lihat utils/statusJadwal.js.
   const where = {
-    ...(status && { statusKunjungan: status }),
+    ...(status ? whereStatusEfektif(status, KUNJUNGAN) : {}),
   };
 
   if (role === "DOKTER") {
@@ -83,7 +86,7 @@ router.get("/", async (req, res) => {
   ]);
 
   res.json({
-    data: kunjungan,
+    data: kunjungan.map((k) => terapkanStatusEfektif(k, KUNJUNGAN)),
     pagination: {
       page,
       limit,
@@ -124,7 +127,7 @@ router.get("/:id", async (req, res) => {
     }
   }
 
-  res.json(kunjungan);
+  res.json(terapkanStatusEfektif(kunjungan, KUNJUNGAN));
 });
 
 module.exports = router;
