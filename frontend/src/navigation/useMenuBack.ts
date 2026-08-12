@@ -3,7 +3,31 @@ import { BackHandler } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NavigationProp, ParamListBase } from '@react-navigation/native';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import type { MainTabParamList } from './types';
+import type { MainTabParamList, MenuEntryParams } from './types';
+
+/**
+ * `options` untuk screen yang dibuka dari tile Menu di Home dan memakai
+ * `useMenuBack`.
+ *
+ * `useMenuBack` cuma bisa mengarahkan dua dari tiga cara "kembali" di screen ini
+ * (tombol back di header + tombol back Android). Cara ketiga — gestur swipe dari
+ * tepi kiri di iOS — dijalankan native oleh react-native-screens tanpa lewat JS,
+ * jadi dia selalu pop ke root stack tab tujuan (ProfilDokter/PasienList), bukan
+ * ke Home. Itu yang bikin swipe mendarat di layar yang tidak pernah sengaja
+ * dibuka user.
+ *
+ * ponytail: gesturnya dimatikan, bukan dibelokkan. Membelokkannya butuh
+ * `usePreventRemove`, dan hook itu memblokir SEMUA penghapusan screen — termasuk
+ * `popToTopOnBlur` di MainTabNavigator yang membersihkan stack tab tujuan waktu
+ * user balik ke Home (apalagi dengan `freezeOnBlur` yang bikin screen blur tidak
+ * dijamin re-render buat melepas blokirnya). Upgrade path kalau swipe-back benar
+ * benar dibutuhkan: daftarkan screen-screen ini di stack milik HomeTab sendiri
+ * supaya pop native-nya memang mendarat di Home, tanpa perlu dibelokkan.
+ */
+export const menuEntryScreenOptions = ({ route }: { route: { params?: MenuEntryParams } }) => ({
+  headerShown: false,
+  gestureEnabled: !route.params?.fromHome,
+});
 
 /**
  * Aksi "kembali" untuk screen yang bisa dibuka dari tile Menu di Home
@@ -24,6 +48,9 @@ import type { MainTabParamList } from './types';
  * tujuan. Saat <Modal> RN lagi kebuka (mis. form di CatatanKalenderScreen),
  * Modal-nya sendiri yang nangkap hardware back lewat `onRequestClose`, jadi
  * listener ini tidak ikut kepanggil.
+ *
+ * Cara "kembali" ketiga — gestur swipe iOS — tidak bisa dibelokkan dari sini
+ * karena jalannya di native; itu ditangani `menuEntryScreenOptions` di atas.
  */
 export function useMenuBack(navigation: NavigationProp<ParamListBase>, fromHome?: boolean) {
   const goBack = useCallback(() => {

@@ -2,6 +2,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ProfilDokterScreen } from '../screens/ProfilDokterScreen';
 import { DataPendapatanScreen } from '../screens/DataPendapatanScreen';
 import { CatatanKalenderScreen } from '../screens/CatatanKalenderScreen';
+import { menuEntryScreenOptions } from './useMenuBack';
 import type { ProfilStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<ProfilStackParamList>();
@@ -17,12 +18,12 @@ export function ProfilStackNavigator() {
       <Stack.Screen
         name="DataPendapatan"
         component={DataPendapatanScreen}
-        options={{ headerShown: false }}
+        options={menuEntryScreenOptions}
       />
       <Stack.Screen
         name="CatatanKalender"
         component={CatatanKalenderScreen}
-        options={{ headerShown: false }}
+        options={menuEntryScreenOptions}
       />
     </Stack.Navigator>
   );

@@ -5,6 +5,7 @@ import { PilihPasienHasilLabScreen } from '../screens/PilihPasienHasilLabScreen'
 import { HasilLabListScreen } from '../screens/HasilLabListScreen';
 import { HasilLabDetailScreen } from '../screens/HasilLabDetailScreen';
 import { LihatPdfLabScreen } from '../screens/LihatPdfLabScreen';
+import { menuEntryScreenOptions } from './useMenuBack';
 import type { PasienStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<PasienStackParamList>();
@@ -21,7 +22,7 @@ export function PasienStackNavigator() {
       <Stack.Screen
         name="PilihPasienHasilLab"
         component={PilihPasienHasilLabScreen}
-        options={{ headerShown: false }}
+        options={menuEntryScreenOptions}
       />
       <Stack.Screen name="HasilLabList" component={HasilLabListScreen} options={{ headerShown: false }} />
       <Stack.Screen
