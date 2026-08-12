@@ -19,6 +19,7 @@ import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
 import { TextInput } from '../components/TextInput';
 import { ScrollToTopButton } from '../components/ScrollToTopButton';
+import { ContentSheet, SHEET_OVERLAP } from '../components/ContentSheet';
 import { ApiError } from '../api/client';
 import { fetchOperasiList } from '../api/operasi';
 import { fetchKunjunganList } from '../api/kunjungan';
@@ -28,6 +29,7 @@ import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useScrollToTopButton } from '../hooks/useScrollToTopButton';
 import { useAnimatedHeaderFade } from '../hooks/useAnimatedHeaderFade';
+import { useCollapseOnScroll } from '../hooks/useCollapseOnScroll';
 import type { OperasiStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<OperasiStackParamList, 'JadwalOperasiKonsul'>;
@@ -110,6 +112,12 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   const { onScroll: onDockScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
   const { onScroll: onTopButtonScroll, visible: showScrollTop, reset: resetScrollTop } = useScrollToTopButton();
   const { headerBackgroundColor, headerShadowOpacity, headerElevation } = useAnimatedHeaderFade(scrolled);
+  const {
+    onScroll: onFilterScroll,
+    onLayout: onFilterLayout,
+    style: filterCollapseStyle,
+    innerStyle: filterSlideStyle,
+  } = useCollapseOnScroll();
   const konsulScrollRef = useRef<ScrollView>(null);
   const operasiScrollRef = useRef<ScrollView>(null);
   const token = useAuthStore((s) => s.token);
@@ -125,8 +133,9 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       onDockScroll(e);
       onTopButtonScroll(e);
+      onFilterScroll(e);
     },
-    [onDockScroll, onTopButtonScroll],
+    [onDockScroll, onTopButtonScroll, onFilterScroll],
   );
 
   function scrollToTop() {
@@ -251,15 +260,7 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
       <Animated.View
         style={[
           styles.headerArea,
-          {
-            paddingTop: insets.top + ms(8),
-            backgroundColor: headerBackgroundColor,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowRadius: 8,
-            shadowOpacity: headerShadowOpacity,
-            elevation: headerElevation,
-          },
+          { paddingTop: insets.top + ms(8), backgroundColor: headerBackgroundColor },
         ]}
       >
         <View style={styles.toggleGroup}>
@@ -303,29 +304,41 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
             </Pressable>
           )}
         </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.statusFilterScroll}
-          contentContainerStyle={styles.statusFilterRow}
+        {/* Pembungkus yang menanggung marginHorizontal negatif (bleed chip ke tepi
+            layar), bukan ScrollView di dalamnya: useCollapseOnScroll memasang
+            overflow hidden di sini, jadi kalau margin negatifnya ada di anak,
+            chip paling pinggir malah kepotong. */}
+        <Animated.View
+          style={[styles.statusFilterScroll, filterCollapseStyle]}
+          onLayout={onFilterLayout}
         >
-          {STATUS_FILTERS.map((f) => {
-            const active = statusFilter === f.value;
-            return (
-              <Pressable
-                key={f.value}
-                onPress={() => setStatusFilter(f.value)}
-                style={[styles.statusFilterChip, active && styles.statusFilterChipActive]}
-              >
-                <Text style={[styles.statusFilterText, active && styles.statusFilterTextActive]}>
-                  {f.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
+          <Animated.View style={filterSlideStyle}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.statusFilterRow}
+            >
+              {STATUS_FILTERS.map((f) => {
+                const active = statusFilter === f.value;
+                return (
+                  <Pressable
+                    key={f.value}
+                    onPress={() => setStatusFilter(f.value)}
+                    style={[styles.statusFilterChip, active && styles.statusFilterChipActive]}
+                  >
+                    <Text style={[styles.statusFilterText, active && styles.statusFilterTextActive]}>
+                      {f.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </Animated.View>
+        </Animated.View>
+
       </Animated.View>
 
+      <ContentSheet shadowOpacity={headerShadowOpacity} elevation={headerElevation}>
       {tab === 'KONSUL' ? (
         kunjunganLoading ? (
           <View style={styles.center}>
@@ -466,6 +479,7 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
           })}
         </ScrollView>
       )}
+      </ContentSheet>
 
       <ScrollToTopButton visible={showScrollTop} onPress={scrollToTop} bottom={tabBarClearance} />
     </View>
@@ -474,7 +488,13 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  headerArea: { padding: spacing.marginMobile, paddingBottom: ms(4), gap: ms(8) },
+  headerArea: {
+    padding: spacing.marginMobile,
+    // Sheet di bawah menindih header, jadi padding bawahnya ditambah sebanyak
+    // tindihan itu — kalau tidak, chip filter paling bawah ketutupan.
+    paddingBottom: ms(12) + SHEET_OVERLAP,
+    gap: ms(8),
+  },
   // dateFilter + toggle digabung 1 kelompok (gap rapat) biar headerArea cuma
   // punya 3 "band" (toggleGroup, search, filter chip), bukan 4 baris rata —
   // tanggal jadi caption yang nempel ke toggle, bukan baris independen sendiri.

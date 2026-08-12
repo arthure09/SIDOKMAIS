@@ -16,6 +16,8 @@ import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useScrollToTopButton } from '../hooks/useScrollToTopButton';
 import { useAnimatedHeaderFade } from '../hooks/useAnimatedHeaderFade';
+import { useCollapseOnScroll } from '../hooks/useCollapseOnScroll';
+import { ContentSheet, SHEET_OVERLAP } from '../components/ContentSheet';
 import type { PasienStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<PasienStackParamList, 'PasienList'>;
@@ -54,6 +56,12 @@ export function PasienListScreen({ navigation }: Props) {
   const { onScroll: onDockScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
   const { onScroll: onTopButtonScroll, visible: showScrollTop } = useScrollToTopButton();
   const { headerBackgroundColor, headerShadowOpacity, headerElevation } = useAnimatedHeaderFade(scrolled);
+  const {
+    onScroll: onFilterScroll,
+    onLayout: onFilterLayout,
+    style: filterCollapseStyle,
+    innerStyle: filterSlideStyle,
+  } = useCollapseOnScroll();
   const listRef = useRef<FlatList<PasienListItem>>(null);
   const token = useAuthStore((s) => s.token);
   const [searchInput, setSearchInput] = useState('');
@@ -73,8 +81,9 @@ export function PasienListScreen({ navigation }: Props) {
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       onDockScroll(e);
       onTopButtonScroll(e);
+      onFilterScroll(e);
     },
-    [onDockScroll, onTopButtonScroll],
+    [onDockScroll, onTopButtonScroll, onFilterScroll],
   );
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
@@ -105,14 +114,8 @@ export function PasienListScreen({ navigation }: Props) {
     <View style={styles.container}>
       <Animated.View
         style={[
+          styles.header,
           { paddingTop: insets.top, backgroundColor: headerBackgroundColor },
-          {
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowRadius: 8,
-            shadowOpacity: headerShadowOpacity,
-            elevation: headerElevation,
-          },
         ]}
       >
         <View style={[styles.searchWrapper, { marginTop: spacing.base }]}>
@@ -131,24 +134,27 @@ export function PasienListScreen({ navigation }: Props) {
           )}
         </View>
 
-        <View style={styles.filterRow}>
-          {STATUS_FILTERS.map((f) => {
-            const active = status === f.value;
-            return (
-              <Pressable
-                key={f.label}
-                onPress={() => setStatus(f.value)}
-                style={[styles.filterChip, active && styles.filterChipActive]}
-              >
-                <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                  {f.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        <Animated.View style={filterCollapseStyle} onLayout={onFilterLayout}>
+          <Animated.View style={[styles.filterRow, filterSlideStyle]}>
+            {STATUS_FILTERS.map((f) => {
+              const active = status === f.value;
+              return (
+                <Pressable
+                  key={f.label}
+                  onPress={() => setStatus(f.value)}
+                  style={[styles.filterChip, active && styles.filterChipActive]}
+                >
+                  <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                    {f.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </Animated.View>
+        </Animated.View>
       </Animated.View>
 
+      <ContentSheet shadowOpacity={headerShadowOpacity} elevation={headerElevation}>
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />
@@ -227,6 +233,7 @@ export function PasienListScreen({ navigation }: Props) {
           }}
         />
       )}
+      </ContentSheet>
 
       <ScrollToTopButton
         visible={showScrollTop}
@@ -239,6 +246,9 @@ export function PasienListScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  // Sheet di bawah menindih header, jadi header perlu padding bawah sebanyak
+  // tindihan itu — kalau tidak, baris chip filter ketutupan.
+  header: { paddingBottom: SHEET_OVERLAP },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   errorText: { color: colors.error, textAlign: 'center' },
   emptyText: { color: colors.onSurfaceVariant, textAlign: 'center' },
@@ -265,8 +275,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     paddingHorizontal: spacing.marginMobile,
-    marginTop: 12,
-    marginBottom: 4,
+    // Jarak atas/bawah sengaja padding, bukan margin: margin tidak ikut terhitung
+    // di tinggi yang diukur useCollapseOnScroll, jadi kalau pakai margin barisnya
+    // menyisakan celah kosong 16px waktu sudah tersembunyi.
+    paddingTop: 12,
+    paddingBottom: 4,
   },
   filterChip: {
     paddingHorizontal: 16,

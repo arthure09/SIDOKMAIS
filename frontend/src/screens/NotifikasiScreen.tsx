@@ -14,6 +14,7 @@ import { notifikasiList as notifikasiMockList } from '../mocks/notifikasiMock';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useAnimatedHeaderFade } from '../hooks/useAnimatedHeaderFade';
+import { ContentSheet, SHEET_OVERLAP } from '../components/ContentSheet';
 import type { NotifikasiStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<NotifikasiStackParamList, 'NotifikasiList'>;
@@ -184,15 +185,7 @@ export function NotifikasiScreen({ navigation }: Props) {
       <Animated.View
         style={[
           styles.header,
-          {
-            paddingTop: insets.top + ms(6),
-            backgroundColor: headerBackgroundColor,
-            shadowColor: '#000',
-            shadowOffset: { width: 0, height: 2 },
-            shadowRadius: 8,
-            shadowOpacity: headerShadowOpacity,
-            elevation: headerElevation,
-          },
+          { paddingTop: insets.top + ms(6), backgroundColor: headerBackgroundColor },
         ]}
       >
         <View>
@@ -223,6 +216,7 @@ export function NotifikasiScreen({ navigation }: Props) {
         </ScrollView>
       </Animated.View>
 
+      <ContentSheet shadowOpacity={headerShadowOpacity} elevation={headerElevation}>
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />
@@ -304,6 +298,7 @@ export function NotifikasiScreen({ navigation }: Props) {
           </View>
         </ScrollView>
       )}
+      </ContentSheet>
     </View>
   );
 }
@@ -315,10 +310,12 @@ const styles = StyleSheet.create({
   emptyText: { color: colors.onSurfaceVariant, textAlign: 'center' },
   header: {
     paddingHorizontal: spacing.marginMobile,
-    paddingBottom: ms(10),
+    // Sheet di bawah menindih header, jadi padding bawahnya ditambah sebanyak
+    // tindihan itu — kalau tidak, baris chip filter ketutupan.
+    paddingBottom: ms(10) + SHEET_OVERLAP,
     backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: `${colors.outlineVariant}1A`,
+    // Garis bawah dilepas: pemisah header sekarang lengkung sheet + shadow-nya,
+    // dan garis itu bakal terpotong melintang di tengah lengkungan.
   },
   content: { padding: spacing.marginMobile, gap: spacing.gutter, paddingBottom: ms(32) },
   title: { fontSize: ms(20), fontWeight: '800', color: colors.onBackground },
