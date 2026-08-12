@@ -13,5 +13,5 @@ export const navigasiCards: NavigasiCard[] = [
   { id: 'pendapatan', label: 'Data Pendapatan', icon: 'payments' },
   { id: 'hasillab', label: 'Cari Hasil Lab', icon: 'biotech' },
   { id: 'radiologi', label: 'Cek Hasil Radiologi', icon: 'scanner' },
-  { id: 'kalender', label: 'Tambah Pengingat', icon: 'event' },
+  { id: 'kalender', label: 'Kalender Pengingat', icon: 'event' },
 ];

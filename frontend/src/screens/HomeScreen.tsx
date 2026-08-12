@@ -21,6 +21,7 @@ import { navigasiCards } from '../mocks/homeMock';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useAnimatedHeaderFade } from '../hooks/useAnimatedHeaderFade';
+import { ringkasanAktivitas } from '../utils/ringkasanAktivitas';
 import type { MainTabParamList } from '../navigation/types';
 import { fetchStatistikDashboard } from '../api/dashboard';
 import { fetchCatatanKalenderList } from '../api/kalender';
@@ -386,7 +387,7 @@ export function HomeScreen({ navigation }: Props) {
                   "di luar". Yang baru mengorientasikan tanpa merendahkan, dan tanpa
                   mengulang label tile di bawahnya. */}
               <Text style={styles.summaryTitle}>Menu</Text>
-              <Text style={styles.sectionSubtitle}>Pintasan yang tidak ada di bar bawah</Text>
+              <Text style={styles.sectionSubtitle}>Pilihan menu untuk Anda</Text>
             </View>
             {/* Dua tombol terpisah (bukan satu tombol yang nge-toggle): mode yang
                 lagi aktif kelihatan langsung dari warnanya, tanpa user harus nebak
@@ -627,6 +628,7 @@ export function HomeScreen({ navigation }: Props) {
                   );
                 })}
                 </View>
+                <Text style={styles.chartSummary}>{ringkasanAktivitas(aktivitasMingguan)}</Text>
               </View>
             </PagerSlide>
           </Animated.ScrollView>
@@ -710,7 +712,15 @@ const styles = StyleSheet.create({
   },
   menuHeaderRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   menuHeaderText: { flex: 1 },
-  viewToggleRow: { flexDirection: 'row', gap: 4 },
+  // Pill di belakang kedua tombol: bikin keduanya kebaca sebagai satu kontrol
+  // dua-posisi (track + knob), bukan dua ikon lepas yang kebetulan bersebelahan.
+  viewToggleRow: {
+    flexDirection: 'row',
+    gap: 4,
+    backgroundColor: colors.outlineVariant,
+    borderRadius: 20,
+    padding: 3,
+  },
   // Default transparan — cuma ikon abu di atas background seksi, tanpa kotak.
   // Yang aktif dapat lingkaran teal gelap + ikon putih, jadi mode terpilih
   // kebaca dari kontras, bukan cuma dari bentuk ikonnya.
@@ -797,6 +807,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surfaceSoft,
     borderRadius: radius.lg,
     padding: spacing.cardPadding,
+    gap: 12,
   },
   summaryTitle: { fontSize: 20, fontWeight: '700', color: colors.deepTealDark, marginBottom: 4 },
   sectionSubtitle: { fontSize: 12, color: colors.onSurfaceVariant },
@@ -896,6 +907,7 @@ const styles = StyleSheet.create({
   chartBarValueActive: { fontWeight: '800', color: colors.primary },
   chartBarTrack: { flex: 1, width: '100%', justifyContent: 'flex-end' },
   chartBarFill: { width: '100%', borderTopLeftRadius: 4, borderTopRightRadius: 4 },
+  chartSummary: { fontSize: 14, lineHeight: 21, color: colors.onSurfaceVariant },
   chartBarLabel: { fontSize: 10, color: colors.outline },
   chartBarLabelActive: { color: colors.primary, fontWeight: '700' },
 });

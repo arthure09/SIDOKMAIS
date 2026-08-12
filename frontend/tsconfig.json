@@ -1,6 +1,9 @@
 {
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
-    "strict": true
+    "strict": true,
+    // *.check.ts dijalankan langsung oleh Node (bukan Metro/tsc), jadi
+    // import-nya wajib menyebut ekstensi .ts sesuai aturan resolusi ESM.
+    "allowImportingTsExtensions": true
   }
 }
