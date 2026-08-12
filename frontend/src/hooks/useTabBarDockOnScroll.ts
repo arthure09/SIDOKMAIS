@@ -1,7 +1,8 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useRef } from 'react';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTabBarStore } from '../store/tabBarStore';
+import { useScrollPastThreshold } from './useScrollPastThreshold';
 
 const DOCK_THRESHOLD = 24;
 const SHADOW_THRESHOLD = 2;
@@ -14,15 +15,15 @@ const SHADOW_THRESHOLD = 2;
 export function useTabBarDockOnScroll() {
   const setDocked = useTabBarStore((s) => s.setDocked);
   const wasAtBottom = useRef(false);
-  const [scrolled, setScrolled] = useState(false);
+  const { onScroll: onShadowScroll, past: scrolled, reset: resetScrolled } = useScrollPastThreshold(SHADOW_THRESHOLD);
 
   useFocusEffect(
     useCallback(() => {
       wasAtBottom.current = false;
       setDocked(false);
-      setScrolled(false);
+      resetScrolled();
       return () => setDocked(false);
-    }, [setDocked]),
+    }, [setDocked, resetScrolled]),
   );
 
   const onScroll = useCallback(
@@ -37,12 +38,9 @@ export function useTabBarDockOnScroll() {
         setDocked(atBottom);
       }
 
-      setScrolled((prev) => {
-        const next = contentOffset.y > SHADOW_THRESHOLD;
-        return prev === next ? prev : next;
-      });
+      onShadowScroll(e);
     },
-    [setDocked],
+    [setDocked, onShadowScroll],
   );
 
   return { onScroll, scrollEventThrottle: 16, scrolled };

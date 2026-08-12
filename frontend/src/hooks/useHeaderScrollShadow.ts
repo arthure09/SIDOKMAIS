@@ -1,5 +1,4 @@
-import { useCallback, useState } from 'react';
-import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import { useScrollPastThreshold } from './useScrollPastThreshold';
 
 const SHADOW_THRESHOLD = 2;
 
@@ -7,12 +6,6 @@ const SHADOW_THRESHOLD = 2;
 // nge-toggle shadow header di screen yang nggak butuh dock FloatingTabBar
 // (lihat useTabBarDockOnScroll buat screen yang butuh keduanya).
 export function useHeaderScrollShadow() {
-  const [scrolled, setScrolled] = useState(false);
-
-  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const next = e.nativeEvent.contentOffset.y > SHADOW_THRESHOLD;
-    setScrolled((prev) => (prev === next ? prev : next));
-  }, []);
-
-  return { onScroll, scrollEventThrottle: 16, scrolled };
+  const { onScroll, past } = useScrollPastThreshold(SHADOW_THRESHOLD);
+  return { onScroll, scrollEventThrottle: 16, scrolled: past };
 }
