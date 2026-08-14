@@ -8,8 +8,10 @@ const router = express.Router();
 
 // Satu bentuk untuk /login dan /me — dua literal terpisah sebelumnya, dan itu
 // resep dua response yang diam-diam beda isinya.
-// nip & sip dipakai kartu identitas di ProfilDokterScreen. Aman: yang dikirim
-// selalu identitas akun yang sedang login sendiri, bukan dokter lain.
+// nip dipakai kartu identitas di ProfilDokterScreen. Aman: yang dikirim selalu
+// identitas akun yang sedang login sendiri, bukan dokter lain. Nomor SIP tidak
+// ikut dikirim — tidak ditampilkan di app (keputusan Arthuro, 2026-08-14), jadi
+// tidak perlu keluar dari server sama sekali. Kolomnya tetap ada di DB.
 function bentukPengguna(pengguna) {
   return {
     id: pengguna.id,
@@ -21,7 +23,6 @@ function bentukPengguna(pengguna) {
           nama: pengguna.dokter.nama,
           spesialisasi: pengguna.dokter.spesialisasi,
           nip: pengguna.dokter.nip,
-          sip: pengguna.dokter.sip,
         }
       : null,
   };

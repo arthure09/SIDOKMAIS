@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
-import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useFocusEffect } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -22,7 +22,7 @@ import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useAnimatedHeaderFade } from '../hooks/useAnimatedHeaderFade';
 import { ringkasanAktivitas } from '../utils/ringkasanAktivitas';
-import type { MainTabParamList } from '../navigation/types';
+import type { HomeStackParamList } from '../navigation/types';
 import { fetchStatistikDashboard } from '../api/dashboard';
 import { fetchCatatanKalenderList } from '../api/kalender';
 import { TIPE_META } from './CatatanKalenderScreen';
@@ -119,7 +119,7 @@ function PagerSlide({
   );
 }
 
-type Props = BottomTabScreenProps<MainTabParamList, 'HomeTab'>;
+type Props = NativeStackScreenProps<HomeStackParamList, 'Home'>;
 
 // Label sengaja tanpa "Hari Ini": judul seksi di atasnya sudah bilang
 // "Ringkasan Aktivitas Hari Ini", jadi pengulangannya cuma bikin teks patah
@@ -268,53 +268,28 @@ export function HomeScreen({ navigation }: Props) {
     setRefreshing(false);
   }, [loadRingkasan]);
 
+  // Semua tujuan tile Menu sekarang satu stack dengan Home (lihat
+  // HomeStackNavigator), jadi push biasa — tidak ada lagi lompat tab,
+  // `initial: false`, atau param `fromHome`. Konsekuensinya "kembali" dari
+  // screen-screen ini mendarat di Home lewat jalur apa pun, termasuk gestur
+  // swipe iOS yang jalan di native dan dulu terpaksa dimatikan.
   function handleCardPress(id: string) {
-    // `initial: false` di semua case ini penting: tanpanya, navigasi ke
-    // screen yang BUKAN initialRouteName tab tujuan (pertama kali tab itu
-    // dikunjungi) bikin React Navigation ganti seluruh state stack tab
-    // tujuan jadi cuma berisi screen itu sendiri (root aslinya, mis.
-    // ProfilDokter/PasienList, gak pernah ke-push). Akibatnya tombol
-    // "kembali" gak punya apa-apa buat di-pop di dalam stack itu dan
-    // nembus balik ke tab asal (Home), dan tab tujuan jadi rusak setelahnya.
-    // `initial: false` memastikan root screen tab tujuan tetap ke-push dulu,
-    // screen target di-push di atasnya — back stack normal.
-    //
-    // `params: { fromHome: true }` dibaca useMenuBack di screen tujuan: tombol
-    // back di sana balik ke Home, bukan pop ke root stack tab tujuan. Screen yang
-    // sama juga bisa dibuka dari dalam tabnya (ProfilDokter → DataPendapatan);
-    // di jalur itu paramnya tidak ada dan back-nya goBack() normal.
     switch (id) {
       case 'pendapatan':
-        navigation.navigate('ProfilTab', {
-          screen: 'DataPendapatan',
-          params: { fromHome: true },
-          initial: false,
-        });
+        navigation.navigate('DataPendapatan');
         break;
       case 'hasillab':
       case 'radiologi':
-        navigation.navigate('PasienTab', {
-          screen: 'PilihPasienHasilLab',
-          params: { fromHome: true },
-          initial: false,
-        });
+        navigation.navigate('PilihPasienHasilLab');
         break;
       case 'kalender':
-        navigation.navigate('ProfilTab', {
-          screen: 'CatatanKalender',
-          params: { fromHome: true },
-          initial: false,
-        });
+        navigation.navigate('CatatanKalender');
         break;
     }
   }
 
   function bukaKalender() {
-    navigation.navigate('ProfilTab', {
-      screen: 'CatatanKalender',
-      params: { fromHome: true },
-      initial: false,
-    });
+    navigation.navigate('CatatanKalender');
   }
 
   return (

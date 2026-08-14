@@ -74,7 +74,7 @@ export function ProfilDokterScreen({}: Props) {
   const [refreshing, setRefreshing] = useState(false);
 
   // Identitas ikut ditarik ulang, bukan cuma angkanya: sesi yang tersimpan bisa
-  // lebih tua dari bentuk response sekarang (NIP & SIP baru ikut belakangan),
+  // lebih tua dari bentuk response sekarang (NIP baru ikut belakangan),
   // dan itu tidak boleh berarti user harus login ulang buat melihatnya.
   const load = useCallback(async () => {
     if (!token) return;
@@ -130,9 +130,10 @@ export function ProfilDokterScreen({}: Props) {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
         }
       >
-        {/* Kartu identitas dinas, bukan kartu profil sosial: yang dibawa NIP &
-            SIP — dua hal yang memang tercetak di tanda pengenal RS, dan yang
-            membedakan halaman ini dari halaman profil aplikasi mana pun.
+        {/* Kartu identitas dinas, bukan kartu profil sosial: yang dibawa NIP —
+            hal yang memang tercetak di tanda pengenal RS, dan yang membedakan
+            halaman ini dari halaman profil aplikasi mana pun. Nomor SIP sengaja
+            tidak ditampilkan (keputusan Arthuro, 2026-08-14).
             Permukaan gelapnya sama dengan panel Jasa Medis, jadi dua layar
             "tentang kamu" terbaca sepasang. */}
         <View style={styles.kartu}>
@@ -156,14 +157,6 @@ export function ProfilDokterScreen({}: Props) {
                     <Text style={styles.barisLabel}>NIP</Text>
                     <Text style={styles.barisNilai} numberOfLines={1}>
                       {dokter.nip}
-                    </Text>
-                  </View>
-                )}
-                {dokter?.sip && (
-                  <View style={styles.barisData}>
-                    <Text style={styles.barisLabel}>SIP</Text>
-                    <Text style={styles.barisNilai} numberOfLines={2}>
-                      {dokter.sip}
                     </Text>
                   </View>
                 )}
@@ -245,7 +238,7 @@ export function ProfilDokterScreen({}: Props) {
   );
 }
 
-// NIP 18 digit & nomor SIP dibaca sebagai deret, bukan sebagai kata — figure
+// NIP 18 digit dibaca sebagai deret, bukan sebagai kata — figure
 // tabular bikin digitnya rata dan lebih gampang dicocokkan ke kartu fisik.
 const angka = { fontVariant: ['tabular-nums' as const] };
 

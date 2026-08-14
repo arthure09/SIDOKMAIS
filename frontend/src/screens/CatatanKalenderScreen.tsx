@@ -30,10 +30,9 @@ import { useAuthStore } from '../store/authStore';
 import type { CatatanKalenderItem, KunjunganListItem, OperasiListItem, TipeCatatanKalender } from '../api/types';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useHideTabBar } from '../hooks/useHideTabBar';
-import { useMenuBack } from '../navigation/useMenuBack';
-import type { ProfilStackParamList } from '../navigation/types';
+import type { HomeStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<ProfilStackParamList, 'CatatanKalender'>;
+type Props = NativeStackScreenProps<HomeStackParamList, 'CatatanKalender'>;
 
 const WEEKDAY_LABELS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'];
 const GRID_CELLS = 42; // 6 baris x 7 kolom, cukup buat bulan mana pun
@@ -119,8 +118,7 @@ export const TIPE_META: Record<TipeCatatanKalender, { label: string; icon: keyof
   PRIBADI: { label: 'Pribadi', icon: 'person', color: colors.secondary },
 };
 
-export function CatatanKalenderScreen({ navigation, route }: Props) {
-  const goBack = useMenuBack(navigation, route.params?.fromHome);
+export function CatatanKalenderScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   useHideTabBar();
   const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
@@ -332,7 +330,7 @@ export function CatatanKalenderScreen({ navigation, route }: Props) {
 
   const header = (
     <View style={[styles.header, { paddingTop: insets.top }, scrolled && shadows.header]}>
-      <Pressable onPress={goBack} style={styles.backButton}>
+      <Pressable onPress={navigation.goBack} style={styles.backButton}>
         <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
       </Pressable>
       <View style={styles.headerTitleWrap}>

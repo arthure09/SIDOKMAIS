@@ -1,5 +1,5 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { HomeScreen } from '../screens/HomeScreen';
+import { HomeStackNavigator } from './HomeStackNavigator';
 import { PasienStackNavigator } from './PasienStackNavigator';
 import { OperasiStackNavigator } from './OperasiStackNavigator';
 import { NotifikasiStackNavigator } from './NotifikasiStackNavigator';
@@ -36,7 +36,7 @@ export function MainTabNavigator() {
       }}
       tabBar={(props) => <FloatingTabBar {...props} />}
     >
-      <Tab.Screen name="HomeTab" component={HomeScreen} />
+      <Tab.Screen name="HomeTab" component={HomeStackNavigator} />
       <Tab.Screen name="PasienTab" component={PasienStackNavigator} />
       <Tab.Screen name="OperasiTab" component={OperasiStackNavigator} />
       <Tab.Screen name="NotifikasiTab" component={NotifikasiStackNavigator} />

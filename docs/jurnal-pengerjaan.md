@@ -1144,6 +1144,102 @@ perangkat**. Daftar yang perlu dicek langsung ada di bagian 9
 
 ---
 
+### Hari 32 (Jum, 14 Ags) — Hapus Detail Laporan Lab, rapikan teks Home & Profil, navigasi tile Menu pindah ke stack Home
+
+Masa buffer. Frontend + satu perubahan kecil backend (`auth.routes.js`). Tidak
+ada perubahan schema, migration, maupun endpoint baru.
+
+**`f98945f` — commit gabungan (25 berkas).** Isinya dua lapis: pekerjaan yang
+sudah ada di working tree sejak hari-hari sebelumnya tapi belum pernah
+di-commit, plus pekerjaan hari ini. Digabung jadi satu commit karena Arthuro
+minta "push semua perubahan" sekaligus; idealnya dipecah per topik, dan ini
+dicatat supaya jelas kenapa satu commit isinya seluas ini.
+
+Yang sudah ada sebelumnya:
+- **Jasa Medis (`DataPendapatanScreen`) dirombak** — panel ringkasan +
+  komposisi penjamin, filter bulan, daftar transaksi dikelompokkan per tanggal
+  dan dimuat 10 baris sekali jalan. Komposisi bar sengaja dihitung dari
+  transaksi `TERVERIFIKASI` saja supaya segmennya menjumlah persis ke angka
+  besar di atasnya.
+- **`frontend/scripts/cek-pendapatan.mjs`** — 1 berkas assert yang dijalankan
+  Node langsung (bukan Jest, pola sama dengan `ringkasanAktivitas.check.ts`).
+  Yang dijaga invarian datanya: id unik, tanggal ISO, nominal wajar, status &
+  jenis tidak keluar dari nilai yang dikenali panel, dan **tidak ada field
+  identitas pasien** yang ikut di baris jasa medis.
+- **Kartu identitas di Profil** — NIP & SIP ditarik dari `/api/auth/me`;
+  bentuk respons `/login` dan `/me` disatukan lewat helper `bentukPengguna()`
+  di `auth.routes.js` (sebelumnya dua literal terpisah — resep dua respons yang
+  diam-diam beda isinya).
+- **`useCollapseOnScroll` jadi dua baris** — swipe pertama menyembunyikan chip
+  filter, swipe kedua search bar; arah sebaliknya search bar duluan yang balik.
+  Dipakai `PasienListScreen` & `JadwalOperasiKonsulScreen`.
+- **`ContentSheet.tsx` dan `profilMock.ts` dihapus** (sudah nol pemakai).
+
+Pekerjaan hari ini yang ikut di commit itu:
+- **Notifikasi Hasil Lab dihapus.** Kartu demo statis kategori "Lab" di
+  `NotifikasiScreen` (satu-satunya pintu masuk ke `DetailLaporanLabScreen`)
+  dan chip filter "Hasil Lab" dibuang, berikut kategori `Lab`, label "Contoh",
+  dan state `labDemoRead`. Daftar notifikasi sekarang murni dari
+  `/api/notifikasi` dengan 2 kategori: Pasien Baru & Jadwal.
+- **`DetailLaporanLabScreen` dihapus total** (keputusan Arthuro) — screen
+  dekoratif hasil eksplorasi Figma itu sudah digantikan modul Cari Hasil Lab
+  yang tersambung backend asli, jadi tidak perlu dua jalur ke data yang sama.
+  Ikut dihapus: route `DetailLaporanLab` di `NotifikasiStackNavigator` +
+  `types.ts`, dan `frontend/src/mocks/notifikasiMock.ts` (jadi nol consumer).
+  Catatan di `CLAUDE.md` diperbarui supaya sesi berikutnya tidak mencari screen
+  yang sudah tidak ada.
+- **Tile "Ringkasan Aktivitas Hari Ini" di Home dirapikan.** Label dipendekkan
+  jadi Pasien Aktif / Operasi / Konsultasi — "Hari Ini" sudah ada di judul
+  seksinya, dan pengulangan itu yang bikin "Konsultasi Hari Ini" patah 2-3
+  baris di kolom selebar ~73pt. `textTransform: 'uppercase'` dilepas (huruf
+  besar + letterSpacing ~30% lebih lebar, pemicu utama wrap-nya). Margin kiri
+  ikon/angka/label disamakan jadi 0 — sebelumnya 0/9/4, terbaca seperti tangga.
+
+**Sesudah commit itu (belum di-commit saat catatan ini ditulis):**
+
+- **Nomor SIP tidak lagi ditampilkan** (keputusan Arthuro) — cukup NIP. Bukan
+  cuma barisnya yang dihapus dari kartu Profil: `sip` juga dilepas dari
+  `bentukPengguna()` dan dari tipe `LoginResponse`, jadi nomornya tidak keluar
+  dari server sama sekali. Kolom `sip` di `schema.prisma` + seed-nya tetap ada.
+- **Nama pasien menabrak & terpotong di `PasienDetailScreen`.** Dua titik
+  berbeda:
+  - *Menabrak* — di kartu hero, badge status satu baris dengan nama, jadi sisa
+    lebar buat nama tinggal ~130pt di layar 375. Nama panjang (apalagi satu
+    kata panjang yang tidak bisa dipatah) meluber keluar kotaknya dan menimpa
+    badge. Badge dipindah ke bawah blok info (`alignSelf: 'flex-start'`); nama
+    dapat ~207pt dan bebas wrap.
+  - *Terpotong* — judul header `numberOfLines={1}` → `{2}`. Nama pasien
+    Indonesia gampang lewat ~28 karakter yang muat sebaris, dan judul kepotong
+    "Muhammad Abdul Rah…" memaksa dokter turun ke kartu buat memastikan
+    pasiennya benar.
+- **Screen dari tile Menu pindah ke stack HomeTab** — menutup catatan terbuka
+  Hari 30. Ini persis *upgrade path* yang dulu ditulis di `useMenuBack.ts`, dan
+  dikerjakan sekarang karena Arthuro minta swipe-back-nya jangan dikunci lagi.
+  - Sebelumnya `DataPendapatan`/`CatatanKalender` menumpang `ProfilStack` dan
+    `PilihPasienHasilLab` menumpang `PasienStack`, dibuka lintas tab dengan
+    `initial: false`. Konsekuensinya pop native mendarat di
+    `ProfilDokter`/`PasienList`, dan gestur swipe iOS terpaksa dimatikan karena
+    dia jalan di native tanpa lewat JS.
+  - Sekarang ada `HomeStackNavigator`: `Home` + tiga screen menu itu + tiga
+    screen lanjutan Hasil Lab (`HasilLabList`/`HasilLabDetail`/`LihatPdfLab`).
+    Tiga screen lab itu **sengaja didaftarkan di dua stack** (HomeStack dan
+    PasienStack) karena alurnya memang punya dua pintu masuk: Menu Home → pilih
+    pasien, dan `PasienDetail` → hasil lab pasien itu. Tipe param-nya dishare
+    lewat `LabRoutes` di `types.ts` supaya tidak bisa lepas sinkron.
+  - Karena Home sekarang benar-benar ada di bawahnya dalam satu stack, ketiga
+    cara kembali (tombol header, back Android, swipe iOS) mendarat di Home
+    tanpa dibelokkan. Yang ikut terhapus: `useMenuBack.ts` seluruhnya
+    (`useMenuBack` + `menuEntryScreenOptions`), tipe `MenuEntryParams`, param
+    `fromHome` di empat pemanggilan `HomeScreen`, dan `gestureEnabled: false`.
+    `ProfilStack` tinggal `ProfilDokter`.
+
+**Status verifikasi:** `npx tsc --noEmit` lolos di tiap langkah. **Tidak ada
+yang dites di perangkat** — yang paling perlu dicoba langsung: swipe-back dari
+tiga screen menu, alur Home → Pilih Pasien → Hasil Lab → PDF (swipe mundur
+satu-satu sampai Home), dan tampilan nama panjang di detail pasien.
+
+---
+
 ## Catatan lintas-hari yang masih terbuka
 - ERD v2 (entity Konsultasi terpisah dari Operasi) belum di-merge resmi ke
   dokumen rencana, masih pending keputusan supervisor
@@ -1153,10 +1249,10 @@ perangkat**. Daftar yang perlu dicek langsung ada di bagian 9
   menyambungkan `DetailLaporanLabScreen` ke data asli seperti rencana semula
   — yang dibangun justru alur baru terpisah ("Cari Hasil Lab":
   `PilihPasienHasilLabScreen`/`HasilLabListScreen`/`HasilLabDetailScreen`/
-  `LihatPdfLabScreen`, lihat entri Hari 19). `DetailLaporanLabScreen` (screen
-  dekoratif di tab Notifikasi) masih pakai
-  `frontend/src/mocks/notifikasiMock.ts` sampai sekarang, belum ada rencana
-  baru buat menyambungkannya.
+  `LihatPdfLabScreen`, lihat entri Hari 19). **Selesai 14 Ags 2026:**
+  `DetailLaporanLabScreen` beserta `notifikasiMock.ts` dihapus total — alur
+  Cari Hasil Lab sudah menutup kebutuhannya, jadi tidak ada lagi screen lab
+  yang menggantung di mock.
 - Pertanyaan terbuka ke supervisor: format data klinis (ICD-10, No. RM), kebijakan
   data ke LLM pihak ketiga, handover pasca-magang. Khusus modul lab, daftar
   pertanyaan terstruktur ada di `docs/pertanyaan-supervisor-modul-lab.md`.
@@ -1168,12 +1264,11 @@ perangkat**. Daftar yang perlu dicek langsung ada di bagian 9
   manual di dalam container (`docker compose exec app npx prisma generate`)
   sebelum restart/recreate, tidak otomatis ikut `git pull`. Belum diputuskan
   apa didokumentasikan di README atau diwire ke start command container.
-- **Gestur swipe iOS dimatikan, belum dibelokkan** (Hari 30, 12 Ags): layar
-  yang dibuka dari tile Menu Home kehilangan gestur geser tepi kiri. Perbaikan
-  tuntasnya mendaftarkan layar-layar itu di stack milik HomeTab sendiri supaya
-  pop native-nya memang mendarat di Home — ditunda karena
-  `PilihPasienHasilLab` bercabang ke `HasilLabList` → `HasilLabDetail` →
-  `LihatPdfLab`, jadi keempatnya harus ikut didaftarkan ulang.
+- ~~**Gestur swipe iOS dimatikan, belum dibelokkan**~~ (Hari 30, 12 Ags) —
+  **selesai 14 Ags 2026** (Hari 32): layar tile Menu pindah ke
+  `HomeStackNavigator`, gestur geser tepi kiri aktif lagi dan mendarat di Home.
+  `useMenuBack.ts` + param `fromHome` dihapus. Konsekuensi yang perlu diingat:
+  tiga screen Hasil Lab kini terdaftar di dua stack sekaligus.
 - **Animasi collapse filter masih mengubah layout** (Hari 30, 12 Ags):
   `useCollapseOnScroll` menganimasikan tinggi di thread JS, jadi frame
   `ScrollView` ikut berubah tiap frame. Dua penjaga sudah menutup loop

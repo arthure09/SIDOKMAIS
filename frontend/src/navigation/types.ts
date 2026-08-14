@@ -7,28 +7,41 @@ export type RootStackParamList = {
 };
 
 export type MainTabParamList = {
-  HomeTab: undefined;
+  HomeTab: NavigatorScreenParams<HomeStackParamList> | undefined;
   PasienTab: NavigatorScreenParams<PasienStackParamList> | undefined;
   OperasiTab: undefined;
   NotifikasiTab: undefined;
-  ProfilTab: NavigatorScreenParams<ProfilStackParamList> | undefined;
+  ProfilTab: undefined;
 };
 
 /**
- * Dikirim tile Menu di Home ke screen yang juga punya pintu masuk lain di dalam
- * tab-nya sendiri, supaya tombol "kembali" tahu harus balik ke Home atau `goBack()`
- * normal. Lihat `useMenuBack`.
+ * Alur Hasil Lab punya dua pintu masuk — dari tile Menu di Home (lewat pilih
+ * pasien dulu) dan dari PasienDetail — jadi route-nya didaftarkan di dua stack.
+ * Bentuknya dishare di sini supaya kalau paramnya berubah, dua-duanya ikut.
  */
-export type MenuEntryParams = { fromHome?: boolean };
-
-export type PasienStackParamList = {
-  PasienList: undefined;
-  PasienDetail: { pasienId: string; nama: string };
-  PilihPasienHasilLab: MenuEntryParams | undefined;
+type LabRoutes = {
   HasilLabList: { pasienId: string; nama: string };
   HasilLabDetail: { pemeriksaanLabId: string };
   LihatPdfLab: { namaLaporan: string; tanggal: string };
 };
+
+/**
+ * Screen yang dibuka dari tile Menu di Home tinggal di stack HomeTab sendiri,
+ * bukan menumpang stack tab lain. Dengan begitu "kembali" — tombol header,
+ * back Android, dan gestur swipe iOS yang jalan di native tanpa lewat JS —
+ * ketiganya pop ke Home apa adanya, tanpa param `fromHome` atau hook khusus.
+ */
+export type HomeStackParamList = {
+  Home: undefined;
+  DataPendapatan: undefined;
+  CatatanKalender: undefined;
+  PilihPasienHasilLab: undefined;
+} & LabRoutes;
+
+export type PasienStackParamList = {
+  PasienList: undefined;
+  PasienDetail: { pasienId: string; nama: string };
+} & LabRoutes;
 
 export type OperasiStackParamList = {
   JadwalOperasiKonsul: undefined;
@@ -52,6 +65,4 @@ export type NotifikasiStackParamList = {
 
 export type ProfilStackParamList = {
   ProfilDokter: undefined;
-  DataPendapatan: MenuEntryParams | undefined;
-  CatatanKalender: MenuEntryParams | undefined;
 };

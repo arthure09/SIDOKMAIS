@@ -12,10 +12,9 @@ import { TextInput } from '../components/TextInput';
 import type { PasienListItem } from '../api/types';
 import { useHeaderScrollShadow } from '../hooks/useHeaderScrollShadow';
 import { useHideTabBar } from '../hooks/useHideTabBar';
-import { useMenuBack } from '../navigation/useMenuBack';
-import type { PasienStackParamList } from '../navigation/types';
+import type { HomeStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<PasienStackParamList, 'PilihPasienHasilLab'>;
+type Props = NativeStackScreenProps<HomeStackParamList, 'PilihPasienHasilLab'>;
 
 function initials(nama: string) {
   const parts = nama.trim().split(/\s+/);
@@ -25,8 +24,7 @@ function initials(nama: string) {
     .join('');
 }
 
-export function PilihPasienHasilLabScreen({ navigation, route }: Props) {
-  const goBack = useMenuBack(navigation, route.params?.fromHome);
+export function PilihPasienHasilLabScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   useHideTabBar();
   const { onScroll, scrollEventThrottle, scrolled } = useHeaderScrollShadow();
@@ -63,7 +61,7 @@ export function PilihPasienHasilLabScreen({ navigation, route }: Props) {
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top }, scrolled && shadows.header]}>
-        <Pressable onPress={goBack} style={styles.backButton}>
+        <Pressable onPress={navigation.goBack} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>

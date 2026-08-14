@@ -112,7 +112,10 @@ export function PasienDetailScreen({ route, navigation }: Props) {
       <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
         <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
       </Pressable>
-      <Text style={styles.headerTitle} numberOfLines={1}>
+      {/* 2 baris: nama pasien Indonesia gampang lewat dari ~28 karakter yang
+          muat sebaris, dan judul yang kepotong "Muhammad Abdul Rah…" bikin
+          dokter harus turun ke kartu buat memastikan pasiennya benar. */}
+      <Text style={styles.headerTitle} numberOfLines={2}>
         {detail?.nama ?? nama}
       </Text>
       <View style={styles.backButton} />
@@ -173,9 +176,13 @@ export function PasienDetailScreen({ route, navigation }: Props) {
                   <Text style={styles.heroMetaText}>{umur} Tahun</Text>
                 </View>
               )}
-            </View>
-            <View style={[styles.statusPill, { backgroundColor: badge.bg }]}>
-              <Text style={[styles.statusPillText, { color: badge.fg }]}>{badge.label}</Text>
+              {/* Badge status pindah ke bawah info, bukan di kanan nama: waktu
+                  masih sekolom dengan nama, sisa lebar buat nama cuma ~130pt,
+                  jadi nama panjang (apalagi satu kata panjang) melewati kotaknya
+                  dan menabrak badge ini. */}
+              <View style={[styles.statusPill, { backgroundColor: badge.bg }]}>
+                <Text style={[styles.statusPillText, { color: badge.fg }]}>{badge.label}</Text>
+              </View>
             </View>
           </View>
         </View>
@@ -348,6 +355,8 @@ const styles = StyleSheet.create({
     color: colors.onSurfaceVariant,
   },
   statusPill: {
+    alignSelf: 'flex-start',
+    marginTop: 4,
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: radius.full,

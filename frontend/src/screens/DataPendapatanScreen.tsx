@@ -12,10 +12,9 @@ import {
 } from '../mocks/pendapatanMock';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useHideTabBar } from '../hooks/useHideTabBar';
-import { useMenuBack } from '../navigation/useMenuBack';
-import type { ProfilStackParamList } from '../navigation/types';
+import type { HomeStackParamList } from '../navigation/types';
 
-type Props = NativeStackScreenProps<ProfilStackParamList, 'DataPendapatan'>;
+type Props = NativeStackScreenProps<HomeStackParamList, 'DataPendapatan'>;
 
 const bulanKey = (trx: TransaksiPendapatan) => trx.tanggal.slice(0, 7);
 const jumlah = (list: TransaksiPendapatan[]) => list.reduce((n, t) => n + t.nominal, 0);
@@ -75,8 +74,7 @@ function labelTanggal(iso: string) {
   return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'long' });
 }
 
-export function DataPendapatanScreen({ navigation, route }: Props) {
-  const goBack = useMenuBack(navigation, route.params?.fromHome);
+export function DataPendapatanScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   useHideTabBar();
   const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
@@ -175,7 +173,7 @@ export function DataPendapatanScreen({ navigation, route }: Props) {
   return (
     <View style={styles.container}>
       <View style={[styles.header, { paddingTop: insets.top }, scrolled && shadows.header]}>
-        <Pressable onPress={goBack} style={styles.backButton}>
+        <Pressable onPress={navigation.goBack} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
         </Pressable>
         <Text style={styles.headerTitle}>Jasa Medis</Text>
