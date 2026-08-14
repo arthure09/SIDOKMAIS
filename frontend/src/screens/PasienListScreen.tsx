@@ -17,7 +17,6 @@ import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useScrollToTopButton } from '../hooks/useScrollToTopButton';
 import { useAnimatedHeaderFade } from '../hooks/useAnimatedHeaderFade';
 import { useCollapseOnScroll } from '../hooks/useCollapseOnScroll';
-import { ContentSheet, SHEET_OVERLAP } from '../components/ContentSheet';
 import type { PasienStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<PasienStackParamList, 'PasienList'>;
@@ -56,11 +55,13 @@ export function PasienListScreen({ navigation }: Props) {
   const { onScroll: onDockScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
   const { onScroll: onTopButtonScroll, visible: showScrollTop } = useScrollToTopButton();
   const { headerBackgroundColor, headerShadowOpacity, headerElevation } = useAnimatedHeaderFade(scrolled);
+  // Satu baris per gestur: swipe pertama menyembunyikan filter, swipe kedua
+  // search bar; ke arah sebaliknya search bar duluan yang balik.
   const {
-    onScroll: onFilterScroll,
-    onLayout: onFilterLayout,
-    style: filterCollapseStyle,
-    innerStyle: filterSlideStyle,
+    onScroll: onHeaderScroll,
+    onScrollBeginDrag,
+    top: searchRow,
+    bottom: filterRow,
   } = useCollapseOnScroll();
   const listRef = useRef<FlatList<PasienListItem>>(null);
   const token = useAuthStore((s) => s.token);
@@ -81,9 +82,9 @@ export function PasienListScreen({ navigation }: Props) {
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       onDockScroll(e);
       onTopButtonScroll(e);
-      onFilterScroll(e);
+      onHeaderScroll(e);
     },
-    [onDockScroll, onTopButtonScroll, onFilterScroll],
+    [onDockScroll, onTopButtonScroll, onHeaderScroll],
   );
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
@@ -115,27 +116,39 @@ export function PasienListScreen({ navigation }: Props) {
       <Animated.View
         style={[
           styles.header,
-          { paddingTop: insets.top, backgroundColor: headerBackgroundColor },
+          {
+            paddingTop: insets.top,
+            backgroundColor: headerBackgroundColor,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 8,
+            shadowOpacity: headerShadowOpacity,
+            elevation: headerElevation,
+          },
         ]}
       >
-        <View style={[styles.searchWrapper, { marginTop: spacing.base }]}>
-          <MaterialIcons name="search" size={20} color={colors.primary} />
-          <TextInput
-            value={searchInput}
-            onChangeText={setSearchInput}
-            placeholder="Cari Nama atau No. RM..."
-            placeholderTextColor={colors.outline}
-            style={styles.searchInput}
-          />
-          {searchInput.length > 0 && (
-            <Pressable onPress={() => setSearchInput('')} hitSlop={8}>
-              <MaterialIcons name="close" size={18} color={colors.onSurfaceVariant} />
-            </Pressable>
-          )}
-        </View>
+        <Animated.View style={searchRow.style} onLayout={searchRow.onLayout}>
+          <Animated.View style={[styles.searchSlot, searchRow.innerStyle]}>
+            <View style={styles.searchWrapper}>
+              <MaterialIcons name="search" size={20} color={colors.primary} />
+              <TextInput
+                value={searchInput}
+                onChangeText={setSearchInput}
+                placeholder="Cari Nama atau No. RM..."
+                placeholderTextColor={colors.outline}
+                style={styles.searchInput}
+              />
+              {searchInput.length > 0 && (
+                <Pressable onPress={() => setSearchInput('')} hitSlop={8}>
+                  <MaterialIcons name="close" size={18} color={colors.onSurfaceVariant} />
+                </Pressable>
+              )}
+            </View>
+          </Animated.View>
+        </Animated.View>
 
-        <Animated.View style={filterCollapseStyle} onLayout={onFilterLayout}>
-          <Animated.View style={[styles.filterRow, filterSlideStyle]}>
+        <Animated.View style={filterRow.style} onLayout={filterRow.onLayout}>
+          <Animated.View style={[styles.filterRow, filterRow.innerStyle]}>
             {STATUS_FILTERS.map((f) => {
               const active = status === f.value;
               return (
@@ -154,7 +167,7 @@ export function PasienListScreen({ navigation }: Props) {
         </Animated.View>
       </Animated.View>
 
-      <ContentSheet shadowOpacity={headerShadowOpacity} elevation={headerElevation}>
+      <View style={styles.sheet}>
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />
@@ -175,6 +188,7 @@ export function PasienListScreen({ navigation }: Props) {
           contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
+          onScrollBeginDrag={onScrollBeginDrag}
           scrollEventThrottle={scrollEventThrottle}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
@@ -233,7 +247,7 @@ export function PasienListScreen({ navigation }: Props) {
           }}
         />
       )}
-      </ContentSheet>
+      </View>
 
       <ScrollToTopButton
         visible={showScrollTop}
@@ -246,19 +260,28 @@ export function PasienListScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  // Sheet di bawah menindih header, jadi header perlu padding bawah sebanyak
-  // tindihan itu — kalau tidak, baris chip filter ketutupan.
-  header: { paddingBottom: SHEET_OVERLAP },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   errorText: { color: colors.error, textAlign: 'center' },
   emptyText: { color: colors.onSurfaceVariant, textAlign: 'center' },
 
+  header: {
+    // Jarak bawah ditaruh di header, bukan di baris filter: baris filter ikut
+    // menyusut waktu disembunyikan, jadi kalau jaraknya nempel di sana search
+    // bar berakhir persis di tepi header dan list lewat menempel di bawahnya.
+    paddingBottom: 12,
+    // zIndex biar shadow header jatuh DI ATAS list: tanpa itu sheet di bawahnya
+    // digambar belakangan dan menutupi bayangannya sendiri.
+    zIndex: 1,
+  },
+  sheet: { flex: 1 },
+  // Jarak atas search bar padding di kotak yang menyusut, bukan margin di search
+  // bar-nya: margin tidak ikut terhitung di tinggi yang diukur useCollapseOnScroll.
+  searchSlot: { paddingTop: spacing.base },
   searchWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     marginHorizontal: spacing.marginMobile,
-    marginTop: spacing.base,
     backgroundColor: colors.surfaceVariant,
     borderRadius: radius.full,
     paddingHorizontal: 16,
@@ -275,11 +298,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     paddingHorizontal: spacing.marginMobile,
-    // Jarak atas/bawah sengaja padding, bukan margin: margin tidak ikut terhitung
-    // di tinggi yang diukur useCollapseOnScroll, jadi kalau pakai margin barisnya
-    // menyisakan celah kosong 16px waktu sudah tersembunyi.
+    // Jarak atas sengaja padding, bukan margin: margin tidak ikut terhitung di
+    // tinggi yang diukur useCollapseOnScroll, jadi kalau pakai margin barisnya
+    // menyisakan celah kosong waktu sudah tersembunyi. Jarak bawahnya pindah ke
+    // styles.header supaya tidak ikut hilang waktu baris ini menyusut.
     paddingTop: 12,
-    paddingBottom: 4,
   },
   filterChip: {
     paddingHorizontal: 16,

@@ -1,53 +1,98 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View, useWindowDimensions } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, radius, shadows, spacing } from '../theme/colors';
+import { colors, menuAccent, radius, shadows, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
-import { ringkasanPendapatan, transaksiPendapatan, type JenisTransaksi } from '../mocks/pendapatanMock';
+import {
+  transaksiPendapatan,
+  type JenisTransaksi,
+  type TransaksiPendapatan,
+} from '../mocks/pendapatanMock';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useHideTabBar } from '../hooks/useHideTabBar';
 import { useMenuBack } from '../navigation/useMenuBack';
 import type { ProfilStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<ProfilStackParamList, 'DataPendapatan'>;
-type FilterKey = 'BULAN' | 'JENIS' | 'SUMBER';
-type AnchorRect = { x: number; y: number; width: number; height: number };
+
+const bulanKey = (trx: TransaksiPendapatan) => trx.tanggal.slice(0, 7);
+const jumlah = (list: TransaksiPendapatan[]) => list.reduce((n, t) => n + t.nominal, 0);
+
+const BULAN_KEYS = [...new Set(transaksiPendapatan.map(bulanKey))].sort().reverse();
+
+// Daftar dimuat 10 baris sekali jalan.
+// ponytail: semua baris yang sudah dimuat tetap hidup di satu ScrollView, jadi
+// yang dihemat waktu render awal, bukan memori setelah user menekan "tampilkan
+// lagi" berkali-kali. Cukup buat ratusan baris. Kalau nanti satu bulan bisa
+// ribuan, pindahkan ledger-nya ke SectionList dan panel jadi ListHeaderComponent.
+const BATCH = 10;
+
+// Ramp analog yang sama dengan tile Menu di Home (lihat komentar di colors.ts) —
+// di atas panel #0D3D3B kontrasnya lebih tinggi lagi daripada di tray #006a65.
+const RAMP = [menuAccent.mint, menuAccent.teal, menuAccent.cyan, menuAccent.sky];
 
 function formatRupiah(value: number) {
   return `Rp ${value.toLocaleString('id-ID')}`;
 }
 
-function extractBulan(tanggal: string) {
-  return tanggal.split(' ')[1] ?? tanggal;
+// Dipakai di legend penjamin, di mana nominal penuh bikin barisnya pecah.
+function formatRupiahSingkat(value: number) {
+  if (value >= 1_000_000) {
+    return `${(value / 1_000_000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} jt`;
+  }
+  if (value >= 1_000) return `${Math.round(value / 1_000)} rb`;
+  return String(value);
 }
 
-const BULAN_OPTIONS = Array.from(
-  new Set(transaksiPendapatan.map((t) => extractBulan(t.tanggal))),
-);
-const JENIS_OPTIONS: { value: JenisTransaksi | 'Semua'; label: string }[] = [
-  { value: 'Semua', label: 'Semua' },
-  { value: 'OPERASI', label: 'Operasi' },
-  { value: 'KONSUL', label: 'Konsultasi' },
-];
-const SUMBER_OPTIONS = ['Semua', ...new Set(transaksiPendapatan.map((t) => t.sumber))];
+function labelBulan(key: string) {
+  return new Date(`${key}-01`).toLocaleDateString('id-ID', { month: 'long' });
+}
 
-const DROPDOWN_WIDTH = 180;
+function labelBulanTahun(key: string) {
+  return `${labelBulan(key)} ${key.slice(0, 4)}`;
+}
+
+/**
+ * Rentang tanggal yang benar-benar ada isinya di bulan itu, mis. "3–15 Agustus
+ * 2026". Menggantikan indikator pertumbuhan (+X% dari bulan lalu) yang dihapus
+ * atas keputusan Arthuro, 14 Ags 2026: menempelkan panah hijau/merah di angka
+ * jasa medis mendorong dokter membaca angkanya sebagai skor, dan insentif
+ * pembayaran adalah jalur klasik menuju overtreatment. Baris ini menjawab
+ * "ini angka periode apa", bukan "saya sebagus apa".
+ */
+function labelPeriode(list: TransaksiPendapatan[], key: string) {
+  if (list.length === 0) return null;
+  const hari = list.map((t) => Number(t.tanggal.slice(8, 10))).sort((a, b) => a - b);
+  const awal = hari[0];
+  const akhir = hari[hari.length - 1];
+  const rentang = awal === akhir ? `${awal}` : `${awal}–${akhir}`;
+  return `${rentang} ${labelBulan(key)} ${key.slice(0, 4)}`;
+}
+
+function labelTanggal(iso: string) {
+  return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'long' });
+}
 
 export function DataPendapatanScreen({ navigation, route }: Props) {
   const goBack = useMenuBack(navigation, route.params?.fromHome);
   const insets = useSafeAreaInsets();
   useHideTabBar();
   const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
-  const { width: windowWidth } = useWindowDimensions();
 
-  const [bulan, setBulan] = useState(ringkasanPendapatan.labelBulan);
-  const [jenis, setJenis] = useState<JenisTransaksi | 'Semua'>('Semua');
-  const [sumber, setSumber] = useState('Semua');
-  const [openFilter, setOpenFilter] = useState<FilterKey | null>(null);
-  const [anchorRect, setAnchorRect] = useState<AnchorRect | null>(null);
+  const [bulan, setBulan] = useState(BULAN_KEYS[0]);
+  const [sumber, setSumber] = useState<string | null>(null);
+  const [jenis, setJenis] = useState<JenisTransaksi | null>(null);
+  const [hanyaMenunggu, setHanyaMenunggu] = useState(false);
+  const [bulanTerbuka, setBulanTerbuka] = useState(false);
+  const [tampil, setTampil] = useState(BATCH);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Ganti bulan atau filter = daftar dibaca dari awal lagi. Satu effect untuk
+  // semua pemicunya, bukan setTampil di tiap setter — yang begitu selalu ada
+  // satu yang kelupaan.
+  useEffect(() => setTampil(BATCH), [bulan, sumber, jenis, hanyaMenunggu]);
 
   // Data pendapatan masih murni mock (belum ada endpoint), jadi "refresh" di
   // sini cuma re-affirm data yang sama — disimulasikan biar gesture pull-to-
@@ -58,59 +103,74 @@ export function DataPendapatanScreen({ navigation, route }: Props) {
     setTimeout(() => setRefreshing(false), 500);
   }, []);
 
-  const anchorRefs = useRef<Record<FilterKey, View | null>>({
-    BULAN: null,
-    JENIS: null,
-    SUMBER: null,
-  });
-
-  const filteredTransaksi = useMemo(
-    () =>
-      transaksiPendapatan.filter((trx) => {
-        const matchBulan = extractBulan(trx.tanggal) === bulan;
-        const matchJenis = jenis === 'Semua' || trx.jenis === jenis;
-        const matchSumber = sumber === 'Semua' || trx.sumber === sumber;
-        return matchBulan && matchJenis && matchSumber;
-      }),
-    [bulan, jenis, sumber],
+  const bulanIni = useMemo(
+    () => transaksiPendapatan.filter((t) => bulanKey(t) === bulan),
+    [bulan],
   );
+  const diterima = useMemo(
+    () => bulanIni.filter((t) => t.status === 'TERVERIFIKASI'),
+    [bulanIni],
+  );
+  const menunggu = useMemo(() => bulanIni.filter((t) => t.status === 'MENUNGGU'), [bulanIni]);
 
-  function toggleDropdown(key: FilterKey) {
-    if (openFilter === key) {
-      setOpenFilter(null);
-      return;
-    }
-    anchorRefs.current[key]?.measureInWindow((x, y, width, height) => {
-      setAnchorRect({ x, y, width, height });
-      setOpenFilter(key);
-    });
-  }
+  const totalDiterima = jumlah(diterima);
+  const totalMenunggu = jumlah(menunggu);
+  const periode = labelPeriode(bulanIni, bulan);
 
-  const jenisLabel = JENIS_OPTIONS.find((o) => o.value === jenis)?.label ?? 'Semua';
+  // Komposisi sengaja dihitung dari transaksi TERVERIFIKASI saja, sama dengan
+  // angka besar di atasnya — kalau bar-nya memakai semua transaksi, segmennya
+  // tidak akan pernah menjumlah ke angka yang dibacanya.
+  const perSumber = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const t of diterima) map.set(t.sumber, (map.get(t.sumber) ?? 0) + t.nominal);
+    return [...map]
+      .map(([nama, total]) => ({ nama, total }))
+      .sort((a, b) => b.total - a.total);
+  }, [diterima]);
 
-  const FILTERS: { key: FilterKey; label: string }[] = [
-    { key: 'BULAN', label: `Bulan: ${bulan}` },
-    { key: 'JENIS', label: `Jenis: ${jenisLabel}` },
-    { key: 'SUMBER', label: `Sumber: ${sumber}` },
+  const perJenis: { value: JenisTransaksi; label: string; total: number }[] = [
+    { value: 'OPERASI', label: 'Operasi', total: jumlah(diterima.filter((t) => t.jenis === 'OPERASI')) },
+    { value: 'KONSUL', label: 'Konsultasi', total: jumlah(diterima.filter((t) => t.jenis === 'KONSUL')) },
   ];
 
-  const dropdownConfig: Record<FilterKey, { options: string[]; value: string; onSelect: (v: string) => void }> = {
-    BULAN: { options: BULAN_OPTIONS, value: bulan, onSelect: setBulan },
-    JENIS: {
-      options: JENIS_OPTIONS.map((o) => o.label),
-      value: jenisLabel,
-      onSelect: (label) => {
-        const found = JENIS_OPTIONS.find((o) => o.label === label);
-        setJenis(found ? found.value : 'Semua');
-      },
-    },
-    SUMBER: { options: SUMBER_OPTIONS, value: sumber, onSelect: setSumber },
-  };
+  const rincian = useMemo(
+    () =>
+      bulanIni.filter(
+        (t) =>
+          (!sumber || t.sumber === sumber) &&
+          (!jenis || t.jenis === jenis) &&
+          (!hanyaMenunggu || t.status === 'MENUNGGU'),
+      ),
+    [bulanIni, sumber, jenis, hanyaMenunggu],
+  );
 
-  const activeDropdown = openFilter ? dropdownConfig[openFilter] : null;
-  const dropdownLeft = anchorRect
-    ? Math.max(16, Math.min(anchorRect.x, windowWidth - DROPDOWN_WIDTH - 16))
-    : 0;
+  // Dikelompokkan SETELAH dipotong, jadi grup tanggal terakhir bisa tampil
+  // sebagian — itu memang maunya "10 pertama", bukan "10 tanggal pertama".
+  const grup = useMemo(() => {
+    const map = new Map<string, TransaksiPendapatan[]>();
+    for (const t of rincian.slice(0, tampil)) {
+      const isi = map.get(t.tanggal);
+      if (isi) isi.push(t);
+      else map.set(t.tanggal, [t]);
+    }
+    return [...map].sort((a, b) => b[0].localeCompare(a[0]));
+  }, [rincian, tampil]);
+
+  const sisa = rincian.length - tampil;
+
+  const adaFilter = sumber !== null || jenis !== null || hanyaMenunggu;
+
+  function hapusFilter() {
+    setSumber(null);
+    setJenis(null);
+    setHanyaMenunggu(false);
+  }
+
+  function pilihBulan(key: string) {
+    setBulan(key);
+    setBulanTerbuka(false);
+    hapusFilter();
+  }
 
   return (
     <View style={styles.container}>
@@ -118,10 +178,7 @@ export function DataPendapatanScreen({ navigation, route }: Props) {
         <Pressable onPress={goBack} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
         </Pressable>
-        <View style={styles.headerTitleWrap}>
-          <Text style={styles.headerTitle}>Data Pendapatan</Text>
-          <Text style={styles.headerSubtitle}>Ringkasan & rincian transaksi</Text>
-        </View>
+        <Text style={styles.headerTitle}>Jasa Medis</Text>
         <View style={styles.backButton} />
       </View>
 
@@ -134,146 +191,202 @@ export function DataPendapatanScreen({ navigation, route }: Props) {
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
         }
       >
-        <View style={styles.summaryCard}>
-          <View>
-            <Text style={styles.summaryLabel}>TOTAL PENDAPATAN BULAN INI</Text>
-            <Text style={styles.summaryValue}>
-              {formatRupiah(ringkasanPendapatan.totalBulanIni)}
-            </Text>
+        {/* Dropdown, bukan deretan chip: daftar bulan tumbuh terus seiring
+            pemakaian, dan baris chip yang harus digeser horizontal menyembunyikan
+            bulan lama di luar layar tanpa penanda apa pun. */}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => setBulanTerbuka(true)}
+          style={({ pressed }) => [styles.bulanTrigger, pressed && styles.ditekan]}
+        >
+          <MaterialIcons name="calendar-month" size={18} color={colors.primary} />
+          <Text style={styles.bulanTriggerText}>{labelBulanTahun(bulan)}</Text>
+          <MaterialIcons name="expand-more" size={20} color={colors.onSurfaceVariant} />
+        </Pressable>
+
+        {/* Satu-satunya permukaan gelap di seluruh app: penanda bahwa ini angka
+            uang, bukan sekadar kartu ringkasan lain. */}
+        <View style={styles.panel}>
+          <Text style={styles.panelLabel}>Jasa medis diterima</Text>
+          <View style={styles.panelAngkaRow}>
+            <Text style={styles.panelAngka}>{formatRupiah(totalDiterima)}</Text>
+            {periode && <Text style={styles.panelPeriode}>{periode}</Text>}
           </View>
-          <View style={styles.divider} />
-          <View style={styles.breakdownRow}>
-            <View style={styles.breakdownCol}>
-              <Text style={styles.summaryLabel}>Operasi</Text>
-              <Text style={styles.breakdownValue}>
-                {formatRupiah(ringkasanPendapatan.totalOperasi)}
-              </Text>
-            </View>
-            <View style={styles.breakdownDividerVertical} />
-            <View style={styles.breakdownCol}>
-              <Text style={styles.summaryLabel}>Konsultasi</Text>
-              <Text style={styles.breakdownValue}>
-                {formatRupiah(ringkasanPendapatan.totalKonsul)}
-              </Text>
-            </View>
-          </View>
-        </View>
 
-        <View style={styles.filterRow}>
-          {FILTERS.map((f) => {
-            const active = openFilter === f.key;
-            return (
-              <Pressable
-                key={f.key}
-                ref={(el) => {
-                  anchorRefs.current[f.key] = el;
-                }}
-                onPress={() => toggleDropdown(f.key)}
-                style={({ pressed }) => [
-                  styles.filterChip,
-                  active && styles.filterChipActive,
-                  pressed && styles.filterChipPressed,
-                ]}
-              >
-                <Text
-                  style={[styles.filterChipText, active && styles.filterChipTextActive]}
-                  numberOfLines={1}
-                >
-                  {f.label}
-                </Text>
-                <MaterialIcons
-                  name={active ? 'expand-less' : 'expand-more'}
-                  size={16}
-                  color={active ? colors.onPrimary : colors.onSurface}
-                />
-              </Pressable>
-            );
-          })}
-        </View>
-
-        <View>
-          <Text style={styles.sectionTitle}>RINCIAN TRANSAKSI</Text>
-          {filteredTransaksi.length === 0 ? (
-            <Text style={styles.emptyText}>Tidak ada transaksi untuk filter ini.</Text>
-          ) : (
-            <View style={{ gap: spacing.gutter }}>
-              {filteredTransaksi.map((trx) => (
-                <View key={trx.id} style={styles.trxCard}>
-                  <View style={styles.trxIconCircle}>
-                    <MaterialIcons
-                      name={trx.jenis === 'OPERASI' ? 'medical-services' : 'person'}
-                      size={20}
-                      color={colors.primary}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.trxNama}>{trx.pasienNama}</Text>
-                    <Text style={styles.trxMeta}>
-                      {trx.tanggal} • {trx.sumber}
-                    </Text>
-                  </View>
-                  <View style={{ alignItems: 'flex-end', gap: 6 }}>
-                    <Text style={styles.trxNominal}>{formatRupiah(trx.nominal)}</Text>
-                    <View
-                      style={[
-                        styles.trxBadge,
-                        trx.status === 'MENUNGGU' && styles.trxBadgeMenunggu,
-                      ]}
-                    >
-                      <Text style={styles.trxBadgeText}>{trx.status}</Text>
-                    </View>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-      </ScrollView>
-
-      <Modal
-        visible={openFilter !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOpenFilter(null)}
-      >
-        <Pressable style={StyleSheet.absoluteFillObject} onPress={() => setOpenFilter(null)} />
-        {activeDropdown && anchorRect && (
-          <View
-            style={[
-              styles.dropdown,
-              { top: anchorRect.y + anchorRect.height + 6, left: dropdownLeft },
-            ]}
-          >
-            {activeDropdown.options.map((opt) => {
-              const active = opt === activeDropdown.value;
+          {/* Pecahan per jenis tinggal di dalam panel, bukan dua kartu putih
+              mengambang di bawahnya: satu permukaan ringkasan yang seluruhnya
+              bisa ditekan buat menyaring daftar di bawah. */}
+          <View style={styles.jenisRow}>
+            {perJenis.map((j) => {
+              const active = jenis === j.value;
               return (
                 <Pressable
-                  key={opt}
-                  onPress={() => {
-                    activeDropdown.onSelect(opt);
-                    setOpenFilter(null);
-                  }}
-                  style={({ pressed }) => [
-                    styles.dropdownOption,
-                    active && styles.dropdownOptionActive,
-                    pressed && styles.filterChipPressed,
-                  ]}
+                  key={j.value}
+                  accessibilityRole="button"
+                  onPress={() => setJenis(active ? null : j.value)}
+                  style={[styles.jenisItem, active && styles.jenisItemActive]}
                 >
-                  <Text
-                    style={[styles.dropdownOptionText, active && styles.dropdownOptionTextActive]}
-                  >
-                    {opt}
-                  </Text>
-                  {active && <MaterialIcons name="check" size={18} color={colors.primary} />}
+                  <Text style={styles.jenisLabel}>{j.label}</Text>
+                  <Text style={styles.jenisNominal}>{formatRupiah(j.total)}</Text>
                 </Pressable>
               );
             })}
           </View>
+
+          {perSumber.length > 0 && (
+            <>
+              <View style={styles.bar}>
+                {perSumber.map((s, i) => (
+                  <View
+                    key={s.nama}
+                    style={{
+                      flex: s.total,
+                      backgroundColor: RAMP[i % RAMP.length],
+                      opacity: sumber && sumber !== s.nama ? 0.3 : 1,
+                    }}
+                  />
+                ))}
+              </View>
+
+              {/* Legend-nya sekaligus filternya: tidak ada dropdown "Sumber"
+                  terpisah, dan bar di atas berhenti jadi dekorasi. */}
+              <View style={styles.legendRow}>
+                {perSumber.map((s, i) => {
+                  const active = sumber === s.nama;
+                  return (
+                    <Pressable
+                      key={s.nama}
+                      accessibilityRole="button"
+                      onPress={() => setSumber(active ? null : s.nama)}
+                      style={[styles.legendItem, active && styles.legendItemActive]}
+                    >
+                      <View style={[styles.legendDot, { backgroundColor: RAMP[i % RAMP.length] }]} />
+                      <Text style={styles.legendNama} numberOfLines={1}>
+                        {s.nama}
+                      </Text>
+                      <Text style={styles.legendNominal}>{formatRupiahSingkat(s.total)}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </>
+          )}
+
+          {totalMenunggu > 0 && (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => setHanyaMenunggu((v) => !v)}
+              style={[styles.menungguRow, hanyaMenunggu && styles.menungguRowActive]}
+            >
+              <MaterialIcons name="schedule" size={18} color={colors.surfaceVariant} />
+              <Text style={styles.menungguText}>
+                <Text style={styles.menungguNominal}>{formatRupiah(totalMenunggu)}</Text> menunggu
+                verifikasi · {menunggu.length} pelayanan
+              </Text>
+              <MaterialIcons
+                name={hanyaMenunggu ? 'close' : 'chevron-right'}
+                size={18}
+                color={colors.surfaceVariant}
+              />
+            </Pressable>
+          )}
+        </View>
+
+        <View style={styles.rincianHeader}>
+          <Text style={styles.rincianTitle}>
+            {rincian.length} pelayanan{adaFilter ? ' tersaring' : ''}
+          </Text>
+          {adaFilter && (
+            <Pressable accessibilityRole="button" onPress={hapusFilter} hitSlop={8}>
+              <Text style={styles.hapusFilter}>Tampilkan semua</Text>
+            </Pressable>
+          )}
+        </View>
+
+        {grup.length === 0 ? (
+          <Text style={styles.emptyText}>Tidak ada pelayanan untuk filter ini.</Text>
+        ) : (
+          grup.map(([tanggal, isi]) => (
+            <View key={tanggal} style={styles.grup}>
+              <View style={styles.grupHeader}>
+                <Text style={styles.grupTanggal}>{labelTanggal(tanggal)}</Text>
+                <Text style={styles.grupTotal}>{formatRupiah(jumlah(isi))}</Text>
+              </View>
+              <View style={styles.grupCard}>
+                {isi.map((trx, index) => (
+                  <View key={trx.id}>
+                    {index > 0 && <View style={styles.trxDivider} />}
+                    <View style={styles.trxRow}>
+                      {/* Yang mengidentifikasi baris ini pelayanannya, bukan
+                          pasiennya: jenis + penjamin + tanggal di grup header
+                          sudah cukup buat mencocokkan klaim ke SIMRS. */}
+                      <Text style={styles.trxJenis} numberOfLines={1}>
+                        {trx.jenis === 'OPERASI' ? 'Operasi' : 'Konsultasi'}
+                        <Text style={styles.trxMeta}> · {trx.sumber}</Text>
+                      </Text>
+                      <View style={styles.trxNominalWrap}>
+                        <Text style={styles.trxNominal}>{formatRupiah(trx.nominal)}</Text>
+                        {trx.status === 'MENUNGGU' && (
+                          <Text style={styles.trxMenunggu}>Menunggu verifikasi</Text>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          ))
         )}
+
+        {sisa > 0 && (
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => setTampil((n) => n + BATCH)}
+            style={({ pressed }) => [styles.muatLagi, pressed && styles.ditekan]}
+          >
+            <Text style={styles.muatLagiText}>
+              Tampilkan {Math.min(BATCH, sisa)} pelayanan lagi
+            </Text>
+          </Pressable>
+        )}
+      </ScrollView>
+
+      <Modal
+        visible={bulanTerbuka}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setBulanTerbuka(false)}
+      >
+        <Pressable style={styles.backdrop} onPress={() => setBulanTerbuka(false)} />
+        <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.gutter }]}>
+          <Text style={styles.sheetTitle}>Pilih bulan</Text>
+          <ScrollView style={styles.sheetList} showsVerticalScrollIndicator={false}>
+            {BULAN_KEYS.map((key) => {
+              const active = key === bulan;
+              return (
+                <Pressable
+                  key={key}
+                  accessibilityRole="button"
+                  onPress={() => pilihBulan(key)}
+                  style={({ pressed }) => [styles.sheetItem, pressed && styles.ditekan]}
+                >
+                  <Text style={[styles.sheetItemText, active && styles.sheetItemTextActive]}>
+                    {labelBulanTahun(key)}
+                  </Text>
+                  {active && <MaterialIcons name="check" size={20} color={colors.primary} />}
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
       </Modal>
     </View>
   );
 }
+
+// Angka uang pakai figure tabular supaya kolom nominal lurus ke bawah; tanpa
+// ini digit Nunito Sans lebarnya beda-beda dan kolomnya goyang.
+const angka = { fontVariant: ['tabular-nums' as const] };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
@@ -285,133 +398,142 @@ const styles = StyleSheet.create({
     gap: 12,
     paddingHorizontal: spacing.marginMobile,
     paddingBottom: spacing.base,
-    borderBottomWidth: 1,
-    borderBottomColor: `${colors.outlineVariant}1A`,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerTitleWrap: { flex: 1, alignItems: 'center' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.onBackground },
-  headerSubtitle: { fontSize: 12, color: colors.outline, marginTop: 2 },
+  backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '700', color: colors.onBackground },
 
-  summaryCard: {
-    backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: radius.md,
-    padding: spacing.cardPadding,
-    gap: 20,
-    shadowColor: colors.primary,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 1,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    letterSpacing: 0.5,
-    color: colors.outline,
-    marginBottom: 4,
-  },
-  summaryValue: { fontSize: 24, fontWeight: '800', color: colors.onSurface },
-  divider: { height: 1, backgroundColor: colors.outlineVariant },
-  breakdownRow: { flexDirection: 'row' },
-  breakdownCol: { flex: 1 },
-  breakdownDividerVertical: {
-    width: 1,
-    backgroundColor: colors.outlineVariant,
-    marginHorizontal: spacing.gutter,
-  },
-  breakdownValue: { fontSize: 20, fontWeight: '700', color: colors.onSurface },
+  ditekan: { opacity: 0.7 },
 
-  filterRow: { flexDirection: 'row', gap: 10 },
-  filterChip: {
-    flex: 1,
+  bulanTrigger: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 4,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
+    gap: 10,
+    alignSelf: 'flex-start',
+    paddingLeft: 14,
+    paddingRight: 10,
+    paddingVertical: 8,
     borderRadius: radius.full,
     backgroundColor: colors.surfaceVariant,
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
   },
-  filterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  filterChipPressed: { opacity: 0.7 },
-  filterChipText: { flexShrink: 1, fontSize: 12, fontWeight: '600', color: colors.onSurface },
-  filterChipTextActive: { color: colors.onPrimary },
+  bulanTriggerText: { fontSize: 13, fontWeight: '700', color: colors.onSurface },
 
-  dropdown: {
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: '#00000066' },
+  sheet: {
     position: 'absolute',
-    width: DROPDOWN_WIDTH,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: radius.sm,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: colors.outlineVariant,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    elevation: 8,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    paddingTop: spacing.cardPadding,
   },
-  dropdownOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-  },
-  dropdownOptionActive: { backgroundColor: `${colors.primary}14` },
-  dropdownOptionText: { fontSize: 14, color: colors.onSurface },
-  dropdownOptionTextActive: { color: colors.primary, fontWeight: '700' },
-
-  sectionTitle: {
+  sheetTitle: {
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.5,
     color: colors.outline,
-    marginBottom: 12,
+    paddingHorizontal: spacing.marginMobile,
+    paddingBottom: spacing.base,
   },
-  emptyText: { fontSize: 14, color: colors.onSurfaceVariant },
-  trxCard: {
-    backgroundColor: colors.surfaceContainerLowest,
-    borderRadius: radius.md,
-    overflow: 'hidden',
-    padding: 16,
+  // Dibatasi tingginya supaya daftar bulan yang panjang tidak menutupi layar.
+  sheetList: { maxHeight: 320 },
+  sheetItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
-    borderWidth: 1,
-    borderColor: colors.surfaceVariant,
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.marginMobile,
+    paddingVertical: 14,
   },
-  trxIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: colors.surfaceSoft,
+  sheetItemText: { fontSize: 15, color: colors.onSurface },
+  sheetItemTextActive: { fontWeight: '800', color: colors.primary },
+
+  muatLagi: {
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  trxNama: { fontSize: 16, fontWeight: '700', color: colors.onSurface },
-  trxMeta: { fontSize: 14, color: colors.outline, marginTop: 2 },
-  trxNominal: { fontSize: 16, fontWeight: '700', color: colors.onSurface },
-  trxBadge: {
-    backgroundColor: colors.surfaceVariant,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  trxBadgeMenunggu: {
-    backgroundColor: colors.surfaceContainerLowest,
+    paddingVertical: 14,
+    borderRadius: radius.full,
     borderWidth: 1,
     borderColor: colors.outlineVariant,
   },
-  trxBadgeText: { fontSize: 10, fontWeight: '700', color: colors.onSurfaceVariant },
+  muatLagiText: { fontSize: 13, fontWeight: '700', color: colors.primary },
+
+  panel: {
+    backgroundColor: colors.deepTealDark,
+    borderRadius: radius.md,
+    padding: spacing.cardPadding,
+    gap: spacing.gutter,
+  },
+  panelLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    letterSpacing: 0.5,
+    color: colors.surfaceVariant,
+  },
+  panelAngkaRow: { gap: 6 },
+  panelAngka: { ...angka, fontSize: 30, fontWeight: '800', color: colors.onPrimary },
+  panelPeriode: { ...angka, fontSize: 12, color: colors.surfaceVariant },
+
+  bar: { flexDirection: 'row', height: 10, borderRadius: radius.full, overflow: 'hidden', gap: 2 },
+  legendRow: { gap: spacing.base },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.base,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    marginHorizontal: -8,
+    borderRadius: radius.sm,
+  },
+  legendItemActive: { backgroundColor: `${colors.onPrimary}14` },
+  legendDot: { width: 8, height: 8, borderRadius: 4 },
+  legendNama: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.onPrimary },
+  legendNominal: { ...angka, fontSize: 13, fontWeight: '700', color: colors.surfaceVariant },
+
+  menungguRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingTop: spacing.gutter,
+    borderTopWidth: 1,
+    borderTopColor: `${colors.onPrimary}24`,
+  },
+  menungguRowActive: { opacity: 0.75 },
+  menungguText: { flex: 1, fontSize: 12, color: colors.surfaceVariant },
+  menungguNominal: { ...angka, fontSize: 13, fontWeight: '800', color: colors.onPrimary },
+
+  jenisRow: { flexDirection: 'row', gap: spacing.base },
+  jenisItem: {
+    flex: 1,
+    gap: 2,
+    padding: 12,
+    borderRadius: radius.sm,
+    backgroundColor: `${colors.onPrimary}0F`,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  jenisItemActive: { backgroundColor: `${colors.onPrimary}1F`, borderColor: menuAccent.mint },
+  jenisLabel: { fontSize: 11, fontWeight: '600', color: colors.surfaceVariant },
+  jenisNominal: { ...angka, fontSize: 15, fontWeight: '800', color: colors.onPrimary },
+
+  rincianHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  rincianTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, color: colors.outline },
+  hapusFilter: { fontSize: 12, fontWeight: '700', color: colors.primary },
+  emptyText: { fontSize: 14, color: colors.onSurfaceVariant },
+
+  grup: { gap: spacing.base },
+  grupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
+  grupTanggal: { fontSize: 13, fontWeight: '700', color: colors.onSurfaceVariant },
+  grupTotal: { ...angka, fontSize: 12, fontWeight: '600', color: colors.outline },
+  grupCard: {
+    backgroundColor: colors.surfaceContainerLowest,
+    borderRadius: radius.sm,
+    paddingHorizontal: spacing.gutter,
+  },
+  trxDivider: { height: 1, backgroundColor: colors.surfaceVariant },
+  trxRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.gutter, paddingVertical: 14 },
+  trxJenis: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.onSurface },
+  trxMeta: { ...angka, fontSize: 12, color: colors.outline },
+  trxNominalWrap: { alignItems: 'flex-end', gap: 2 },
+  trxNominal: { ...angka, fontSize: 15, fontWeight: '700', color: colors.onSurface },
+  trxMenunggu: { fontSize: 10, fontWeight: '700', color: colors.outline },
 });

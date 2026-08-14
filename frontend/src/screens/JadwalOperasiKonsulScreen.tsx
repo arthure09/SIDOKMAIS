@@ -19,7 +19,6 @@ import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
 import { TextInput } from '../components/TextInput';
 import { ScrollToTopButton } from '../components/ScrollToTopButton';
-import { ContentSheet, SHEET_OVERLAP } from '../components/ContentSheet';
 import { ApiError } from '../api/client';
 import { fetchOperasiList } from '../api/operasi';
 import { fetchKunjunganList } from '../api/kunjungan';
@@ -112,11 +111,14 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   const { onScroll: onDockScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
   const { onScroll: onTopButtonScroll, visible: showScrollTop, reset: resetScrollTop } = useScrollToTopButton();
   const { headerBackgroundColor, headerShadowOpacity, headerElevation } = useAnimatedHeaderFade(scrolled);
+  // Satu baris per gestur: swipe pertama menyembunyikan filter, swipe kedua
+  // search bar. Toggle Konsultasi/Operasi sengaja tidak ikut — itu penanda
+  // posisi, bukan kontrol yang bisa hilang tanpa bikin bingung.
   const {
-    onScroll: onFilterScroll,
-    onLayout: onFilterLayout,
-    style: filterCollapseStyle,
-    innerStyle: filterSlideStyle,
+    onScroll: onHeaderScroll,
+    onScrollBeginDrag,
+    top: searchRow,
+    bottom: filterRow,
   } = useCollapseOnScroll();
   const konsulScrollRef = useRef<ScrollView>(null);
   const operasiScrollRef = useRef<ScrollView>(null);
@@ -133,9 +135,9 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       onDockScroll(e);
       onTopButtonScroll(e);
-      onFilterScroll(e);
+      onHeaderScroll(e);
     },
-    [onDockScroll, onTopButtonScroll, onFilterScroll],
+    [onDockScroll, onTopButtonScroll, onHeaderScroll],
   );
 
   function scrollToTop() {
@@ -260,7 +262,15 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
       <Animated.View
         style={[
           styles.headerArea,
-          { paddingTop: insets.top + ms(8), backgroundColor: headerBackgroundColor },
+          {
+            paddingTop: insets.top + ms(8),
+            backgroundColor: headerBackgroundColor,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 8,
+            shadowOpacity: headerShadowOpacity,
+            elevation: headerElevation,
+          },
         ]}
       >
         <View style={styles.toggleGroup}>
@@ -289,30 +299,34 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
             </Pressable>
           </View>
         </View>
-        <View style={styles.searchWrapper}>
-          <MaterialIcons name="search" size={20} color={colors.primary} />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder="Cari Nama atau No. RM..."
-            placeholderTextColor={colors.outline}
-            style={styles.searchInput}
-          />
-          {search.length > 0 && (
-            <Pressable onPress={() => setSearch('')} hitSlop={8}>
-              <MaterialIcons name="close" size={18} color={colors.onSurfaceVariant} />
-            </Pressable>
-          )}
-        </View>
+        <Animated.View style={searchRow.style} onLayout={searchRow.onLayout}>
+          <Animated.View style={[styles.rowSlot, searchRow.innerStyle]}>
+            <View style={styles.searchWrapper}>
+              <MaterialIcons name="search" size={20} color={colors.primary} />
+              <TextInput
+                value={search}
+                onChangeText={setSearch}
+                placeholder="Cari Nama atau No. RM..."
+                placeholderTextColor={colors.outline}
+                style={styles.searchInput}
+              />
+              {search.length > 0 && (
+                <Pressable onPress={() => setSearch('')} hitSlop={8}>
+                  <MaterialIcons name="close" size={18} color={colors.onSurfaceVariant} />
+                </Pressable>
+              )}
+            </View>
+          </Animated.View>
+        </Animated.View>
         {/* Pembungkus yang menanggung marginHorizontal negatif (bleed chip ke tepi
             layar), bukan ScrollView di dalamnya: useCollapseOnScroll memasang
             overflow hidden di sini, jadi kalau margin negatifnya ada di anak,
             chip paling pinggir malah kepotong. */}
         <Animated.View
-          style={[styles.statusFilterScroll, filterCollapseStyle]}
-          onLayout={onFilterLayout}
+          style={[styles.statusFilterScroll, filterRow.style]}
+          onLayout={filterRow.onLayout}
         >
-          <Animated.View style={filterSlideStyle}>
+          <Animated.View style={[styles.rowSlot, filterRow.innerStyle]}>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -338,7 +352,7 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
 
       </Animated.View>
 
-      <ContentSheet shadowOpacity={headerShadowOpacity} elevation={headerElevation}>
+      <View style={styles.sheet}>
       {tab === 'KONSUL' ? (
         kunjunganLoading ? (
           <View style={styles.center}>
@@ -363,6 +377,7 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
             contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
             showsVerticalScrollIndicator={false}
             onScroll={handleScroll}
+            onScrollBeginDrag={onScrollBeginDrag}
             scrollEventThrottle={scrollEventThrottle}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
@@ -431,6 +446,7 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
           contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
+          onScrollBeginDrag={onScrollBeginDrag}
           scrollEventThrottle={scrollEventThrottle}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
@@ -479,7 +495,7 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
           })}
         </ScrollView>
       )}
-      </ContentSheet>
+      </View>
 
       <ScrollToTopButton visible={showScrollTop} onPress={scrollToTop} bottom={tabBarClearance} />
     </View>
@@ -488,13 +504,18 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  sheet: { flex: 1 },
   headerArea: {
     padding: spacing.marginMobile,
-    // Sheet di bawah menindih header, jadi padding bawahnya ditambah sebanyak
-    // tindihan itu — kalau tidak, chip filter paling bawah ketutupan.
-    paddingBottom: ms(12) + SHEET_OVERLAP,
-    gap: ms(8),
+    paddingBottom: ms(12),
+    // zIndex biar shadow header jatuh DI ATAS list: tanpa itu sheet di bawahnya
+    // digambar belakangan dan menutupi bayangannya sendiri.
+    zIndex: 1,
   },
+  // Jarak antar band jadi padding di tiap baris, bukan `gap` di headerArea:
+  // gap tetap berlaku buat anak setinggi nol, jadi baris yang tersembunyi
+  // masih menyisakan celah kosong.
+  rowSlot: { paddingTop: ms(8) },
   // dateFilter + toggle digabung 1 kelompok (gap rapat) biar headerArea cuma
   // punya 3 "band" (toggleGroup, search, filter chip), bukan 4 baris rata —
   // tanggal jadi caption yang nempel ke toggle, bukan baris independen sendiri.

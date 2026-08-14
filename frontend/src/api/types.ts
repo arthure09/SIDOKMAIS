@@ -256,6 +256,15 @@ export type LoginResponse = {
     id: string;
     username: string;
     role: 'DOKTER' | 'ADMIN';
-    dokter: { id: string; nama: string; spesialisasi: string | null } | null;
+    // nip & sip opsional: sesi lama yang tersimpan di SecureStore (login
+    // sebelum field ini ada) tidak punya keduanya, dan screen-nya harus tetap
+    // jalan tanpa memaksa user login ulang.
+    dokter: {
+      id: string;
+      nama: string;
+      spesialisasi: string | null;
+      nip?: string;
+      sip?: string | null;
+    } | null;
   };
 };

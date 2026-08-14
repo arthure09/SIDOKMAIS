@@ -10,16 +10,14 @@ import { ApiError } from '../api/client';
 import { fetchNotifikasiList, markNotifikasiRead } from '../api/notifikasi';
 import { useAuthStore } from '../store/authStore';
 import type { NotifikasiItemApi, NotifikasiTipe } from '../api/types';
-import { notifikasiList as notifikasiMockList } from '../mocks/notifikasiMock';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useAnimatedHeaderFade } from '../hooks/useAnimatedHeaderFade';
-import { ContentSheet, SHEET_OVERLAP } from '../components/ContentSheet';
 import type { NotifikasiStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<NotifikasiStackParamList, 'NotifikasiList'>;
 
-type DisplayKategori = 'Lab' | 'Pasien Baru' | 'Jadwal';
+type DisplayKategori = 'Pasien Baru' | 'Jadwal';
 
 type DisplayItem = {
   id: string;
@@ -29,31 +27,9 @@ type DisplayItem = {
   waktu: string;
   isRead: boolean;
   icon: string;
-  bukaLaporanLab?: boolean;
-  /** Item demo statis (entity Laporan Lab belum ada modelnya) — tidak pernah manggil API. */
-  isDemo?: boolean;
   /** Cuma diisi dari respons API — dipakai buat tampilan ADMIN (lintas dokter). */
   dokterNama?: string;
 };
-
-// entity "Laporan Lab" belum ada modelnya (lihat CLAUDE.md) — DetailLaporanLabScreen
-// tetap murni UI dekoratif, jadi entry point-nya di sini tetap statis dari mock,
-// bukan hasil fetch ke /api/notifikasi (beda entity, jangan disambungin).
-const LAB_DEMO_ITEM: DisplayItem | undefined = (() => {
-  const mock = notifikasiMockList.find((n) => n.bukaLaporanLab);
-  if (!mock) return undefined;
-  return {
-    id: mock.id,
-    kategori: 'Lab',
-    judul: mock.judul,
-    pesan: mock.pesan,
-    waktu: mock.waktu,
-    isRead: mock.isRead,
-    icon: mock.icon,
-    bukaLaporanLab: true,
-    isDemo: true,
-  };
-})();
 
 const TIPE_META: Record<NotifikasiTipe, { kategori: DisplayKategori; judul: string; icon: string }> = {
   PASIEN_BARU: { kategori: 'Pasien Baru', judul: 'Pasien Baru Ditugaskan', icon: 'person-add' },
@@ -64,14 +40,12 @@ const TIPE_META: Record<NotifikasiTipe, { kategori: DisplayKategori; judul: stri
 // Tint per kategori (reuse token yang udah ada, bukan hex baru) — biar filter
 // kategori kebaca cepat dari warna, pola sama kayak NAVIGASI_TINTS di Home.
 const KATEGORI_TINT: Record<DisplayKategori, string> = {
-  Lab: colors.primaryContainer,
   'Pasien Baru': colors.primary,
   Jadwal: colors.tertiaryContainer,
 };
 
 const FILTERS: { label: string; value: DisplayKategori | 'Semua' }[] = [
   { label: 'Semua', value: 'Semua' },
-  { label: 'Hasil Lab', value: 'Lab' },
   { label: 'Pasien Baru', value: 'Pasien Baru' },
   { label: 'Jadwal', value: 'Jadwal' },
 ];
@@ -118,10 +92,6 @@ export function NotifikasiScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // LAB_DEMO_ITEM dikecualikan dari markNotifikasiRead (bukan entity asli, lihat
-  // komentar di atas) — status baca-nya dilacak lokal aja biar titik unread-nya
-  // ilang begitu dibuka, tanpa nyoba nulis ke /api/notifikasi.
-  const [labDemoRead, setLabDemoRead] = useState(LAB_DEMO_ITEM?.isRead ?? false);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!token) return;
@@ -147,21 +117,14 @@ export function NotifikasiScreen({ navigation }: Props) {
     setRefreshing(false);
   }, [load]);
 
-  const items = [
-    ...(LAB_DEMO_ITEM ? [{ ...LAB_DEMO_ITEM, isRead: labDemoRead }] : []),
-    ...apiItems.map(toDisplayItem),
-  ].filter((n) => filter === 'Semua' || n.kategori === filter);
+  const items = apiItems
+    .map(toDisplayItem)
+    .filter((n) => filter === 'Semua' || n.kategori === filter);
 
   function handlePress(item: DisplayItem) {
-    if (item.bukaLaporanLab) {
-      setLabDemoRead(true);
-      navigation.navigate('DetailLaporanLab');
-      return;
-    }
-
     // ADMIN cuma boleh lihat notifikasi dokter lain — mark-as-read tetap
     // hak milik dokter yang bersangkutan, jadi jangan dicoba dari sini.
-    const willMarkRead = !item.isDemo && !item.isRead && !!token && role === 'DOKTER';
+    const willMarkRead = !item.isRead && !!token && role === 'DOKTER';
     if (willMarkRead) {
       setApiItems((prev) => prev.map((n) => (n.id === item.id ? { ...n, isRead: true } : n)));
       markNotifikasiRead(token as string, item.id).catch(() => {
@@ -170,7 +133,7 @@ export function NotifikasiScreen({ navigation }: Props) {
     }
 
     navigation.navigate('DetailNotifikasi', {
-      kategori: item.kategori as 'Pasien Baru' | 'Jadwal',
+      kategori: item.kategori,
       judul: item.judul,
       pesan: item.pesan,
       waktu: item.waktu,
@@ -185,7 +148,15 @@ export function NotifikasiScreen({ navigation }: Props) {
       <Animated.View
         style={[
           styles.header,
-          { paddingTop: insets.top + ms(6), backgroundColor: headerBackgroundColor },
+          {
+            paddingTop: insets.top + ms(6),
+            backgroundColor: headerBackgroundColor,
+            shadowColor: '#000',
+            shadowOffset: { width: 0, height: 2 },
+            shadowRadius: 8,
+            shadowOpacity: headerShadowOpacity,
+            elevation: headerElevation,
+          },
         ]}
       >
         <View>
@@ -216,7 +187,7 @@ export function NotifikasiScreen({ navigation }: Props) {
         </ScrollView>
       </Animated.View>
 
-      <ContentSheet shadowOpacity={headerShadowOpacity} elevation={headerElevation}>
+      <View style={styles.sheet}>
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.primary} />
@@ -266,18 +237,15 @@ export function NotifikasiScreen({ navigation }: Props) {
                 </View>
                 <View style={{ flex: 1 }}>
                   <View style={styles.cardTopRow}>
-                    <View style={styles.cardTopLeft}>
-                      <View
-                        style={[
-                          styles.kategoriPill,
-                          { backgroundColor: `${KATEGORI_TINT[item.kategori]}1A` },
-                        ]}
-                      >
-                        <Text style={[styles.kategoriPillText, { color: KATEGORI_TINT[item.kategori] }]}>
-                          {item.kategori}
-                        </Text>
-                      </View>
-                      {item.isDemo && <Text style={styles.demoLabel}>Contoh</Text>}
+                    <View
+                      style={[
+                        styles.kategoriPill,
+                        { backgroundColor: `${KATEGORI_TINT[item.kategori]}1A` },
+                      ]}
+                    >
+                      <Text style={[styles.kategoriPillText, { color: KATEGORI_TINT[item.kategori] }]}>
+                        {item.kategori}
+                      </Text>
                     </View>
                     <Text style={styles.waktuText}>{item.waktu}</Text>
                   </View>
@@ -298,24 +266,25 @@ export function NotifikasiScreen({ navigation }: Props) {
           </View>
         </ScrollView>
       )}
-      </ContentSheet>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
+  sheet: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   errorText: { color: colors.error, textAlign: 'center' },
   emptyText: { color: colors.onSurfaceVariant, textAlign: 'center' },
   header: {
     paddingHorizontal: spacing.marginMobile,
-    // Sheet di bawah menindih header, jadi padding bawahnya ditambah sebanyak
-    // tindihan itu — kalau tidak, baris chip filter ketutupan.
-    paddingBottom: ms(10) + SHEET_OVERLAP,
+    paddingBottom: ms(10),
     backgroundColor: colors.background,
-    // Garis bawah dilepas: pemisah header sekarang lengkung sheet + shadow-nya,
-    // dan garis itu bakal terpotong melintang di tengah lengkungan.
+    // Garis bawah dilepas: pemisahnya sekarang shadow header waktu discroll.
+    // zIndex biar shadow itu jatuh DI ATAS list — tanpa itu sheet di bawahnya
+    // digambar belakangan dan menutupi bayangannya sendiri.
+    zIndex: 1,
   },
   content: { padding: spacing.marginMobile, gap: spacing.gutter, paddingBottom: ms(32) },
   title: { fontSize: ms(20), fontWeight: '800', color: colors.onBackground },
@@ -379,14 +348,12 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginBottom: ms(4),
   },
-  cardTopLeft: { flexDirection: 'row', alignItems: 'center', gap: ms(6) },
   kategoriPill: {
     paddingHorizontal: ms(8),
     paddingVertical: ms(2),
     borderRadius: ms(6),
   },
   kategoriPillText: { fontSize: ms(10), fontWeight: '700' },
-  demoLabel: { fontSize: ms(10), fontWeight: '600', fontStyle: 'italic', color: colors.outline },
   waktuText: { fontSize: ms(11), color: colors.outline },
   dokterNamaText: { fontSize: ms(12), fontWeight: '600', color: colors.primary, marginBottom: ms(2) },
   judul: { fontSize: ms(16), fontWeight: '700', color: colors.onBackground, marginBottom: ms(4) },

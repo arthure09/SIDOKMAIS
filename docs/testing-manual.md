@@ -93,7 +93,7 @@ tanggal 23 Jul 2026.
       `req.user.dokterId` dari JWT, tidak pernah dari input request
       (dicek manual lewat `grep dokterId` di `operasi.routes.js`).
 
-**Belum dites (opsional/bonus, lihat `docs/prompts/hari-10-challenge.md` Level 7):**
+**Belum dites (opsional/bonus, lihat `docs/latihan/hari-10-challenge.md` Level 7):**
 - [ ] Validasi `ruanganId` harus tipe `OK` — belum diimplementasikan, by design (keputusan produk yang sengaja ditunda)
 - [ ] Cek bentrok jadwal (ruangan + waktu overlap) — belum diimplementasikan, dicatat sebagai utang teknis untuk Hari 17 (validation layer chatbot)
 - [ ] Validasi transisi status (mis. `COMPLETED` tidak boleh balik ke `SCHEDULED`) — skip untuk MVP, cuma divalidasi value-nya termasuk salah satu dari 4 enum
@@ -364,7 +364,7 @@ untuk detail commit.
       lagi (slide-up) begitu keluar dari screen itu
 
 ### 3. Regresi — review kode Day 22
-Kasus tepi dari `docs/prompts/review-kode-day-22-4-agustus-2026.md` (bagian 6
+Kasus tepi dari `docs/analisa/review-kode-day-22-4-agustus-2026.md` (bagian 6
 & 8), belum ada bukti pengetesan manual untuk baris-baris ini:
 - [ ] Buka picker "Dari" atau "Sampai" lalu **diamkan tanpa memilih tanggal**
       beberapa saat (kondisi persis yang bikin crash sebelum fix — `value`

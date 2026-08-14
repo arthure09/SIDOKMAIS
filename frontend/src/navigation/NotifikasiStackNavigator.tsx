@@ -1,6 +1,5 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NotifikasiScreen } from '../screens/NotifikasiScreen';
-import { DetailLaporanLabScreen } from '../screens/DetailLaporanLabScreen';
 import { DetailNotifikasiScreen } from '../screens/DetailNotifikasiScreen';
 import type { NotifikasiStackParamList } from './types';
 
@@ -12,11 +11,6 @@ export function NotifikasiStackNavigator() {
       <Stack.Screen
         name="NotifikasiList"
         component={NotifikasiScreen}
-        options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="DetailLaporanLab"
-        component={DetailLaporanLabScreen}
         options={{ headerShown: false }}
       />
       <Stack.Screen

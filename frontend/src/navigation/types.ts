@@ -38,7 +38,6 @@ export type OperasiStackParamList = {
 
 export type NotifikasiStackParamList = {
   NotifikasiList: undefined;
-  DetailLaporanLab: undefined;
   DetailNotifikasi: {
     kategori: 'Pasien Baru' | 'Jadwal';
     judul: string;

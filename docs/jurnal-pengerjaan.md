@@ -617,7 +617,7 @@ lab tambahan:**
   `tabBarStore.hidden`, balik lagi begitu blur — screen PDF full-bleed jadi
   tidak ketutupan tab bar.
 
-**Review kode menyeluruh (`docs/prompts/review-kode-day-22-4-agustus-2026.md`):**
+**Review kode menyeluruh (`docs/analisa/review-kode-day-22-4-agustus-2026.md`):**
 dipicu laporan aplikasi keluar sendiri di filter tanggal Hasil Lab. Menelusuri
 kode sumber (bukan crash log — mesin pengembangan tidak punya `adb`/Xcode
 penuh, pengetesan device lewat Expo Go) menemukan akar masalah persis sama
@@ -1016,6 +1016,132 @@ terpisah yang tidak ikut `git pull`. `README.md` sudah mencatat langkah
 `git pull` — ditawarkan ke Arthuro buat ditambahkan ke README atau diwire ke
 start command container, belum ada keputusan sampai catatan ini ditulis.
 
+### Hari 30 (Rab, 12 Ags) — Ringkasan statistik Home, fix gestur swipe iOS, filter auto-sembunyi, panel konten membulat, rapikan `docs/`
+
+Masa buffer (11 Ags–akhir Agustus) sesuai `CLAUDE.md`. Frontend saja — tidak
+ada perubahan backend, schema, maupun endpoint. Lima commit sore (14:44–14:45
+WIB), plus penataan `docs/` yang belum di-commit saat catatan ini ditulis.
+
+Rekaman lengkap alasan tiap keputusan ada di
+`docs/catatan-belajar-frontend-12-agustus-2026.md` — entri jurnal ini
+ringkasannya.
+
+**`51363c7` — ringkasan teks statistik mingguan di Home:**
+- Pertanyaan pembuka dari Arthuro: perlukah memanggil LLM untuk menghasilkan
+  kalimat ringkasan di bawah chart "Statistik Pasien Mingguan"? **Tidak.**
+  Seluruh isinya aritmetika di atas array yang sama dengan yang menggambar
+  bar-nya, jadi rule-based menang di semua aspek yang relevan: angkanya
+  dijamin konsisten dengan chart, instan, gratis, dan bisa dites. LLM baru
+  masuk akal kalau ringkasannya butuh penalaran yang tidak bisa diturunkan
+  dari angka — bukan kasus di sini.
+- `frontend/src/utils/ringkasanAktivitas.ts`: fungsi murni, keluarannya satu
+  kalimat berisi total minggu berjalan, hari tersibuk, dan posisi hari ini
+  terhadap rata-rata harian.
+- **Sengaja tidak ada klaim naik/turun vs minggu lalu.** `GET
+  /api/dashboard/statistik` cuma mengirim minggu berjalan (`getRentangMingguIniWIB`
+  di `dashboard.routes.js`), jadi data pembandingnya memang tidak ada.
+  Kalau nanti dibutuhkan, backend perlu menambah hitungan rentang −7 hari
+  dulu — bukan ditebak di frontend.
+- Tesnya `ringkasanAktivitas.check.ts`, 7 assert dijalankan Node langsung
+  (`node src/utils/ringkasanAktivitas.check.ts`, type stripping Node 24),
+  bukan Jest — frontend belum punya Jest dan memasangnya untuk satu fungsi
+  murni tidak sepadan. Konsekuensinya `tsconfig.json` perlu
+  `allowImportingTsExtensions` karena impornya menyebut ekstensi `.ts` sesuai
+  aturan resolusi ESM.
+- Ikut di commit yang sama karena berkasnya sama: label menu "Tambah
+  Pengingat" → "Kalender Pengingat" (`id` tetap `kalender`), subjudul Menu →
+  "Pilihan menu untuk Anda", dan pill di belakang tombol grid/list.
+
+**`89d072c` — fix gestur swipe iOS di screen yang dibuka dari tile Menu:**
+- Bug lanjutan dari yang diperbaiki Hari 28. Tombol back header sudah benar
+  (ke Home) sejak `useMenuBack` dibuat, tapi **gestur geser dari tepi kiri
+  iPhone** masih mendarat di `ProfilDokter`/`PasienList` — root stack tab
+  tujuan yang tidak pernah sengaja dibuka user.
+- Akar masalah: `useMenuBack` cuma bisa mencegat dua dari tiga cara kembali.
+  Tombol back header dan back Android jalan di JS; gestur geser iOS
+  dijalankan native oleh `react-native-screens` tanpa lewat JS, jadi tidak
+  ada titik untuk membelokkannya.
+- Fix: `menuEntryScreenOptions` (di `useMenuBack.ts`) mematikan
+  `gestureEnabled` saat layar dibuka dengan param `fromHome`. Satu konstanta
+  dipakai ketiga layar (`DataPendapatan`, `CatatanKalender`,
+  `PilihPasienHasilLab`), bukan ditambal per layar.
+- **Kenapa dimatikan, bukan dibelokkan.** Membelokkan hanya bisa lewat
+  `usePreventRemove`, dan hook itu bekerja dengan menolak SEMUA penghapusan
+  layar — termasuk `popToTopOnBlur` di `MainTabNavigator` yang membersihkan
+  stack tab tujuan saat user balik ke Home. Kalau itu ikut tertolak,
+  `DataPendapatan` tidak pernah terbuang dan muncul lagi waktu tab Profil
+  ditekan (persis bug yang dulu diperbaiki `popToTopOnBlur`). Melepas kunci
+  saat layar kehilangan fokus juga tidak bisa diandalkan karena `freezeOnBlur`
+  membekukan layar non-aktif, jadi pelepasannya jadi balapan timing.
+  Kesimpulan ini dari membaca `node_modules/@react-navigation/core/src/usePreventRemove.tsx`
+  dan `bottom-tabs/src/views/BottomTabView.tsx`, bukan dari uji di device.
+
+**`51f9a8c` — lepas Data Pendapatan dari menu Profil:**
+- Entri itu dulu ditaruh di daftar Settings Profil karena Home belum punya
+  kartu menunya; sekarang sudah ada, jadi cuma jalan kedua ke layar yang sama.
+  Daftarnya balik ke 3 item versi Figma. Screen + route `DataPendapatan`
+  **tidak** dihapus, masih dipakai kartu menu Home.
+- Efek berantai: setelah entri itu hilang tidak ada satu pun item di daftar
+  yang punya tujuan navigasi, jadi `handleMenuPress`, `AVAILABLE_MENU_IDS`,
+  prop `navigation`, dan style `settingsRowPressed` ikut dibuang. Barisnya
+  jadi `View` biasa, bukan `Pressable` yang di-*disable*.
+
+**`9841db2` — filter auto-sembunyi saat scroll + panel konten membulat:**
+- `useCollapseOnScroll`: baris chip filter di Pasien & Jadwal naik saat scroll
+  ke bawah, turun lagi saat scroll ke atas. Dua lapis View — kotak luar tidak
+  bergeser dan dia yang memotong (`overflow: hidden`), isinya yang digeser —
+  supaya chip terlihat menyelinap ke **belakang** search bar. Versi pertama
+  menggeser kotaknya sendiri sehingga kotak itu menimpa search bar dan malah
+  terlihat lewat di depannya.
+- Dua `Animated.Value` terpisah: geseran isi native driver (mulus), tinggi
+  kotak JS driver (layout tidak bisa native). Satu nilai tidak boleh dipakai
+  dua driver sekaligus.
+- **Bug "list terasa nyangkut saat discroll balik"** (dilaporkan Arthuro
+  setelah versi pertama). Akar masalahnya umpan balik: selama animasi jalan
+  tinggi viewport list ikut berubah → `ScrollView` menjepit `contentOffset` →
+  jepitan itu masuk lagi ke `onScroll` sebagai scroll balik arah → memicu
+  animasi lawan. Dua penjaga: (a) arah tidak dibaca selama animasi + 80ms
+  sesudahnya; (b) filter tidak disembunyikan kalau sisa jarak ke dasar list
+  kurang dari 2× tingginya, karena di sana menyembunyikannya justru menambah
+  ruang scroll dan menarik konten balik ke atas.
+- `ContentSheet` (komponen baru): panel konten menindih header sejauh
+  radiusnya, jadi warna header mengintip di dua sudut atas — lengkung
+  menghadap ke luar, pola kartu putih di bawah header biru Livin' yang jadi
+  rujukan Arthuro. Dipakai Pasien, Jadwal, dan Notifikasi. Shadow menempel di
+  sheet (offset negatif, jatuh ke atas), bukan di header, karena sheet
+  menindih header sehingga shadow milik header sendiri ketutupan.
+- **Temuan desain yang layak diingat:** lengkung terbaca dari kontras, bukan
+  dari radius. Dengan skema header sekarang (`#effbff` → `#ffffff` saat
+  discroll) rasionya cuma ~1.06:1 — praktis tidak terlihat; yang benar-benar
+  memisahkan header dari list adalah shadow-nya. Header berwarna solid sempat
+  dicoba (`primary` `#006a65`, 6.1:1) lalu **dikembalikan atas permintaan
+  Arthuro** — kalau mau diambil, itu keputusan untuk semua screen sekaligus,
+  bukan satu layar.
+
+**`1d44ee2` — `docs/catatan-belajar-frontend-12-agustus-2026.md`:** dokumen
+belajar berisi gejala → akar masalah → perbaikan → pelajaran untuk tiap butir
+di atas, atas permintaan Arthuro.
+
+**Penataan `docs/` (belum di-commit saat catatan ini ditulis):**
+- 22 berkas di `docs/prompts/` dipilah: 18 prompt eksekusi tetap di sana,
+  2 materi challenge pindah ke `docs/latihan/`, 2 review/brief pindah ke
+  `docs/analisa/`.
+- **Penting:** `docs/prompts/` ternyata sudah ada di `.gitignore` sejak awal
+  ("Local prompt/dev journal notes — not for the repo"). Memindahkan isinya ke
+  `docs/` biasa akan membuat catatan lokal itu ikut terpublikasi, jadi dua
+  folder baru ikut ditambahkan ke `.gitignore` supaya statusnya tidak
+  berubah diam-diam. Kalau nanti salah satunya memang mau masuk repo, hapus
+  barisnya dari `.gitignore` — bukan pindahkan berkasnya.
+- Rujukan path lama diperbarui di `testing-manual.md` (2 tempat),
+  `jurnal-pengerjaan.md`, dan komentar `homeMock.ts`.
+- `docs/README.md` baru: cara mengenali tiap jenis dokumen + 4 aturan menaruh
+  dokumen baru, supaya pembagian ini tidak berantakan lagi.
+
+**Status verifikasi:** semua lolos `npx tsc --noEmit` dan
+`ringkasanAktivitas.check.ts` lolos, tapi **tidak ada satu pun yang dites di
+perangkat**. Daftar yang perlu dicek langsung ada di bagian 9
+`docs/catatan-belajar-frontend-12-agustus-2026.md`.
+
 ---
 
 ## Catatan lintas-hari yang masih terbuka
@@ -1042,6 +1168,24 @@ start command container, belum ada keputusan sampai catatan ini ditulis.
   manual di dalam container (`docker compose exec app npx prisma generate`)
   sebelum restart/recreate, tidak otomatis ikut `git pull`. Belum diputuskan
   apa didokumentasikan di README atau diwire ke start command container.
+- **Gestur swipe iOS dimatikan, belum dibelokkan** (Hari 30, 12 Ags): layar
+  yang dibuka dari tile Menu Home kehilangan gestur geser tepi kiri. Perbaikan
+  tuntasnya mendaftarkan layar-layar itu di stack milik HomeTab sendiri supaya
+  pop native-nya memang mendarat di Home — ditunda karena
+  `PilihPasienHasilLab` bercabang ke `HasilLabList` → `HasilLabDetail` →
+  `LihatPdfLab`, jadi keempatnya harus ikut didaftarkan ulang.
+- **Animasi collapse filter masih mengubah layout** (Hari 30, 12 Ags):
+  `useCollapseOnScroll` menganimasikan tinggi di thread JS, jadi frame
+  `ScrollView` ikut berubah tiap frame. Dua penjaga sudah menutup loop
+  buka-tutupnya, tapi penyebab dasarnya belum hilang. Perbaikan tuntasnya
+  header dijadikan `position: absolute` + `paddingTop` di list. Ditandai
+  komentar `ponytail:` di hook-nya.
+- **Header berwarna solid belum diputuskan** (Hari 30, 12 Ags): lengkung
+  `ContentSheet` baru benar-benar terbaca kalau header punya warna kontras
+  (`primary` `#006a65` = 6.1:1, vs ~1.06:1 dengan skema sekarang). Sempat
+  dicoba lalu dikembalikan — kalau diambil, harus diterapkan ke semua screen
+  sekaligus, dan seluruh isi header ikut ditinjau (chip aktif, warna teks,
+  `StatusBar`).
 
 ---
 

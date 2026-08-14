@@ -121,15 +121,18 @@ function PagerSlide({
 
 type Props = BottomTabScreenProps<MainTabParamList, 'HomeTab'>;
 
+// Label sengaja tanpa "Hari Ini": judul seksi di atasnya sudah bilang
+// "Ringkasan Aktivitas Hari Ini", jadi pengulangannya cuma bikin teks patah
+// jadi 2-3 baris di kolom selebar ~73pt (paling parah "Konsultasi Hari Ini").
 const RINGKASAN_ROWS = [
   { key: 'pasienAktif' as const, label: 'Pasien Aktif', icon: 'groups', tint: colors.primary },
   {
     key: 'operasiHariIni' as const,
-    label: 'Operasi Hari Ini',
+    label: 'Operasi',
     icon: 'local-hospital',
     tint: colors.tertiaryContainer,
   },
-  { key: 'konsulHariIni' as const, label: 'Konsultasi Hari Ini', icon: 'chat-bubble', tint: colors.primary },
+  { key: 'konsulHariIni' as const, label: 'Konsultasi', icon: 'chat-bubble', tint: colors.primary },
 ];
 
 // 'radiologi' belum ada modulnya sendiri (gak ada entity/endpoint di
@@ -828,14 +831,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  statTileValue: { fontSize: 26, fontWeight: '800', marginLeft: 9 },
+  // Ikon, angka, dan label rata di satu garis kiri (dulu marginLeft-nya
+  // beda-beda: 0 / 9 / 4, kelihatan kayak tangga).
+  statTileValue: { fontSize: 26, fontWeight: '800' },
   statTileLabel: {
     fontSize: 11,
     fontWeight: '600',
     color: colors.onSurfaceVariant,
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-    marginLeft: 4,
+    letterSpacing: 0.2,
   },
 
   priorityCard: {

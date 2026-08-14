@@ -7,6 +7,7 @@ type AuthState = {
   pengguna: LoginResponse['pengguna'] | null;
   hydrated: boolean;
   setAuth: (data: LoginResponse, rememberMe: boolean) => void;
+  setPengguna: (pengguna: LoginResponse['pengguna']) => void;
   logout: () => void;
   hydrate: () => Promise<void>;
 };
@@ -26,6 +27,17 @@ export const useAuthStore = create<AuthState>((set) => ({
     } else {
       clearSession().catch(() => {});
     }
+  },
+  // Identitas disegarkan dari /api/auth/me. Sesi tersimpan ikut ditimpa supaya
+  // bentuk lama tidak balik lagi di buka berikutnya — kalau user tidak
+  // mencentang "Ingat Saya", loadSession() null dan tidak ada yang ditulis.
+  setPengguna: (pengguna) => {
+    set({ pengguna });
+    loadSession()
+      .then((sesi) => {
+        if (sesi) return saveSession({ ...sesi, pengguna });
+      })
+      .catch(() => {});
   },
   logout: () => {
     set({ token: null, pengguna: null });

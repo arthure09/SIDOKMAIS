@@ -176,14 +176,14 @@ nice-to-have yang dipangkas, atau tugas lain dari supervisor.
   Notifikasi tetap ada (disembunyikan dari tab bar, diakses lewat bel di
   header Home) — modul itu sudah tersambung backend asli & sudah dites,
   jadi tidak dihapus.
-- `DetailLaporanLabScreen` (screen Notifikasi → Detail Laporan Lab) dibangun
-  sebagai UI dekoratif hasil eksplorasi desain Figma, di luar 4 modul resmi
-  rencana awal. **Update 30 Jul 2026:** entity-nya sekarang SUDAH ada di
-  `schema.prisma` (`PemeriksaanLab` + `HasilLabItem`, migration
-  `20260730024026_add_lab_module`), jadi catatan lama "belum ada modelnya"
-  tidak berlaku lagi. Screen-nya sendiri masih pakai
-  `frontend/src/mocks/notifikasiMock.ts` — penyambungan ke data asli
-  dijadwalkan Hari 19 setelah endpoint Hari 18 siap.
+- `DetailLaporanLabScreen` (screen Notifikasi → Detail Laporan Lab) **dihapus
+  total** (keputusan Arthuro, 2026-08-14) — screen dekoratif dari eksplorasi
+  Figma ini sudah digantikan modul Cari Hasil Lab yang tersambung backend asli
+  (`HasilLabListScreen`/`HasilLabDetailScreen`), jadi tidak perlu ada dua jalur
+  ke data yang sama. Ikut dihapus: kartu demo statis kategori "Lab" +
+  chip filter "Hasil Lab" di `NotifikasiScreen`, route `DetailLaporanLab`, dan
+  `frontend/src/mocks/notifikasiMock.ts` (jadi nol consumer). Notifikasi
+  sekarang murni dari `/api/notifikasi` dengan 2 kategori: Pasien Baru & Jadwal.
 - `DetailPembatalanOperasiScreen` (screen bonus Figma di luar 6 screen batch
   ini) dihapus total (keputusan Arthuro, 2026-07-24) — dokter tidak punya
   wewenang mengatur/menindaklanjuti jadwal operasi (aplikasi ini SIMRS info

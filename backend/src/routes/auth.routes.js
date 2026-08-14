@@ -6,6 +6,27 @@ const authMiddleware = require("../middleware/auth.middleware");
 
 const router = express.Router();
 
+// Satu bentuk untuk /login dan /me — dua literal terpisah sebelumnya, dan itu
+// resep dua response yang diam-diam beda isinya.
+// nip & sip dipakai kartu identitas di ProfilDokterScreen. Aman: yang dikirim
+// selalu identitas akun yang sedang login sendiri, bukan dokter lain.
+function bentukPengguna(pengguna) {
+  return {
+    id: pengguna.id,
+    username: pengguna.username,
+    role: pengguna.role,
+    dokter: pengguna.dokter
+      ? {
+          id: pengguna.dokter.id,
+          nama: pengguna.dokter.nama,
+          spesialisasi: pengguna.dokter.spesialisasi,
+          nip: pengguna.dokter.nip,
+          sip: pengguna.dokter.sip,
+        }
+      : null,
+  };
+}
+
 router.post("/login", async (req, res) => {
   const { username, password } = req.body;
 
@@ -34,21 +55,7 @@ router.post("/login", async (req, res) => {
     role: pengguna.role,
   });
 
-  res.json({
-    token,
-    pengguna: {
-      id: pengguna.id,
-      username: pengguna.username,
-      role: pengguna.role,
-      dokter: pengguna.dokter
-        ? {
-            id: pengguna.dokter.id,
-            nama: pengguna.dokter.nama,
-            spesialisasi: pengguna.dokter.spesialisasi,
-          }
-        : null,
-    },
-  });
+  res.json({ token, pengguna: bentukPengguna(pengguna) });
 });
 
 router.get("/me", authMiddleware, async (req, res) => {
@@ -61,18 +68,7 @@ router.get("/me", authMiddleware, async (req, res) => {
     return res.status(404).json({ message: "Pengguna tidak ditemukan" });
   }
 
-  res.json({
-    id: pengguna.id,
-    username: pengguna.username,
-    role: pengguna.role,
-    dokter: pengguna.dokter
-      ? {
-          id: pengguna.dokter.id,
-          nama: pengguna.dokter.nama,
-          spesialisasi: pengguna.dokter.spesialisasi,
-        }
-      : null,
-  });
+  res.json(bentukPengguna(pengguna));
 });
 
 module.exports = router;

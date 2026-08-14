@@ -22,5 +22,10 @@ npm-debug.log*
 .DS_Store
 **/.DS_Store
 
-# Local prompt/dev journal notes — not for the repo
+# Local prompt/dev journal notes — not for the repo.
+# latihan/ & analisa/ dipisah dari prompts/ waktu docs dirapikan (12 Ags 2026);
+# statusnya tetap sama, catatan lokal. Hapus barisnya kalau salah satu mau
+# ikut masuk repo.
 docs/prompts/
+docs/latihan/
+docs/analisa/
