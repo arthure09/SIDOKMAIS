@@ -994,9 +994,13 @@ async function seedKonsultasi(dokterList, dokterUtama, pasienList, pasienUtama, 
       await prisma.konsultasi.create({
         data: {
           pasienId: pasien.id,
-          // Sebagian konsul sengaja tanpa konteks kunjungan (kunjunganId
-          // nullable) supaya layar detail teruji di dua-duanya.
-          kunjunganId: kunjunganByPasien.get(pasien.id)?.id ?? null,
+          // Sekitar seperempat sengaja tanpa konteks kunjungan supaya jalur
+          // `kunjunganId` null benar-benar terpakai di layar detail. Tanpa
+          // undian ini semuanya kebagian kunjungan — tiap pasien di seed selalu
+          // punya minimal satu — dan kondisi itu tidak pernah teruji di app.
+          kunjunganId: faker.datatype.boolean(0.75)
+            ? (kunjunganByPasien.get(pasien.id)?.id ?? null)
+            : null,
           dokterPengirimId: dokterPengirim.id,
           dokterTujuanId: dokterTujuan.id,
           prioritas: faker.datatype.boolean(0.25) ? "CITO" : "BIASA",
