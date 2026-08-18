@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
-import { ActivityIndicator, Animated, FlatList, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, FlatList, Modal, Pressable, RefreshControl, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,8 +11,8 @@ import { colors, radius, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
 import { TextInput } from '../components/TextInput';
 import { ScrollToTopButton } from '../components/ScrollToTopButton';
-import type { AssignmentStatus, PasienListItem } from '../api/types';
-import { labelJenisKunjungan } from '../utils/jenisKunjungan';
+import type { AssignmentStatus, JenisKunjungan, PasienListItem } from '../api/types';
+import { JENIS_KUNJUNGAN_LABEL, labelJenisKunjungan } from '../utils/jenisKunjungan';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useScrollToTopButton } from '../hooks/useScrollToTopButton';
@@ -22,11 +22,93 @@ import type { PasienStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<PasienStackParamList, 'PasienList'>;
 
-const STATUS_FILTERS: { label: string; value: AssignmentStatus | undefined }[] = [
+type Opsi<T> = { label: string; value: T };
+
+// Dua dropdown, bukan enam chip: dua kelompok filter yang berdiri sendiri tidak
+// muat satu baris di layar ponsel, dan yang dibungkus jadi dua baris ikut
+// menaikkan tinggi header yang menyusut-mengembang waktu scroll.
+const STATUS_OPTIONS: Opsi<AssignmentStatus | undefined>[] = [
   { label: 'Semua', value: undefined },
   { label: 'Aktif', value: 'ACTIVE' },
   { label: 'Selesai', value: 'COMPLETED' },
 ];
+
+const JENIS_OPTIONS: Opsi<JenisKunjungan | undefined>[] = [
+  { label: 'Semua', value: undefined },
+  // Dibangun dari peta label, bukan diketik ulang, supaya tidak melenceng dari
+  // label yang dipakai badge di kartu.
+  ...(['RAWAT_JALAN', 'IGD', 'RAWAT_INAP'] as JenisKunjungan[]).map((value) => ({
+    label: JENIS_KUNJUNGAN_LABEL[value],
+    value,
+  })),
+];
+
+// Tombol + bottom sheet, mengikuti pola dropdown bulan di DataPendapatanScreen.
+// Waktu tidak ada yang dipilih tombolnya menampilkan nama dimensinya
+// ("Status"), bukan "Semua" — dua tombol bertuliskan "Semua" bersebelahan tidak
+// memberi tahu apa pun soal isinya.
+function FilterDropdown<T>({
+  judul,
+  labelKosong,
+  opsi,
+  nilai,
+  onPilih,
+}: {
+  judul: string;
+  labelKosong: string;
+  opsi: Opsi<T>[];
+  nilai: T;
+  onPilih: (nilai: T) => void;
+}) {
+  const insets = useSafeAreaInsets();
+  const [terbuka, setTerbuka] = useState(false);
+  const aktif = nilai !== undefined;
+  const label = aktif ? (opsi.find((o) => o.value === nilai)?.label ?? labelKosong) : labelKosong;
+
+  return (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${judul}: ${label}`}
+        onPress={() => setTerbuka(true)}
+        style={({ pressed }) => [styles.dropdown, aktif && styles.dropdownAktif, pressed && styles.ditekan]}
+      >
+        <Text style={[styles.dropdownText, aktif && styles.dropdownTextAktif]}>{label}</Text>
+        <MaterialIcons
+          name="expand-more"
+          size={18}
+          color={aktif ? colors.onPrimary : colors.onSurfaceVariant}
+        />
+      </Pressable>
+
+      <Modal visible={terbuka} transparent animationType="fade" onRequestClose={() => setTerbuka(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setTerbuka(false)} />
+        <View style={[styles.modalSheet, { paddingBottom: insets.bottom + spacing.gutter }]}>
+          <Text style={styles.sheetTitle}>{judul}</Text>
+          {opsi.map((o) => {
+            const terpilih = o.value === nilai;
+            return (
+              <Pressable
+                key={o.label}
+                accessibilityRole="button"
+                onPress={() => {
+                  onPilih(o.value);
+                  setTerbuka(false);
+                }}
+                style={({ pressed }) => [styles.sheetItem, pressed && styles.ditekan]}
+              >
+                <Text style={[styles.sheetItemText, terpilih && styles.sheetItemTextActive]}>
+                  {o.label}
+                </Text>
+                {terpilih && <MaterialIcons name="check" size={20} color={colors.primary} />}
+              </Pressable>
+            );
+          })}
+        </View>
+      </Modal>
+    </>
+  );
+}
 
 const STATUS_BADGE: Record<AssignmentStatus, { label: string; bg: string; fg: string }> = {
   ACTIVE: { label: 'AKTIF', bg: colors.primary, fg: colors.onPrimary },
@@ -64,6 +146,7 @@ export function PasienListScreen({ navigation }: Props) {
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<AssignmentStatus | undefined>(undefined);
+  const [jenis, setJenis] = useState<JenisKunjungan | undefined>(undefined);
   const [items, setItems] = useState<PasienListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -88,14 +171,20 @@ export function PasienListScreen({ navigation }: Props) {
     if (!opts?.silent) setLoading(true);
     setError(null);
     try {
-      const result = await fetchPasienList(token, { search, status, page: 1, limit: 50 });
+      const result = await fetchPasienList(token, {
+        search,
+        status,
+        jenisKunjungan: jenis,
+        page: 1,
+        limit: 50,
+      });
       setItems(result.data);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Gagal memuat data pasien');
     } finally {
       if (!opts?.silent) setLoading(false);
     }
-  }, [token, search, status]);
+  }, [token, search, status, jenis]);
 
   useEffect(() => {
     load();
@@ -145,20 +234,20 @@ export function PasienListScreen({ navigation }: Props) {
 
         <Animated.View style={filterRow.style} onLayout={filterRow.onLayout}>
           <Animated.View style={[styles.filterRow, filterRow.innerStyle]}>
-            {STATUS_FILTERS.map((f) => {
-              const active = status === f.value;
-              return (
-                <Pressable
-                  key={f.label}
-                  onPress={() => setStatus(f.value)}
-                  style={[styles.filterChip, active && styles.filterChipActive]}
-                >
-                  <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                    {f.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
+            <FilterDropdown
+              judul="Status pasien"
+              labelKosong="Status"
+              opsi={STATUS_OPTIONS}
+              nilai={status}
+              onPilih={setStatus}
+            />
+            <FilterDropdown
+              judul="Jenis kunjungan"
+              labelKosong="Jenis Kunjungan"
+              opsi={JENIS_OPTIONS}
+              nilai={jenis}
+              onPilih={setJenis}
+            />
           </Animated.View>
         </Animated.View>
       </Animated.View>
@@ -309,26 +398,62 @@ const styles = StyleSheet.create({
     // styles.header supaya tidak ikut hilang waktu baris ini menyusut.
     paddingTop: 12,
   },
-  filterChip: {
-    paddingHorizontal: 16,
+  ditekan: { opacity: 0.7 },
+
+  dropdown: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingLeft: 14,
+    paddingRight: 8,
     paddingVertical: 8,
     borderRadius: radius.full,
     backgroundColor: colors.surfaceContainerLowest,
     borderWidth: 1,
     borderColor: colors.surfaceVariant,
   },
-  filterChipActive: {
+  dropdownAktif: {
     backgroundColor: colors.primary,
     borderColor: colors.primary,
   },
-  filterChipText: {
+  dropdownText: {
     fontSize: 12,
     fontWeight: '600',
     color: colors.onSurface,
   },
-  filterChipTextActive: {
+  dropdownTextAktif: {
     color: colors.onPrimary,
   },
+
+  backdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: '#00000066' },
+  // `sheet` di atas sudah dipakai panel konten layar ini — ini yang modal.
+  modalSheet: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: colors.surfaceContainerLowest,
+    borderTopLeftRadius: radius.lg,
+    borderTopRightRadius: radius.lg,
+    paddingTop: spacing.cardPadding,
+  },
+  sheetTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    color: colors.outline,
+    paddingHorizontal: spacing.marginMobile,
+    paddingBottom: spacing.base,
+  },
+  sheetItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: spacing.marginMobile,
+    paddingVertical: 14,
+  },
+  sheetItemText: { fontSize: 15, color: colors.onSurface },
+  sheetItemTextActive: { fontWeight: '800', color: colors.primary },
 
   listContent: {
     padding: spacing.marginMobile,
