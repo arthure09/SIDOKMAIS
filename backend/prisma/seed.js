@@ -80,6 +80,7 @@ function generateNamaOrang() {
 
 async function resetData() {
   await prisma.auditLog.deleteMany();
+  await prisma.konsultasi.deleteMany();
   await prisma.pendapatan.deleteMany();
   await prisma.operasi.deleteMany();
   await prisma.hasilLabItem.deleteMany();
@@ -878,6 +879,150 @@ async function seedNotifikasi(dokterList) {
   return notifikasi;
 }
 
+// Satu skenario = satu surat konsul yang utuh: permintaannya nyambung dengan
+// diagnosis kerjanya, dan jawabannya menjawab permintaan itu. Field-nya TIDAK
+// diacak sendiri-sendiri — permintaan "evaluasi anestesi" yang dijawab "tunda
+// kemoterapi" bukan data dummy, itu data rusak. Prinsip yang sama dengan seed
+// lab (nilai berkorelasi, bukan angka acak per parameter).
+const SKENARIO_KONSULTASI = [
+  {
+    diagnosisKerja: "Ca mammae dextra, rencana mastektomi",
+    konsulYangDiminta: "Mohon evaluasi kelayakan anestesi dan toleransi operasi pada pasien ini.",
+    jawaban: {
+      penemuan:
+        "Pasien kompos mentis, tekanan darah terkontrol dengan antihipertensi, tidak ada keluhan sesak. " +
+        "EKG irama sinus normal, foto toraks tidak tampak lesi metastasis.",
+      diagnosisJawaban: "Status fisik ASA II",
+      anjuran: "Puasa 8 jam pra-operasi. Antihipertensi tetap diminum pagi hari operasi.",
+      setujuUntuk: "Tindakan mastektomi dengan anestesi umum",
+    },
+  },
+  {
+    diagnosisKerja: "Ca colon dengan anemia berat",
+    konsulYangDiminta: "Mohon penanganan anemia sebelum tindakan bedah definitif.",
+    jawaban: {
+      penemuan: "Hb 7,2 g/dL, konjungtiva anemis, tidak ditemukan tanda perdarahan aktif saat ini.",
+      diagnosisJawaban: "Anemia defisiensi besi et causa perdarahan kronis",
+      anjuran: "Transfusi PRC 2 kolf, evaluasi Hb ulang 6 jam pasca transfusi.",
+      setujuUntuk: "Tindakan bedah setelah Hb mencapai 10 g/dL",
+    },
+  },
+  {
+    diagnosisKerja: "Limfoma non-Hodgkin, pasca kemoterapi siklus ke-3",
+    konsulYangDiminta: "Mohon evaluasi neutropenia dan kelayakan siklus kemoterapi berikutnya.",
+    jawaban: {
+      penemuan: "Leukosit 2.100/uL, ANC 800/uL. Tidak ada demam maupun fokus infeksi.",
+      diagnosisJawaban: "Neutropenia derajat 3 tanpa infeksi",
+      anjuran: "Tunda siklus 1 minggu, berikan G-CSF, ulangi darah lengkap sebelum siklus berikutnya.",
+      setujuUntuk: "Penundaan kemoterapi siklus ke-4",
+    },
+  },
+  {
+    diagnosisKerja: "Tumor paru dengan efusi pleura",
+    konsulYangDiminta: "Mohon pertimbangan tindakan pungsi pleura diagnostik.",
+    jawaban: {
+      penemuan:
+        "Suara napas menurun di basal kanan. Foto toraks: efusi kurang lebih sepertiga hemitoraks kanan.",
+      diagnosisJawaban: "Efusi pleura maligna",
+      anjuran: "Torakosentesis diagnostik disertai pemeriksaan sitologi cairan pleura.",
+      setujuUntuk: "Tindakan torakosentesis",
+    },
+  },
+  {
+    diagnosisKerja: "Nyeri kanker derajat berat pada Ca serviks stadium lanjut",
+    konsulYangDiminta: "Mohon penyesuaian regimen analgetik, nyeri belum terkontrol.",
+    jawaban: {
+      penemuan: "Skala nyeri 8/10, nyeri menetap sepanjang hari, tidak teratasi dengan NSAID.",
+      diagnosisJawaban: "Nyeri kanker nosiseptif derajat berat",
+      anjuran: "Naikkan ke opioid kuat sesuai step 3 WHO, evaluasi respons dalam 24 jam.",
+      setujuUntuk: "Pemberian morfin oral dengan titrasi bertahap",
+    },
+  },
+  {
+    diagnosisKerja: "Ca nasofaring, rencana radioterapi",
+    konsulYangDiminta: "Mohon evaluasi kondisi gigi dan mulut sebelum radiasi kepala-leher.",
+    jawaban: {
+      penemuan: "Karies pada dua gigi molar rahang bawah, gingiva hiperemis.",
+      diagnosisJawaban: "Karies dentis dengan risiko osteoradionekrosis",
+      anjuran: "Ekstraksi gigi bermasalah, tunggu penyembuhan 2 minggu sebelum radiasi dimulai.",
+      setujuUntuk: "Ekstraksi gigi pra-radioterapi",
+    },
+  },
+];
+
+const KESADARAN_LIST = ["Kompos mentis", "Kompos mentis", "Kompos mentis", "Apatis"];
+
+function ikhtisarKlinis() {
+  return {
+    kesadaran: pickOne(KESADARAN_LIST),
+    tekananDarah: `${faker.number.int({ min: 100, max: 145 })}/${faker.number.int({ min: 60, max: 95 })}`,
+    nadi: faker.number.int({ min: 60, max: 104 }),
+    pernapasan: faker.number.int({ min: 16, max: 24 }),
+    suhu: Number(faker.number.float({ min: 36.2, max: 37.9, fractionDigits: 1 }).toFixed(1)),
+    tinggiBadan: faker.number.int({ min: 150, max: 178 }),
+    beratBadan: Number(faker.number.float({ min: 44, max: 86, fractionDigits: 1 }).toFixed(1)),
+    nyeri: faker.number.int({ min: 0, max: 8 }),
+  };
+}
+
+// Akses modul ini lewat `dokterTujuanId`, jadi mayoritas konsul sengaja
+// ditujukan ke dokterUtama — kalau tidak, layar Konsul pada akun login utama
+// tampil kosong meski datanya ada di DB.
+async function seedKonsultasi(dokterList, dokterUtama, pasienList, pasienUtama, kunjunganList) {
+  const dokterLainnya = dokterList.filter((d) => d.id !== dokterUtama.id);
+  const kunjunganByPasien = new Map();
+  for (const k of kunjunganList) {
+    if (!kunjunganByPasien.has(k.pasienId)) kunjunganByPasien.set(k.pasienId, k);
+  }
+
+  const konsultasi = [];
+  const now = new Date();
+
+  for (let i = 0; i < 14; i++) {
+    const untukDokterUtama = i < 9;
+    const dokterTujuan = untukDokterUtama ? dokterUtama : pickOne(dokterLainnya);
+    // Pengirim tidak boleh sama dengan tujuan — dokter tidak mengonsulkan
+    // pasien kepada dirinya sendiri.
+    const dokterPengirim = pickOne(dokterList.filter((d) => d.id !== dokterTujuan.id));
+    const pasien = pickOne(untukDokterUtama ? pasienUtama : pasienList);
+    const skenario = pickOne(SKENARIO_KONSULTASI);
+
+    const sudahDijawab = faker.datatype.boolean(0.55);
+    const tanggalPermintaan = faker.date.recent({ days: 21, refDate: now });
+
+    konsultasi.push(
+      await prisma.konsultasi.create({
+        data: {
+          pasienId: pasien.id,
+          // Sebagian konsul sengaja tanpa konteks kunjungan (kunjunganId
+          // nullable) supaya layar detail teruji di dua-duanya.
+          kunjunganId: kunjunganByPasien.get(pasien.id)?.id ?? null,
+          dokterPengirimId: dokterPengirim.id,
+          dokterTujuanId: dokterTujuan.id,
+          prioritas: faker.datatype.boolean(0.25) ? "CITO" : "BIASA",
+          status: sudahDijawab ? "SUDAH_DIJAWAB" : "MENUNGGU_JAWABAN",
+          tanggalPermintaan,
+          diagnosisKerja: skenario.diagnosisKerja,
+          konsulYangDiminta: skenario.konsulYangDiminta,
+          ...ikhtisarKlinis(),
+          // Blok jawaban ikut status: MENUNGGU_JAWABAN harus benar-benar kosong,
+          // bukan terisi tapi disembunyikan UI.
+          ...(sudahDijawab
+            ? {
+                ...skenario.jawaban,
+                tanggalJawaban: new Date(
+                  tanggalPermintaan.getTime() + faker.number.int({ min: 2, max: 48 }) * 3_600_000
+                ),
+              }
+            : {}),
+        },
+      })
+    );
+  }
+
+  return konsultasi;
+}
+
 async function seedPengguna(dokterList, dokterUtama) {
   const passwordHashDefault = await bcrypt.hash("Sidokmais#2026", 10);
   const passwordHashAdmin = await bcrypt.hash("admin123", 10);
@@ -957,6 +1102,13 @@ async function main() {
     dokterList,
     assignments
   );
+  const konsultasiList = await seedKonsultasi(
+    dokterList,
+    dokterUtama,
+    pasienList,
+    pasienUtama,
+    kunjunganList
+  );
   const notifikasiList = await seedNotifikasi(dokterList);
   const penggunaList = await seedPengguna(dokterList, dokterUtama);
 
@@ -972,6 +1124,7 @@ async function main() {
     Pendapatan: pendapatanList.length,
     PemeriksaanLab: pemeriksaanLabList.length,
     HasilLabItem: totalHasilLabItem,
+    Konsultasi: konsultasiList.length,
     Notifikasi: notifikasiList.length,
     Pengguna: penggunaList.length,
   });

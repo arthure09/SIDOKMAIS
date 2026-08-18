@@ -73,6 +73,18 @@ enum TipeCatatanKalender {
   PRIBADI
 }
 
+// Dimensi terpisah dari jenis kunjungan: konsul CITO bisa datang dari rawat
+// jalan maupun rawat inap.
+enum PrioritasKonsultasi {
+  BIASA
+  CITO
+}
+
+enum StatusKonsultasi {
+  MENUNGGU_JAWABAN
+  SUDAH_DIJAWAB
+}
+
 model Dokter {
   id           String   @id @default(uuid())
   nip          String   @unique
@@ -89,6 +101,9 @@ model Dokter {
   notifikasi      Notifikasi[]
   pemeriksaanLab  PemeriksaanLab[]
   catatanKalender CatatanKalender[]
+
+  konsultasiDiajukan  Konsultasi[] @relation("KonsultasiPengirim")
+  konsultasiDitujukan Konsultasi[] @relation("KonsultasiTujuan")
 }
 
 model Pasien {
@@ -109,6 +124,7 @@ model Pasien {
   assignments    DokterPasienAssignment[]
   kunjungan      Kunjungan[]
   pemeriksaanLab PemeriksaanLab[]
+  konsultasi     Konsultasi[]
 }
 
 model Ruangan {
@@ -154,6 +170,7 @@ model Kunjungan {
 
   operasi        Operasi[]
   pemeriksaanLab PemeriksaanLab[]
+  konsultasi     Konsultasi[]
 }
 
 model Pengguna {
@@ -225,6 +242,62 @@ model Pendapatan {
 
   operasi  Operasi  @relation(fields: [operasiId], references: [id], onDelete: Restrict)
   penjamin Penjamin @relation(fields: [penjaminId], references: [id], onDelete: Restrict)
+}
+
+// Surat konsul antar-dokter (Lembar Konsultasi SIMRS), BUKAN jadwal appointment.
+// Satu dokter meminta pendapat dokter lain soal satu pasien; dua pihak
+// (pengirim, tujuan) dan dua state (menunggu jawaban, sudah dijawab).
+//
+// Hak akses dokter ditentukan lewat `dokterTujuanId` yang tercatat di record
+// ini — BEDA pola dari modul lab/pasien yang lewat DokterPasienAssignment.
+// Dokter yang login hanya melihat konsul yang DITUJUKAN kepadanya, bukan yang
+// dia ajukan (keputusan terkunci, docs/rencana-revisi-modul-dokter.md Tahap 2).
+//
+// `dokterPengirimId` tidak ada di tabel field rencana, tapi wajib ada: satu
+// lembar konsul selalu punya dokter peminta, dan tanpa itu layar detail tidak
+// bisa menampilkan konsul ini datang dari siapa.
+model Konsultasi {
+  id                String              @id @default(uuid())
+  pasienId          String
+  kunjunganId       String?
+  dokterPengirimId  String
+  dokterTujuanId    String
+  prioritas         PrioritasKonsultasi @default(BIASA)
+  status            StatusKonsultasi    @default(MENUNGGU_JAWABAN)
+  tanggalPermintaan DateTime            @default(now())
+  diagnosisKerja    String
+
+  // Ikhtisar klinis — semua opsional: lembar konsul di lapangan sering terisi
+  // sebagian. `tekananDarah` String karena bentuknya "120/80", bukan satu angka.
+  kesadaran    String?
+  tekananDarah String?
+  nadi         Int?
+  pernapasan   Int?
+  suhu         Float?
+  tinggiBadan  Int?
+  beratBadan   Float?
+  nyeri        Int?
+
+  konsulYangDiminta String
+
+  // Bagian jawaban — kosong selama status MENUNGGU_JAWABAN.
+  penemuan         String?
+  diagnosisJawaban String?
+  anjuran          String?
+  setujuUntuk      String?
+  tanggalJawaban   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  pasien         Pasien     @relation(fields: [pasienId], references: [id], onDelete: Restrict)
+  kunjungan      Kunjungan? @relation(fields: [kunjunganId], references: [id], onDelete: SetNull)
+  dokterPengirim Dokter     @relation("KonsultasiPengirim", fields: [dokterPengirimId], references: [id], onDelete: Restrict)
+  dokterTujuan   Dokter     @relation("KonsultasiTujuan", fields: [dokterTujuanId], references: [id], onDelete: Restrict)
+
+  // Query utamanya "konsul untuk saya, terbaru dulu".
+  @@index([dokterTujuanId, tanggalPermintaan])
+  @@index([pasienId])
 }
 
 // Satu order/permintaan lab. `kunjunganId` nullable (lab rawat inap/order susulan
