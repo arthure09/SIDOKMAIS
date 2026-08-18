@@ -2,6 +2,7 @@ const express = require("express");
 const prisma = require("../lib/prisma");
 const { dokterPunyaAksesPasien } = require("../utils/aksesPasien");
 const { parsePagination, parseDokterIdFilter } = require("../utils/queryParams");
+const { jenisKunjungan, parseJenisKunjungan } = require("../utils/jenisKunjungan");
 const { KUNJUNGAN, terapkanStatusEfektif, whereStatusEfektif } = require("../utils/statusJadwal");
 
 const router = express.Router();
@@ -27,9 +28,21 @@ function parseListQuery(query, role) {
   const pagination = parsePagination(query);
   errors.push(...pagination.errors);
 
+  const jenis = parseJenisKunjungan(query);
+  errors.push(...jenis.errors);
+
   const dokterId = parseDokterIdFilter(query, role);
 
-  return { errors, values: { status, page: pagination.page, limit: pagination.limit, dokterId } };
+  return {
+    errors,
+    values: {
+      status,
+      ruanganJenis: jenis.ruanganJenis,
+      page: pagination.page,
+      limit: pagination.limit,
+      dokterId,
+    },
+  };
 }
 
 router.get("/", async (req, res) => {
@@ -44,12 +57,13 @@ router.get("/", async (req, res) => {
     return res.status(400).json({ message: "Query params tidak valid", errors });
   }
 
-  const { status, page, limit, dokterId } = values;
+  const { status, ruanganJenis, page, limit, dokterId } = values;
 
   // Filter menyeleksi berdasar status EFEKTIF, bukan status tersimpan —
   // lihat utils/statusJadwal.js.
   const where = {
     ...(status ? whereStatusEfektif(status, KUNJUNGAN) : {}),
+    ...(ruanganJenis && { ruangan: { jenis: ruanganJenis } }),
   };
 
   if (role === "DOKTER") {
@@ -86,7 +100,10 @@ router.get("/", async (req, res) => {
   ]);
 
   res.json({
-    data: kunjungan.map((k) => terapkanStatusEfektif(k, KUNJUNGAN)),
+    data: kunjungan.map((k) => ({
+      ...terapkanStatusEfektif(k, KUNJUNGAN),
+      jenisKunjungan: jenisKunjungan(k.ruangan),
+    })),
     pagination: {
       page,
       limit,
@@ -127,7 +144,10 @@ router.get("/:id", async (req, res) => {
     }
   }
 
-  res.json(terapkanStatusEfektif(kunjungan, KUNJUNGAN));
+  res.json({
+    ...terapkanStatusEfektif(kunjungan, KUNJUNGAN),
+    jenisKunjungan: jenisKunjungan(kunjungan.ruangan),
+  });
 });
 
 module.exports = router;

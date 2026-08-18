@@ -17,10 +17,15 @@ enum JenisKelamin {
   P
 }
 
+// Kategori kunjungan (Rawat Jalan/IGD/Rawat Inap) diturunkan dari sini —
+// lihat src/utils/jenisKunjungan.js. IGD masuk 18 Ags 2026 (Tahap 1
+// docs/rencana-revisi-modul-dokter.md); OK bukan kategori kunjungan, cuma
+// dipakai Operasi.
 enum RuanganJenis {
   POLI
   OK
   RAWAT_INAP
+  IGD
 }
 
 enum AssignmentStatus {

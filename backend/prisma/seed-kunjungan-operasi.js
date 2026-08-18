@@ -120,7 +120,10 @@ async function clearKunjunganOperasi() {
 }
 
 async function seedKunjungan(assignments, ruanganList) {
-  const poliRuangan = ruanganList.filter((r) => r.jenis === "POLI");
+  // Kunjungan tidak pernah menempati ruang OK (operasi punya ruanganId
+  // sendiri); Ruangan.jenis di sini yang jadi kategori kunjungan Rawat
+  // Jalan/IGD/Rawat Inap — lihat src/utils/jenisKunjungan.js.
+  const kunjunganRuangan = ruanganList.filter((r) => r.jenis !== "OK");
   const today = new Date();
   const kunjungan = [];
   const meta = [];
@@ -150,7 +153,7 @@ async function seedKunjungan(assignments, ruanganList) {
       data: {
         pasienId: assignment.pasienId,
         dokterId: assignment.dokterId,
-        ruanganId: pickOne(poliRuangan).id,
+        ruanganId: pickOne(kunjunganRuangan).id,
         tanggalMasuk,
         tanggalKeluar,
         diagnosa: diagnosaEntry.text,

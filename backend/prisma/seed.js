@@ -104,6 +104,7 @@ async function seedRuangan() {
     { nama: "OK Bedah 2", jenis: "OK", lantai: 4 },
     { nama: "Rawat Inap Melati", jenis: "RAWAT_INAP", lantai: 5 },
     { nama: "Rawat Inap Anggrek", jenis: "RAWAT_INAP", lantai: 5 },
+    { nama: "IGD", jenis: "IGD", lantai: 1 },
   ];
 
   const ruangan = [];
@@ -206,7 +207,10 @@ async function seedAssignments(dokterList, pasienList, dokterUtama) {
 // (Ringkasan Aktivitas Hari Ini, Pasien Prioritas, Statistik Mingguan) selalu
 // kosong/nol — lihat dashboard.routes.js.
 async function seedJadwalMendatang(dokterUtama, pasienUtama, ruanganList) {
-  const poliRuangan = ruanganList.filter((r) => r.jenis === "POLI");
+  // Kunjungan tidak pernah menempati ruang OK: operasi punya `ruanganId`
+  // sendiri, dan Ruangan.jenis kunjungan-lah yang jadi kategori kunjungan
+  // (Rawat Jalan/IGD/Rawat Inap) — lihat src/utils/jenisKunjungan.js.
+  const kunjunganRuangan = ruanganList.filter((r) => r.jenis !== "OK");
   const okRuangan = ruanganList.filter((r) => r.jenis === "OK");
   const now = new Date();
 
@@ -224,7 +228,7 @@ async function seedJadwalMendatang(dokterUtama, pasienUtama, ruanganList) {
     const jamMendatang = new Date(
       now.getTime() + HARI_OFFSET[i] * 86_400_000 + faker.number.int({ min: 1, max: 6 }) * 3_600_000
     );
-    const ruangan = perluOK ? pickOne(okRuangan) : pickOne(poliRuangan);
+    const ruangan = pickOne(kunjunganRuangan);
 
     const k = await prisma.kunjungan.create({
       data: {
@@ -262,8 +266,8 @@ async function seedJadwalMendatang(dokterUtama, pasienUtama, ruanganList) {
 }
 
 async function seedKunjungan(pasienList, dokterList, ruanganList) {
-  const poliRuangan = ruanganList.filter((r) => r.jenis === "POLI");
-  const okRuangan = ruanganList.filter((r) => r.jenis === "OK");
+  // Lihat catatan di seedJadwalMendatang(): kunjungan tidak menempati ruang OK.
+  const kunjunganRuangan = ruanganList.filter((r) => r.jenis !== "OK");
   const statusList = ["SCHEDULED", "ONGOING", "COMPLETED", "COMPLETED", "CANCELLED"];
 
   const kunjungan = [];
@@ -274,8 +278,7 @@ async function seedKunjungan(pasienList, dokterList, ruanganList) {
       const dokter = pickOne(dokterList);
       const status = pickOne(statusList);
       const tanggalMasuk = faker.date.between({ from: "2026-06-01", to: "2026-07-20" });
-      const perluOK = faker.datatype.boolean(0.3);
-      const ruangan = perluOK ? pickOne(okRuangan) : pickOne(poliRuangan);
+      const ruangan = pickOne(kunjunganRuangan);
 
       kunjungan.push(
         await prisma.kunjungan.create({

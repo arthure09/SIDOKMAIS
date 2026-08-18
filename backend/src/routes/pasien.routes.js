@@ -1,6 +1,7 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
 const { parsePagination, parseDokterIdFilter } = require("../utils/queryParams");
+const { jenisKunjungan, parseJenisKunjungan } = require("../utils/jenisKunjungan");
 const { KUNJUNGAN, statusEfektif } = require("../utils/statusJadwal");
 
 const router = express.Router();
@@ -26,9 +27,22 @@ function parseListQuery(query, role) {
   const pagination = parsePagination(query);
   errors.push(...pagination.errors);
 
+  const jenis = parseJenisKunjungan(query);
+  errors.push(...jenis.errors);
+
   const dokterId = parseDokterIdFilter(query, role);
 
-  return { errors, values: { search, status, page: pagination.page, limit: pagination.limit, dokterId } };
+  return {
+    errors,
+    values: {
+      search,
+      status,
+      ruanganJenis: jenis.ruanganJenis,
+      page: pagination.page,
+      limit: pagination.limit,
+      dokterId,
+    },
+  };
 }
 
 // Untuk daftar pasienId, ambil kunjungan terakhir (tanggalMasuk <= now, paling
@@ -50,7 +64,12 @@ async function getKunjunganTerdekat(pasienIds) {
     prisma.kunjungan.findMany({
       where: { pasienId: { in: pasienIds }, tanggalMasuk: { lte: now } },
       orderBy: { tanggalMasuk: "desc" },
-      select: { pasienId: true, tanggalMasuk: true, diagnosa: true },
+      select: {
+        pasienId: true,
+        tanggalMasuk: true,
+        diagnosa: true,
+        ruangan: { select: { jenis: true } },
+      },
     }),
     prisma.kunjungan.findMany({
       where: { pasienId: { in: pasienIds }, tanggalMasuk: { gt: now } },
@@ -81,22 +100,29 @@ router.get("/", async (req, res) => {
     return res.status(400).json({ message: "Query params tidak valid", errors });
   }
 
-  const { search, status, page, limit, dokterId } = values;
+  const { search, status, ruanganJenis, page, limit, dokterId } = values;
   // DOKTER selalu dipaksa ke assignment miliknya sendiri. ADMIN melihat semua
   // pasien lintas dokter, kecuali secara eksplisit filter lewat ?dokterId=.
   const assignmentDokterId = role === "DOKTER" ? ownDokterId : dokterId;
 
+  // Search & filter jenis kunjungan sama-sama menyaring lewat relasi `pasien`,
+  // jadi digabung dulu — dua spread `pasien:` akan saling menimpa.
+  const pasienWhere = {
+    ...(search && {
+      OR: [
+        { nama: { contains: search, mode: "insensitive" } },
+        { norm: { contains: search, mode: "insensitive" } },
+      ],
+    }),
+    // "Pasien yang punya kunjungan jenis ini", bukan "kunjungan terakhirnya
+    // jenis ini" — daftar ini memang berbasis pasien, bukan kunjungan.
+    ...(ruanganJenis && { kunjungan: { some: { ruangan: { jenis: ruanganJenis } } } }),
+  };
+
   const where = {
     ...(assignmentDokterId && { dokterId: assignmentDokterId }),
     ...(status && { status }),
-    ...(search && {
-      pasien: {
-        OR: [
-          { nama: { contains: search, mode: "insensitive" } },
-          { norm: { contains: search, mode: "insensitive" } },
-        ],
-      },
-    }),
+    ...(Object.keys(pasienWhere).length > 0 && { pasien: pasienWhere }),
   };
 
   const [total, assignments] = await Promise.all([
@@ -123,6 +149,7 @@ router.get("/", async (req, res) => {
       nama: a.pasien.nama,
       status: a.status,
       diagnosaSingkat: kunjunganTerakhir?.diagnosa ?? null,
+      jenisKunjungan: jenisKunjungan(kunjunganTerakhir?.ruangan),
       tanggalKunjunganTerakhir: kunjunganTerakhir?.tanggalMasuk ?? null,
       tanggalKunjunganBerikutnya: kunjunganBerikutnya?.tanggalMasuk ?? null,
     };
@@ -191,6 +218,7 @@ router.get("/:id", async (req, res) => {
       // dengan record yang sama di layar Jadwal.
       statusKunjungan: statusEfektif(k.tanggalMasuk, k.statusKunjungan, KUNJUNGAN),
       isPasienBaru: k.isPasienBaru,
+      jenisKunjungan: jenisKunjungan(k.ruangan),
       ruangan: k.ruangan,
       dokter: k.dokter,
     })),
