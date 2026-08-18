@@ -292,6 +292,13 @@ export function HomeScreen({ navigation }: Props) {
     navigation.navigate('CatatanKalender');
   }
 
+  // Form tambah langsung terbuka di sana — tombol bernama "Tambah Pengingat"
+  // yang cuma mendaratkan user di kalender lalu menyuruh cari tombol + lagi
+  // bukan tombol tambah, itu tombol navigasi.
+  function tambahPengingat() {
+    navigation.navigate('CatatanKalender', { buatBaru: true });
+  }
+
   return (
     <View style={styles.container}>
       <Animated.View
@@ -522,17 +529,12 @@ export function HomeScreen({ navigation }: Props) {
                   </Pressable>
                 )}
               </View>
+              {/* Tombolnya satu, di luar percabangan: waktu kosong dia jatuh di
+                  tengah area (cuma teks kosong di atasnya), waktu ada isi dia
+                  duduk persis di bawah daftar. Tidak perlu dua varian. */}
               <View style={{ gap: spacing.gutter }}>
                 {pengingat.length === 0 ? (
-                  <Pressable
-                    onPress={bukaKalender}
-                    accessibilityRole="button"
-                    accessibilityLabel="Belum ada pengingat, buka kalender untuk membuat"
-                  >
-                    <Text style={styles.emptyStateText}>
-                      Belum ada pengingat tersimpan. Ketuk untuk membuat di kalender.
-                    </Text>
-                  </Pressable>
+                  <Text style={styles.emptyStateText}>Belum ada pengingat tersimpan.</Text>
                 ) : (
                   pengingat.slice(0, PENGINGAT_PREVIEW_COUNT).map((item) => {
                     const meta = TIPE_META[item.tipe];
@@ -560,6 +562,15 @@ export function HomeScreen({ navigation }: Props) {
                     );
                   })
                 )}
+
+                <Pressable
+                  onPress={tambahPengingat}
+                  accessibilityRole="button"
+                  style={({ pressed }) => [styles.tambahPengingat, pressed && styles.gridCardPressed]}
+                >
+                  <MaterialIcons name="add" size={18} color={colors.primary} />
+                  <Text style={styles.tambahPengingatText}>Tambah Pengingat</Text>
+                </Pressable>
               </View>
             </PagerSlide>
 
@@ -868,6 +879,21 @@ const styles = StyleSheet.create({
   },
   reminderTitle: { fontSize: 15, fontWeight: '700', color: colors.deepTealDark },
   reminderMeta: { fontSize: 12, color: colors.onSurfaceVariant, marginTop: 2 },
+
+  // Outline, bukan tombol isi penuh: ini aksi opsional di dalam satu slide
+  // pager, jangan menarik mata lebih kuat dari pengingat yang sudah ada.
+  tambahPengingat: {
+    alignSelf: 'center',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: radius.full,
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  tambahPengingatText: { fontSize: 13, fontWeight: '700', color: colors.primary },
 
   chartCard: {
     backgroundColor: colors.backgroundWhite,

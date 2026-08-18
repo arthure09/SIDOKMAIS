@@ -34,7 +34,9 @@ type LabRoutes = {
 export type HomeStackParamList = {
   Home: undefined;
   DataPendapatan: undefined;
-  CatatanKalender: undefined;
+  // `buatBaru` dikirim tombol "Tambah Pengingat" di Home — form catatan langsung
+  // terbuka begitu screen-nya muncul, bukan mendarat di kalender kosong.
+  CatatanKalender: { buatBaru?: boolean } | undefined;
   PilihPasienHasilLab: undefined;
 } & LabRoutes;
 

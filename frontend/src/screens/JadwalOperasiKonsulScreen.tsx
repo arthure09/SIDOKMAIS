@@ -111,15 +111,10 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   const { onScroll: onDockScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
   const { onScroll: onTopButtonScroll, visible: showScrollTop, reset: resetScrollTop } = useScrollToTopButton();
   const { headerBackgroundColor, headerShadowOpacity, headerElevation } = useAnimatedHeaderFade(scrolled);
-  // Satu baris per gestur: swipe pertama menyembunyikan filter, swipe kedua
-  // search bar. Toggle Konsultasi/Operasi sengaja tidak ikut — itu penanda
-  // posisi, bukan kontrol yang bisa hilang tanpa bikin bingung.
-  const {
-    onScroll: onHeaderScroll,
-    onScrollBeginDrag,
-    top: searchRow,
-    bottom: filterRow,
-  } = useCollapseOnScroll();
+  // Satu baris per langkah: filter sembunyi duluan, search bar menyusul kalau
+  // scroll ke bawah masih lanjut. Toggle Konsultasi/Operasi sengaja tidak ikut —
+  // itu penanda posisi, bukan kontrol yang bisa hilang tanpa bikin bingung.
+  const { onScroll: onHeaderScroll, top: searchRow, bottom: filterRow } = useCollapseOnScroll();
   const konsulScrollRef = useRef<ScrollView>(null);
   const operasiScrollRef = useRef<ScrollView>(null);
   const token = useAuthStore((s) => s.token);
@@ -377,7 +372,6 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
             contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
             showsVerticalScrollIndicator={false}
             onScroll={handleScroll}
-            onScrollBeginDrag={onScrollBeginDrag}
             scrollEventThrottle={scrollEventThrottle}
             refreshControl={
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
@@ -446,7 +440,6 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
           contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
-          onScrollBeginDrag={onScrollBeginDrag}
           scrollEventThrottle={scrollEventThrottle}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />

@@ -77,17 +77,22 @@ function useCollapsibleRow() {
  * Menyembunyikan dua baris kontrol header (search bar + chip filter) waktu user
  * scroll ke bawah, dan memunculkannya lagi waktu scroll ke atas.
  *
- * **Satu baris per gestur, bukan dua sekaligus.** Ada tiga posisi:
+ * **Satu baris per langkah, bukan dua sekaligus.** Ada tiga posisi:
  *
  *   0 = semua tampil → 1 = filter sembunyi → 2 = search bar ikut sembunyi
  *
- * Tiap tarikan jari memindahkan posisi paling banyak satu langkah, dan
- * langkahnya baru bisa lanjut setelah jari diangkat lalu menarik lagi
- * (`onScrollBeginDrag` yang "mengisi ulang" jatah langkah). Jadi swipe pertama
- * menyembunyikan filter, swipe kedua menyembunyikan search bar; ke arah
- * sebaliknya search bar duluan yang balik, baru filter. Versi sebelumnya cuma
- * memberi jeda 90ms antar baris — di layar keduanya tetap terbaca sebagai satu
- * gerakan yang sama.
+ * Yang memisahkan dua langkah itu waktu (`busyUntil`: DURATION + SETTLE),
+ * bukan tarikan jari. Jadi swipe pertama menyembunyikan filter, dan kalau
+ * scroll-nya masih lanjut ke bawah search bar menyusul ~300ms kemudian; ke arah
+ * sebaliknya search bar duluan yang balik, baru filter.
+ *
+ * Versi sebelumnya mensyaratkan jari diangkat lalu menarik lagi buat lanjut ke
+ * langkah kedua (`onScrollBeginDrag` "mengisi ulang" jatah langkah). Itu bikin
+ * search bar tidak pernah sembunyi waktu user melempar list sekali dengan cepat:
+ * momentum setelah jari lepas tidak memicu gestur baru, jadi jatahnya tidak
+ * pernah terisi ulang dan posisinya nyangkut di 1. Jeda 300ms sendiri sudah
+ * cukup buat memisahkan dua baris secara visual (yang dulu tidak cukup itu
+ * jeda 90ms).
  *
  * Pakainya butuh dua lapis View per baris, dan pembagiannya bukan gaya-gayaan:
  *   <Animated.View style={style} onLayout={onLayout}>   // kotak: tinggi menyusut
@@ -118,8 +123,6 @@ export function useCollapseOnScroll() {
   const bottom = useCollapsibleRow();
   const lastY = useRef(0);
   const step = useRef(0);
-  // Jatah satu langkah per tarikan jari; diisi ulang tiap gestur baru.
-  const armed = useRef(true);
   const busyUntil = useRef(0);
 
   const goTo = useCallback(
@@ -133,12 +136,6 @@ export function useCollapseOnScroll() {
     [top.animate, bottom.animate], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  // Tiap gestur baru dapat jatah satu langkah lagi. Momentum setelah jari
-  // diangkat tidak memicu ini, jadi flick panjang tetap satu langkah.
-  const onScrollBeginDrag = useCallback(() => {
-    armed.current = true;
-  }, []);
-
   const onScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
       const { contentOffset, contentSize, layoutMeasurement } = e.nativeEvent;
@@ -146,7 +143,7 @@ export function useCollapseOnScroll() {
       const delta = y - lastY.current;
       lastY.current = y;
 
-      // Balik ke puncak = semua tampil, tanpa perlu menghabiskan dua gestur.
+      // Balik ke puncak = semua tampil sekaligus, tanpa menunggu dua langkah.
       if (y <= SHOW_ABOVE_Y) {
         goTo(0);
         return;
@@ -159,7 +156,6 @@ export function useCollapseOnScroll() {
       // digeser. Selama animasi + sesaat sesudahnya, arah tidak dibaca.
       if (Date.now() < busyUntil.current) return;
       if (Math.abs(delta) < MIN_DELTA) return;
-      if (!armed.current) return;
 
       const down = delta > 0;
       const next = Math.min(2, Math.max(0, step.current + (down ? 1 : -1))) as 0 | 1 | 2;
@@ -172,7 +168,6 @@ export function useCollapseOnScroll() {
       const distanceFromBottom = contentSize.height - layoutMeasurement.height - y;
       if (down && distanceFromBottom < nextHeight * 2) return;
 
-      armed.current = false;
       goTo(next);
     },
     [goTo, top.height, bottom.height],
@@ -185,12 +180,11 @@ export function useCollapseOnScroll() {
     useCallback(() => {
       lastY.current = 0;
       step.current = 0;
-      armed.current = true;
       busyUntil.current = 0;
       top.reset();
       bottom.reset();
     }, [top.reset, bottom.reset]), // eslint-disable-line react-hooks/exhaustive-deps
   );
 
-  return { onScroll, onScrollBeginDrag, top, bottom };
+  return { onScroll, top, bottom };
 }

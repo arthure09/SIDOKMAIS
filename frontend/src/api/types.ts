@@ -1,5 +1,8 @@
 export type AssignmentStatus = 'ACTIVE' | 'COMPLETED';
 export type StatusKunjungan = 'SCHEDULED' | 'ONGOING' | 'COMPLETED' | 'CANCELLED';
+// Diturunkan server-side dari Ruangan.jenis, bukan kolom sendiri. Null kalau
+// pasien belum punya kunjungan (atau ruangannya di luar 3 kategori ini).
+export type JenisKunjungan = 'RAWAT_JALAN' | 'IGD' | 'RAWAT_INAP';
 
 export type PasienListItem = {
   id: string;
@@ -7,6 +10,7 @@ export type PasienListItem = {
   nama: string;
   status: AssignmentStatus;
   diagnosaSingkat: string | null;
+  jenisKunjungan: JenisKunjungan | null;
   tanggalKunjunganTerakhir: string | null;
   tanggalKunjunganBerikutnya: string | null;
 };
@@ -30,6 +34,7 @@ export type RiwayatKunjungan = {
   diagnosa: string | null;
   statusKunjungan: StatusKunjungan;
   isPasienBaru: boolean;
+  jenisKunjungan: JenisKunjungan | null;
   ruangan: { nama: string; jenis: string };
   dokter: { nama: string };
 };
@@ -104,6 +109,7 @@ export type KunjunganListItem = {
   diagnosa: string | null;
   statusKunjungan: StatusKunjungan;
   isPasienBaru: boolean;
+  jenisKunjungan: JenisKunjungan | null;
   ruangan: { nama: string; jenis: string };
   pasien: { id: string; nama: string; norm: string };
   dokter: { id: string; nama: string };
@@ -119,6 +125,7 @@ export type KunjunganDetail = {
   diagnosa: string | null;
   statusKunjungan: StatusKunjungan;
   isPasienBaru: boolean;
+  jenisKunjungan: JenisKunjungan | null;
   tanggalMasuk: string;
   tanggalKeluar: string | null;
   pasien: {

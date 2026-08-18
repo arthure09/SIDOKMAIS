@@ -12,6 +12,7 @@ import { Text } from '../components/Text';
 import { TextInput } from '../components/TextInput';
 import { ScrollToTopButton } from '../components/ScrollToTopButton';
 import type { AssignmentStatus, PasienListItem } from '../api/types';
+import { labelJenisKunjungan } from '../utils/jenisKunjungan';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useScrollToTopButton } from '../hooks/useScrollToTopButton';
@@ -55,14 +56,9 @@ export function PasienListScreen({ navigation }: Props) {
   const { onScroll: onDockScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
   const { onScroll: onTopButtonScroll, visible: showScrollTop } = useScrollToTopButton();
   const { headerBackgroundColor, headerShadowOpacity, headerElevation } = useAnimatedHeaderFade(scrolled);
-  // Satu baris per gestur: swipe pertama menyembunyikan filter, swipe kedua
-  // search bar; ke arah sebaliknya search bar duluan yang balik.
-  const {
-    onScroll: onHeaderScroll,
-    onScrollBeginDrag,
-    top: searchRow,
-    bottom: filterRow,
-  } = useCollapseOnScroll();
+  // Satu baris per langkah: filter sembunyi duluan, search bar menyusul kalau
+  // scroll ke bawah masih lanjut; ke arah sebaliknya search bar duluan yang balik.
+  const { onScroll: onHeaderScroll, top: searchRow, bottom: filterRow } = useCollapseOnScroll();
   const listRef = useRef<FlatList<PasienListItem>>(null);
   const token = useAuthStore((s) => s.token);
   const [searchInput, setSearchInput] = useState('');
@@ -188,13 +184,13 @@ export function PasienListScreen({ navigation }: Props) {
           contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
           showsVerticalScrollIndicator={false}
           onScroll={handleScroll}
-          onScrollBeginDrag={onScrollBeginDrag}
           scrollEventThrottle={scrollEventThrottle}
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
           }
           renderItem={({ item }) => {
             const badge = STATUS_BADGE[item.status];
+            const jenisLabel = labelJenisKunjungan(item.jenisKunjungan);
             return (
               <Pressable
                 onPress={() =>
@@ -231,9 +227,18 @@ export function PasienListScreen({ navigation }: Props) {
                 <View style={styles.cardFooter}>
                   <View>
                     <Text style={styles.footerLabel}>Kunjungan Terakhir</Text>
-                    <Text style={styles.footerValue}>
-                      {formatTanggal(item.tanggalKunjunganTerakhir)}
-                    </Text>
+                    <View style={styles.footerValueRow}>
+                      <Text style={styles.footerValue}>
+                        {formatTanggal(item.tanggalKunjunganTerakhir)}
+                      </Text>
+                      {/* Menempel di kunjungan terakhir, bukan di header kartu:
+                          kategorinya milik kunjungan, bukan sifat tetap pasien. */}
+                      {jenisLabel && (
+                        <View style={styles.jenisBadge}>
+                          <Text style={styles.jenisBadgeText}>{jenisLabel}</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                   <View style={styles.footerRight}>
                     <Text style={styles.footerLabel}>Jadwal Berikutnya</Text>
@@ -392,6 +397,22 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
+  },
+  footerValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  jenisBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radius.full,
+    backgroundColor: colors.surfaceSoft,
+  },
+  jenisBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: colors.primary,
   },
 
   diagnosisBox: {

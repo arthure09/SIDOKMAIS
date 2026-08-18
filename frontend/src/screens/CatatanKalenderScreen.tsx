@@ -118,7 +118,7 @@ export const TIPE_META: Record<TipeCatatanKalender, { label: string; icon: keyof
   PRIBADI: { label: 'Pribadi', icon: 'person', color: colors.secondary },
 };
 
-export function CatatanKalenderScreen({ navigation }: Props) {
+export function CatatanKalenderScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   useHideTabBar();
   const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
@@ -246,6 +246,13 @@ export function CatatanKalenderScreen({ navigation }: Props) {
     setFormError(null);
     setFormVisible(true);
   }
+
+  // Dibuka lewat "Tambah Pengingat" di Home. Sekali saja waktu screen-nya masuk:
+  // menutup form tidak mengubah param, jadi effect ini tidak membukanya lagi.
+  useEffect(() => {
+    if (route.params?.buatBaru) openCreateForm();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [route.params?.buatBaru]);
 
   function openEditForm(item: CatatanKalenderItem) {
     setFormMode('edit');

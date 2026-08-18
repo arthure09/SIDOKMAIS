@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors, menuAccent, radius, shadows, spacing } from '../theme/colors';
+import { colors, menuAccent, radius, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
 import {
   transaksiPendapatan,
@@ -11,6 +11,7 @@ import {
   type TransaksiPendapatan,
 } from '../mocks/pendapatanMock';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
+import { useAnimatedHeaderFade } from '../hooks/useAnimatedHeaderFade';
 import { useHideTabBar } from '../hooks/useHideTabBar';
 import type { HomeStackParamList } from '../navigation/types';
 
@@ -31,6 +32,11 @@ const BATCH = 10;
 // Ramp analog yang sama dengan tile Menu di Home (lihat komentar di colors.ts) —
 // di atas panel #0D3D3B kontrasnya lebih tinggi lagi daripada di tray #006a65.
 const RAMP = [menuAccent.mint, menuAccent.teal, menuAccent.cyan, menuAccent.sky];
+
+// Tinggi baris header (tombol kembali 40 + paddingBottom 8), dipakai cuma
+// sebagai tebakan awal sebelum onLayout mengukur yang sebenarnya — tanpa itu
+// konten mulai dari nol dan meloncat satu frame kemudian.
+const HEADER_ROW = 40 + spacing.base;
 
 function formatRupiah(value: number) {
   return `Rp ${value.toLocaleString('id-ID')}`;
@@ -78,6 +84,41 @@ export function DataPendapatanScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   useHideTabBar();
   const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
+  const { headerBackgroundColor, headerShadowOpacity, headerElevation } = useAnimatedHeaderFade(scrolled);
+
+  // Header menempel di atas konten (absolute) dan menggeser dirinya sendiri
+  // keluar layar waktu discroll ke bawah. Absolute, bukan menyusutkan tinggi
+  // seperti useCollapseOnScroll: kotak yang tingginya berubah bikin list
+  // re-layout tiap frame dan ScrollView menjepit offset-nya balik (lihat
+  // catatan panjang di hook itu). Di sini yang bergerak cuma transform.
+  const [headerHeight, setHeaderHeight] = useState(insets.top + HEADER_ROW);
+  const scrollY = useRef(new Animated.Value(0)).current;
+
+  // diffClamp = header mengikuti jari 1:1 sejauh setinggi dirinya, lalu berhenti;
+  // arah baliknya langsung memunculkannya lagi tanpa harus balik ke puncak list.
+  // Semuanya jalan di native driver, jadi tidak ada satu pun re-render per frame.
+  const headerSlide = useMemo(() => {
+    const h = Math.max(headerHeight, 1);
+    return Animated.diffClamp(
+      // extrapolateLeft: overscroll/pull-to-refresh bikin y negatif, dan
+      // diffClamp membacanya sebagai "scroll naik" — tanpa dijepit ke 0, menarik
+      // list ke bawah di puncak halaman menahan header di posisi yang salah.
+      scrollY.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolateLeft: 'clamp' }),
+      0,
+      h,
+    ).interpolate({ inputRange: [0, h], outputRange: [0, -h] });
+  }, [scrollY, headerHeight]);
+
+  // Animated.event buat scrollY (native), listener buat handler JS yang sudah
+  // ada (dock tab bar + flag `scrolled`) — dua-duanya dari satu event scroll.
+  const handleScroll = useMemo(
+    () =>
+      Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+        useNativeDriver: true,
+        listener: onScroll,
+      }),
+    [scrollY, onScroll],
+  );
 
   const [bulan, setBulan] = useState(BULAN_KEYS[0]);
   const [sumber, setSumber] = useState<string | null>(null);
@@ -172,21 +213,49 @@ export function DataPendapatanScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <View style={[styles.header, { paddingTop: insets.top }, scrolled && shadows.header]}>
+      <Animated.View
+        onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
+        style={[styles.header, { paddingTop: insets.top, transform: [{ translateY: headerSlide }] }]}
+      >
+        {/* Lapisan warna + shadow dipisah jadi anak sendiri: geseran header jalan
+            di native driver, sedangkan warna & shadow harus di thread JS, dan
+            satu View tidak boleh dianimasikan dua driver sekaligus. */}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            StyleSheet.absoluteFill,
+            styles.headerLapisan,
+            {
+              backgroundColor: headerBackgroundColor,
+              shadowOpacity: headerShadowOpacity,
+              elevation: headerElevation,
+            },
+          ]}
+        />
         <Pressable onPress={navigation.goBack} style={styles.backButton}>
           <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
         </Pressable>
         <Text style={styles.headerTitle}>Jasa Medis</Text>
         <View style={styles.backButton} />
-      </View>
+      </Animated.View>
 
-      <ScrollView
-        contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing.gutter }]}
+      <Animated.ScrollView
+        contentContainerStyle={[
+          styles.content,
+          // Header sudah keluar dari alur normal, jadi ruangnya dikembalikan di sini.
+          { paddingTop: headerHeight + spacing.marginMobile, paddingBottom: insets.bottom + spacing.gutter },
+        ]}
         showsVerticalScrollIndicator={false}
-        onScroll={onScroll}
+        onScroll={handleScroll}
         scrollEventThrottle={scrollEventThrottle}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+            colors={[colors.primary]}
+            progressViewOffset={headerHeight}
+          />
         }
       >
         {/* Dropdown, bukan deretan chip: daftar bulan tumbuh terus seiring
@@ -347,7 +416,7 @@ export function DataPendapatanScreen({ navigation }: Props) {
             </Text>
           </Pressable>
         )}
-      </ScrollView>
+      </Animated.ScrollView>
 
       <Modal
         visible={bulanTerbuka}
@@ -391,11 +460,21 @@ const styles = StyleSheet.create({
   content: { padding: spacing.marginMobile, gap: spacing.gutter, paddingBottom: 32 },
 
   header: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     paddingHorizontal: spacing.marginMobile,
     paddingBottom: spacing.base,
+  },
+  headerLapisan: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 8,
   },
   backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { flex: 1, textAlign: 'center', fontSize: 18, fontWeight: '700', color: colors.onBackground },

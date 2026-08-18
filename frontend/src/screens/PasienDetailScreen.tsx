@@ -9,6 +9,7 @@ import { useAuthStore } from '../store/authStore';
 import { colors, radius, shadows, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
 import type { AssignmentStatus, PasienDetail, StatusKunjungan } from '../api/types';
+import { labelJenisKunjungan } from '../utils/jenisKunjungan';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useHeaderScrollShadow } from '../hooks/useHeaderScrollShadow';
 import type { PasienStackParamList } from '../navigation/types';
@@ -264,7 +265,12 @@ export function PasienDetailScreen({ route, navigation }: Props) {
                     </View>
                     <Text style={styles.timelineTitle}>{k.diagnosa ?? k.ruangan.nama}</Text>
                     <Text style={styles.timelineDesc}>
-                      {k.ruangan.nama} ({k.ruangan.jenis}) · dr. {k.dokter.nama}
+                      {/* Nama ruangan cuma relevan buat rawat inap (nama bangsal);
+                          rawat jalan & IGD sudah cukup dijelaskan kategorinya. */}
+                      {k.jenisKunjungan === 'RAWAT_INAP'
+                        ? `Rawat Inap · ${k.ruangan.nama}`
+                        : labelJenisKunjungan(k.jenisKunjungan) ?? k.ruangan.nama}
+                      {' · '}dr. {k.dokter.nama}
                       {k.isPasienBaru ? ' · Pasien baru' : ''}
                     </Text>
                   </View>

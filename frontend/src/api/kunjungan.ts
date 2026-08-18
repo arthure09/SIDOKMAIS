@@ -1,8 +1,9 @@
 import { apiFetch } from './client';
-import type { KunjunganDetail, KunjunganListResponse, StatusKunjungan } from './types';
+import type { JenisKunjungan, KunjunganDetail, KunjunganListResponse, StatusKunjungan } from './types';
 
 type ListParams = {
   status?: StatusKunjungan;
+  jenisKunjungan?: JenisKunjungan;
   page?: number;
   limit?: number;
 };
@@ -10,6 +11,7 @@ type ListParams = {
 export function fetchKunjunganList(token: string, params: ListParams) {
   const query = new URLSearchParams();
   if (params.status) query.set('status', params.status);
+  if (params.jenisKunjungan) query.set('jenisKunjungan', params.jenisKunjungan);
   if (params.page) query.set('page', String(params.page));
   if (params.limit) query.set('limit', String(params.limit));
 

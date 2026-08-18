@@ -9,7 +9,6 @@ import { Text } from '../components/Text';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import type { ProfilStackParamList } from '../navigation/types';
-import { fetchStatistikDashboard } from '../api/dashboard';
 import { fetchMe } from '../api/auth';
 
 type Props = NativeStackScreenProps<ProfilStackParamList, 'ProfilDokter'>;
@@ -66,31 +65,18 @@ export function ProfilDokterScreen({}: Props) {
     dokter?.spesialisasi ??
     (pengguna?.role === 'ADMIN' ? 'Akun administrator' : 'Spesialisasi belum tercatat');
 
-  const [statistik, setStatistik] = useState<{
-    pasienAktif: number;
-    operasiHariIni: number;
-    konsulHariIni: number;
-  } | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Identitas ikut ditarik ulang, bukan cuma angkanya: sesi yang tersimpan bisa
-  // lebih tua dari bentuk response sekarang (NIP baru ikut belakangan),
-  // dan itu tidak boleh berarti user harus login ulang buat melihatnya.
+  // Identitas ditarik ulang tiap layar dibuka: sesi yang tersimpan bisa lebih
+  // tua dari bentuk response sekarang (NIP baru ikut belakangan), dan itu tidak
+  // boleh berarti user harus login ulang buat melihatnya. Gagal diam-diam —
+  // identitas lama tetap terbaca dari store.
   const load = useCallback(async () => {
     if (!token) return;
-    const [identitas, hasil] = await Promise.allSettled([
-      fetchMe(token),
-      fetchStatistikDashboard(token),
-    ]);
-    // Dua-duanya gagal diam-diam: identitas lama tetap terbaca dari store, dan
-    // angka yang belum sempat masuk cukup tampil sebagai "–".
-    if (identitas.status === 'fulfilled') setPengguna(identitas.value);
-    if (hasil.status === 'fulfilled') {
-      setStatistik({
-        pasienAktif: hasil.value.pasienAktif,
-        operasiHariIni: hasil.value.operasiHariIni,
-        konsulHariIni: hasil.value.konsulHariIni,
-      });
+    try {
+      setPengguna(await fetchMe(token));
+    } catch {
+      // Biarkan identitas lama dari store.
     }
   }, [token, setPengguna]);
 
@@ -110,12 +96,6 @@ export function ProfilDokterScreen({}: Props) {
       { text: 'Keluar', style: 'destructive', onPress: logout },
     ]);
   }
-
-  const angkaAktivitas = [
-    { label: 'Pasien aktif', value: statistik?.pasienAktif },
-    { label: 'Operasi hari ini', value: statistik?.operasiHariIni },
-    { label: 'Konsultasi hari ini', value: statistik?.konsulHariIni },
-  ];
 
   return (
     <View style={styles.container}>
@@ -172,15 +152,6 @@ export function ProfilDokterScreen({}: Props) {
               </View>
             </View>
           )}
-        </View>
-
-        <View style={styles.aktivitasRow}>
-          {angkaAktivitas.map((a) => (
-            <View key={a.label} style={styles.aktivitasKartu}>
-              <Text style={styles.aktivitasAngka}>{a.value ?? '–'}</Text>
-              <Text style={styles.aktivitasLabel}>{a.label}</Text>
-            </View>
-          ))}
         </View>
 
         <View style={styles.menuKartu}>
@@ -296,18 +267,6 @@ const styles = StyleSheet.create({
   barisData: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
   barisLabel: { width: 34, fontSize: 11, fontWeight: '700', color: colors.surfaceVariant },
   barisNilai: { ...angka, flex: 1, fontSize: 13, fontWeight: '600', color: colors.onPrimary },
-
-  aktivitasRow: { flexDirection: 'row', gap: spacing.base },
-  aktivitasKartu: {
-    flex: 1,
-    gap: 2,
-    paddingVertical: spacing.gutter,
-    paddingHorizontal: 12,
-    borderRadius: radius.sm,
-    backgroundColor: colors.surfaceContainerLowest,
-  },
-  aktivitasAngka: { ...angka, fontSize: 24, fontWeight: '800', color: colors.onBackground },
-  aktivitasLabel: { fontSize: 11, fontWeight: '600', color: colors.onSurfaceVariant },
 
   logoutButton: {
     flexDirection: 'row',
