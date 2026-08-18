@@ -21,9 +21,15 @@ import { TextInput } from '../components/TextInput';
 import { ScrollToTopButton } from '../components/ScrollToTopButton';
 import { ApiError } from '../api/client';
 import { fetchOperasiList } from '../api/operasi';
-import { fetchKunjunganList } from '../api/kunjungan';
+import { fetchKonsultasiList } from '../api/konsultasi';
 import { useAuthStore } from '../store/authStore';
-import type { KunjunganListItem, OperasiListItem, OperasiStatus, StatusKunjungan } from '../api/types';
+import type {
+  KonsultasiListItem,
+  OperasiListItem,
+  OperasiStatus,
+  StatusKonsultasi,
+} from '../api/types';
+import { labelJenisKunjungan } from '../utils/jenisKunjungan';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useScrollToTopButton } from '../hooks/useScrollToTopButton';
@@ -84,23 +90,41 @@ const OPERASI_STATUS_META: Record<
   CANCELLED: { label: 'Batal', icon: 'cancel', bg: colors.errorContainer, fg: colors.onErrorContainer },
 };
 
-const KUNJUNGAN_STATUS_META: Record<
-  StatusKunjungan,
+const KONSUL_STATUS_META: Record<
+  StatusKonsultasi,
   { label: string; icon: string; bg: string; fg: string }
 > = {
-  ONGOING: { label: 'Berlangsung', icon: 'sync', bg: colors.tertiaryContainer, fg: colors.onTertiaryContainer },
-  SCHEDULED: { label: 'Terjadwal', icon: 'schedule', bg: colors.primaryContainer, fg: colors.onPrimaryContainer },
-  COMPLETED: { label: 'Selesai', icon: 'check-circle', bg: colors.deepTealDark, fg: colors.onPrimary },
-  CANCELLED: { label: 'Batal', icon: 'cancel', bg: colors.errorContainer, fg: colors.onErrorContainer },
+  MENUNGGU_JAWABAN: {
+    label: 'Menunggu Jawaban',
+    icon: 'hourglass-empty',
+    bg: colors.primaryContainer,
+    fg: colors.onPrimaryContainer,
+  },
+  SUDAH_DIJAWAB: {
+    label: 'Sudah Dijawab',
+    icon: 'check-circle',
+    bg: colors.deepTealDark,
+    fg: colors.onPrimary,
+  },
 };
 
-type StatusFilter = 'ALL' | 'SCHEDULED' | 'COMPLETED' | 'CANCELLED';
+// Dua tab, dua kosakata status yang tidak beririsan: Operasi punya siklus
+// jadwal (terjadwal/berlangsung/batal), Konsultasi punya dua state surat
+// (menunggu jawaban/sudah dijawab). Satu daftar filter untuk keduanya akan
+// menawarkan "Batal" pada konsul, yang tidak pernah ada.
+type StatusFilter = 'ALL' | 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | StatusKonsultasi;
 
-const STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+const OPERASI_STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: 'ALL', label: 'Semua' },
   { value: 'SCHEDULED', label: 'Terjadwal' },
   { value: 'COMPLETED', label: 'Selesai' },
   { value: 'CANCELLED', label: 'Batal' },
+];
+
+const KONSUL_STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: 'ALL', label: 'Semua' },
+  { value: 'MENUNGGU_JAWABAN', label: 'Menunggu Jawaban' },
+  { value: 'SUDAH_DIJAWAB', label: 'Sudah Dijawab' },
 ];
 
 const TOGGLE_INSET = ms(4);
@@ -124,6 +148,9 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
 
   useEffect(() => {
     resetScrollTop();
+    // Filter ikut direset: nilainya milik kosakata status tab sebelumnya, jadi
+    // "Batal" yang terbawa ke tab Konsultasi akan menyaring habis semua kartu.
+    setStatusFilter('ALL');
   }, [tab, resetScrollTop]);
 
   const handleScroll = useCallback(
@@ -160,10 +187,10 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   const [operasiLoading, setOperasiLoading] = useState(true);
   const [operasiError, setOperasiError] = useState<string | null>(null);
 
-  const [kunjunganItems, setKunjunganItems] = useState<KunjunganListItem[]>([]);
-  const [kunjunganLoading, setKunjunganLoading] = useState(true);
-  const [kunjunganError, setKunjunganError] = useState<string | null>(null);
-  const kunjunganLoaded = useRef(false);
+  const [konsultasiItems, setKonsultasiItems] = useState<KonsultasiListItem[]>([]);
+  const [konsultasiLoading, setKonsultasiLoading] = useState(true);
+  const [konsultasiError, setKonsultasiError] = useState<string | null>(null);
+  const konsultasiLoaded = useRef(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const loadOperasi = useCallback(async (opts?: { silent?: boolean }) => {
@@ -180,17 +207,17 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
     }
   }, [token]);
 
-  const loadKunjungan = useCallback(async (opts?: { silent?: boolean }) => {
+  const loadKonsultasi = useCallback(async (opts?: { silent?: boolean }) => {
     if (!token) return;
-    if (!opts?.silent) setKunjunganLoading(true);
-    setKunjunganError(null);
+    if (!opts?.silent) setKonsultasiLoading(true);
+    setKonsultasiError(null);
     try {
-      const result = await fetchKunjunganList(token, { page: 1, limit: 50 });
-      setKunjunganItems(result.data);
+      const result = await fetchKonsultasiList(token, { page: 1, limit: 50 });
+      setKonsultasiItems(result.data);
     } catch (err) {
-      setKunjunganError(err instanceof ApiError ? err.message : 'Gagal memuat jadwal konsultasi');
+      setKonsultasiError(err instanceof ApiError ? err.message : 'Gagal memuat daftar konsultasi');
     } finally {
-      if (!opts?.silent) setKunjunganLoading(false);
+      if (!opts?.silent) setKonsultasiLoading(false);
     }
   }, [token]);
 
@@ -199,31 +226,32 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   }, [loadOperasi]);
 
   useEffect(() => {
-    if (tab === 'KONSUL' && !kunjunganLoaded.current) {
-      kunjunganLoaded.current = true;
-      loadKunjungan();
+    if (tab === 'KONSUL' && !konsultasiLoaded.current) {
+      konsultasiLoaded.current = true;
+      loadKonsultasi();
     }
-  }, [tab, loadKunjungan]);
+  }, [tab, loadKonsultasi]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     if (tab === 'KONSUL') {
-      kunjunganLoaded.current = true;
-      await loadKunjungan({ silent: true });
+      konsultasiLoaded.current = true;
+      await loadKonsultasi({ silent: true });
     } else {
       await loadOperasi({ silent: true });
     }
     setRefreshing(false);
-  }, [tab, loadKunjungan, loadOperasi]);
+  }, [tab, loadKonsultasi, loadOperasi]);
 
   function handleOperasiPress(item: OperasiListItem) {
     if (item.status === 'CANCELLED') return;
     navigation.navigate('DetailJadwalOperasi', { operasiId: item.id });
   }
 
-  function handleKunjunganPress(item: KunjunganListItem) {
-    if (item.statusKunjungan === 'CANCELLED') return;
-    navigation.navigate('DetailKonsul', { kunjunganId: item.id });
+  // Tidak ada state final yang bikin kartu non-tappable seperti operasi
+  // CANCELLED: surat konsul yang belum dijawab justru yang paling perlu dibuka.
+  function handleKonsultasiPress(item: KonsultasiListItem) {
+    navigation.navigate('DetailKonsul', { konsultasiId: item.id });
   }
 
   const searchTerm = search.trim().toLowerCase();
@@ -238,19 +266,21 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
     (item) => item.status,
     (item) => item.tanggalOperasi,
   );
-  const filteredKunjunganItems = sortByStatusThenNearestDate(
-    (statusFilter === 'ALL'
-      ? kunjunganItems
-      : kunjunganItems.filter((item) => item.statusKunjungan === statusFilter)
-    ).filter(
-      (item) =>
-        !searchTerm ||
-        item.pasien.nama.toLowerCase().includes(searchTerm) ||
-        item.pasien.norm.toLowerCase().includes(searchTerm),
-    ),
-    (item) => item.statusKunjungan,
-    (item) => item.tanggalMasuk,
+  // Tanpa sortByStatusThenNearestDate: konsul bukan jadwal, jadi "tanggal
+  // terdekat dari sekarang" tidak berarti apa-apa di sini. Server sudah
+  // mengurutkan menunggu-jawaban dulu, lalu permintaan terbaru.
+  const filteredKonsultasiItems = (
+    statusFilter === 'ALL'
+      ? konsultasiItems
+      : konsultasiItems.filter((item) => item.status === statusFilter)
+  ).filter(
+    (item) =>
+      !searchTerm ||
+      item.pasien.nama.toLowerCase().includes(searchTerm) ||
+      item.pasien.norm.toLowerCase().includes(searchTerm),
   );
+
+  const statusFilters = tab === 'KONSUL' ? KONSUL_STATUS_FILTERS : OPERASI_STATUS_FILTERS;
 
   return (
     <View style={styles.container}>
@@ -327,7 +357,7 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.statusFilterRow}
             >
-              {STATUS_FILTERS.map((f) => {
+              {statusFilters.map((f) => {
                 const active = statusFilter === f.value;
                 return (
                   <Pressable
@@ -349,21 +379,21 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
 
       <View style={styles.sheet}>
       {tab === 'KONSUL' ? (
-        kunjunganLoading ? (
+        konsultasiLoading ? (
           <View style={styles.center}>
             <ActivityIndicator color={colors.primary} />
           </View>
-        ) : kunjunganError ? (
+        ) : konsultasiError ? (
           <View style={styles.center}>
-            <Text style={styles.errorText}>{kunjunganError}</Text>
+            <Text style={styles.errorText}>{konsultasiError}</Text>
           </View>
-        ) : filteredKunjunganItems.length === 0 ? (
+        ) : filteredKonsultasiItems.length === 0 ? (
           <View style={styles.center}>
             <MaterialIcons name="chat-bubble" size={40} color={colors.outlineVariant} />
             <Text style={styles.comingSoonTitle}>
-              {kunjunganItems.length === 0
-                ? 'Belum ada jadwal konsultasi'
-                : 'Tidak ada jadwal dengan status ini'}
+              {konsultasiItems.length === 0
+                ? 'Belum ada konsultasi yang ditujukan kepada Anda'
+                : 'Tidak ada konsultasi dengan status ini'}
             </Text>
           </View>
         ) : (
@@ -377,43 +407,56 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
             }
           >
-            {filteredKunjunganItems.map((item) => {
-              const meta = KUNJUNGAN_STATUS_META[item.statusKunjungan];
-              const cancelled = item.statusKunjungan === 'CANCELLED';
+            {filteredKonsultasiItems.map((item) => {
+              const meta = KONSUL_STATUS_META[item.status];
+              const jenisLabel = labelJenisKunjungan(item.jenisKunjungan);
               return (
                 <Pressable
                   key={item.id}
-                  disabled={cancelled}
-                  onPress={() => handleKunjunganPress(item)}
+                  onPress={() => handleKonsultasiPress(item)}
                   style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
                 >
                   <View style={styles.cardTop}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.cardTime}>
-                        {formatTanggalSingkat(item.tanggalMasuk)}, {formatJam(item.tanggalMasuk)}
+                        {formatTanggalSingkat(item.tanggalPermintaan)},{' '}
+                        {formatJam(item.tanggalPermintaan)}
                       </Text>
                       <Text style={styles.cardPatient}>{item.pasien.nama}</Text>
-                      <Text style={styles.cardTindakan}>{item.diagnosa ?? 'Belum ada diagnosa'}</Text>
+                      <Text style={styles.cardTindakan}>{item.diagnosisKerja}</Text>
                     </View>
-                    <View style={[styles.statusPill, { backgroundColor: meta.bg }]}>
-                      <MaterialIcons name={meta.icon as never} size={14} color={meta.fg} />
-                      <Text style={[styles.statusPillText, { color: meta.fg }]}>{meta.label}</Text>
+                    <View style={styles.cardPills}>
+                      <View style={[styles.statusPill, { backgroundColor: meta.bg }]}>
+                        <MaterialIcons name={meta.icon as never} size={14} color={meta.fg} />
+                        <Text style={[styles.statusPillText, { color: meta.fg }]}>{meta.label}</Text>
+                      </View>
+                      {/* Cuma CITO yang diberi badge. "BIASA" adalah default dan
+                          mencetaknya di setiap kartu justru menenggelamkan yang
+                          benar-benar mendesak. */}
+                      {item.prioritas === 'CITO' && (
+                        <View style={styles.citoPill}>
+                          <MaterialIcons name="priority-high" size={14} color={colors.onErrorContainer} />
+                          <Text style={styles.citoPillText}>CITO</Text>
+                        </View>
+                      )}
                     </View>
                   </View>
                   <View style={styles.cardDivider} />
                   <View style={styles.cardBottom}>
                     <View style={styles.cardBottomItem}>
-                      <MaterialIcons name="meeting-room" size={18} color={colors.primary} />
+                      <MaterialIcons name="outgoing-mail" size={18} color={colors.primary} />
                       <Text style={styles.cardBottomText} numberOfLines={1} ellipsizeMode="tail">
-                        {item.ruangan.nama}
+                        Dari {item.dokterPengirim.nama}
                       </Text>
                     </View>
-                    <View style={styles.cardBottomItem}>
-                      <MaterialIcons name="person" size={18} color={colors.primary} />
-                      <Text style={styles.cardBottomText} numberOfLines={1} ellipsizeMode="tail">
-                        {item.dokter.nama}
-                      </Text>
-                    </View>
+                    {jenisLabel && (
+                      <View style={styles.cardBottomItem}>
+                        <MaterialIcons name="meeting-room" size={18} color={colors.primary} />
+                        <Text style={styles.cardBottomText} numberOfLines={1} ellipsizeMode="tail">
+                          {jenisLabel}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 </Pressable>
               );
@@ -601,6 +644,20 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
   },
   statusPillText: { fontSize: ms(12), fontWeight: '600' },
+  // Dua pill bertumpuk di pojok kanan kartu, rata kanan supaya tepinya lurus
+  // dengan pill status di kartu-kartu yang tidak punya CITO.
+  cardPills: { alignItems: 'flex-end', gap: ms(6) },
+  citoPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: ms(2),
+    paddingLeft: ms(6),
+    paddingRight: ms(10),
+    paddingVertical: ms(4),
+    borderRadius: radius.full,
+    backgroundColor: colors.errorContainer,
+  },
+  citoPillText: { fontSize: ms(11), fontWeight: '800', color: colors.onErrorContainer },
   cardDivider: { height: 1, backgroundColor: colors.surfaceVariant },
   cardBottom: { flexDirection: 'row', gap: ms(16) },
   cardBottomItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: ms(6), minWidth: 0 },

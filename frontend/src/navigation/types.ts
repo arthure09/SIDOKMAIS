@@ -48,7 +48,10 @@ export type PasienStackParamList = {
 export type OperasiStackParamList = {
   JadwalOperasiKonsul: undefined;
   DetailJadwalOperasi: { operasiId: string };
-  DetailKonsul: { kunjunganId: string };
+  // Konsultasi punya model sendiri sejak Tahap 2 — sebelumnya layar ini
+  // membaca Kunjungan, yang ternyata bukan bentuk aslinya (lihat
+  // docs/rencana-revisi-modul-dokter.md).
+  DetailKonsul: { konsultasiId: string };
 };
 
 export type NotifikasiStackParamList = {

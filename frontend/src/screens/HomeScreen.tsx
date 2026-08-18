@@ -123,7 +123,7 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'Home'>;
 
 // Label sengaja tanpa "Hari Ini": judul seksi di atasnya sudah bilang
 // "Ringkasan Aktivitas Hari Ini", jadi pengulangannya cuma bikin teks patah
-// jadi 2-3 baris di kolom selebar ~73pt (paling parah "Konsultasi Hari Ini").
+// jadi 2-3 baris di kolom selebar ~73pt (paling parah "Kunjungan Hari Ini").
 const RINGKASAN_ROWS = [
   { key: 'pasienAktif' as const, label: 'Pasien Aktif', icon: 'groups', tint: colors.primary },
   {
@@ -132,7 +132,7 @@ const RINGKASAN_ROWS = [
     icon: 'local-hospital',
     tint: colors.tertiaryContainer,
   },
-  { key: 'konsulHariIni' as const, label: 'Konsultasi', icon: 'chat-bubble', tint: colors.primary },
+  { key: 'kunjunganHariIni' as const, label: 'Kunjungan', icon: 'chat-bubble', tint: colors.primary },
 ];
 
 // 'radiologi' belum ada modulnya sendiri (gak ada entity/endpoint di
@@ -167,7 +167,7 @@ export function HomeScreen({ navigation }: Props) {
   const token = useAuthStore((s) => s.token);
   const { nama: dokterNamaUtama, gelar: dokterGelar } = splitGelar(dokterNama ?? 'dr. Reza Auditore');
 
-  const [ringkasan, setRingkasan] = useState({ pasienAktif: 0, operasiHariIni: 0, konsulHariIni: 0 });
+  const [ringkasan, setRingkasan] = useState({ pasienAktif: 0, operasiHariIni: 0, kunjunganHariIni: 0 });
   const [ringkasanLoading, setRingkasanLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [menuViewMode, setMenuViewMode] = useState<'grid' | 'list'>('grid');
@@ -224,7 +224,7 @@ export function HomeScreen({ navigation }: Props) {
       setRingkasan({
         pasienAktif: statistik.pasienAktif,
         operasiHariIni: statistik.operasiHariIni,
-        konsulHariIni: statistik.konsulHariIni,
+        kunjunganHariIni: statistik.kunjunganHariIni,
       });
       // Fallback ke [] kalau backend yang dihit belum punya field ini (mis.
       // backend belum di-redeploy setelah frontend di-update) — biar
@@ -488,11 +488,11 @@ export function HomeScreen({ navigation }: Props) {
             <PagerSlide index={0} scrollX={scrollX} width={windowWidth}>
               <View>
                 <Text style={styles.summaryTitle}>Pasien Prioritas</Text>
-                <Text style={styles.sectionSubtitle}>Jadwal operasi & konsultasi terdekat</Text>
+                <Text style={styles.sectionSubtitle}>Jadwal operasi & kunjungan terdekat</Text>
               </View>
               <View style={{ gap: spacing.base + 4 }}>
                 {pasienPrioritas.length === 0 ? (
-                  <Text style={styles.emptyStateText}>Tidak ada jadwal operasi/konsultasi mendatang.</Text>
+                  <Text style={styles.emptyStateText}>Tidak ada jadwal operasi/kunjungan mendatang.</Text>
                 ) : (
                   pasienPrioritas.map((p) => (
                     <View key={p.id} style={styles.priorityCard}>

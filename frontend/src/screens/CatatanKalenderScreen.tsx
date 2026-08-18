@@ -435,7 +435,7 @@ export function CatatanKalenderScreen({ navigation, route }: Props) {
           </View>
           <View style={styles.legendItem}>
             <View style={[styles.dot, { backgroundColor: colors.outline }]} />
-            <Text style={styles.legendText}>Jadwal Operasi/Konsultasi (read-only)</Text>
+            <Text style={styles.legendText}>Jadwal Operasi/Kunjungan (read-only)</Text>
           </View>
         </View>
 
@@ -463,7 +463,7 @@ export function CatatanKalenderScreen({ navigation, route }: Props) {
                 <View key={`kunjungan-${item.id}`} style={styles.readonlyCard}>
                   <MaterialIcons name="person" size={18} color={colors.outline} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.readonlyTitle}>Konsultasi — {item.pasien.nama}</Text>
+                    <Text style={styles.readonlyTitle}>Kunjungan — {item.pasien.nama}</Text>
                     <Text style={styles.readonlyMeta}>
                       {formatJam(item.tanggalMasuk)} • {item.ruangan.nama}
                     </Text>

@@ -140,6 +140,68 @@ export type KunjunganDetail = {
   operasi: { id: string; status: OperasiStatus; tanggalOperasi: string }[];
 };
 
+/**
+ * Konsultasi = surat konsul antar-dokter (Lembar Konsultasi SIMRS), bukan
+ * jadwal appointment. Dokter yang login hanya menerima konsul yang DITUJUKAN
+ * kepadanya — scoping-nya di server lewat `dokterTujuanId`, jadi tidak ada
+ * field "dokter tujuan" yang perlu dikirim dari sini.
+ */
+export type PrioritasKonsultasi = 'BIASA' | 'CITO';
+export type StatusKonsultasi = 'MENUNGGU_JAWABAN' | 'SUDAH_DIJAWAB';
+
+export type KonsultasiListItem = {
+  id: string;
+  tanggalPermintaan: string;
+  prioritas: PrioritasKonsultasi;
+  status: StatusKonsultasi;
+  diagnosisKerja: string;
+  tanggalJawaban: string | null;
+  pasien: { id: string; nama: string; norm: string };
+  dokterPengirim: { id: string; nama: string; spesialisasi: string | null };
+  jenisKunjungan: JenisKunjungan | null;
+};
+
+export type KonsultasiListResponse = {
+  data: KonsultasiListItem[];
+  pagination: Pagination;
+};
+
+export type KonsultasiDetail = {
+  id: string;
+  kunjunganId: string | null;
+  prioritas: PrioritasKonsultasi;
+  status: StatusKonsultasi;
+  tanggalPermintaan: string;
+  diagnosisKerja: string;
+  // Ikhtisar klinis — lembar konsul di lapangan sering terisi sebagian.
+  kesadaran: string | null;
+  tekananDarah: string | null;
+  nadi: number | null;
+  pernapasan: number | null;
+  suhu: number | null;
+  tinggiBadan: number | null;
+  beratBadan: number | null;
+  nyeri: number | null;
+  konsulYangDiminta: string;
+  // Blok jawaban — semuanya null selama status MENUNGGU_JAWABAN.
+  penemuan: string | null;
+  diagnosisJawaban: string | null;
+  anjuran: string | null;
+  setujuUntuk: string | null;
+  tanggalJawaban: string | null;
+  pasien: {
+    id: string;
+    nama: string;
+    norm: string;
+    jenisKelamin: 'L' | 'P';
+    tanggalLahir: string | null;
+  };
+  dokterPengirim: { id: string; nama: string; spesialisasi: string | null };
+  dokterTujuan: { id: string; nama: string; spesialisasi: string | null };
+  kunjungan: { id: string; tanggalMasuk: string; ruangan: { nama: string; jenis: string } } | null;
+  jenisKunjungan: JenisKunjungan | null;
+};
+
 export type NotifikasiTipe = 'PASIEN_BARU' | 'REMINDER_OPERASI' | 'PERUBAHAN_JADWAL';
 
 export type NotifikasiItemApi = {
@@ -218,13 +280,13 @@ export type PasienPrioritasItem = {
   lokasi: string;
   /** ISO datetime — jadwal Operasi/Kunjungan SCHEDULED, bisa hari ini atau beberapa hari ke depan. */
   waktu: string;
-  jenis: 'OPERASI' | 'KONSULTASI';
+  jenis: 'OPERASI' | 'KUNJUNGAN';
 };
 
 export type StatistikDashboard = {
   pasienAktif: number;
   operasiHariIni: number;
-  konsulHariIni: number;
+  kunjunganHariIni: number;
   // Gabungan jumlah Kunjungan + Operasi per hari, Senin-Minggu minggu
   // berjalan WIB — 7 entri, urutan tetap.
   aktivitasMingguan: AktivitasHarianMingguan[];

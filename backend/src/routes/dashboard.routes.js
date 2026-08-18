@@ -84,9 +84,9 @@ async function getPasienPrioritas(aksesPasienDokter) {
   const kandidat = [
     ...kunjunganMendatang.map((k) => ({
       id: k.id,
-      jenis: "KONSULTASI",
+      jenis: "KUNJUNGAN",
       nama: k.pasien.nama,
-      lokasi: `${k.ruangan.nama} — Konsultasi`,
+      lokasi: `${k.ruangan.nama} — Kunjungan`,
       waktu: k.tanggalMasuk,
     })),
     ...operasiMendatang.map((o) => ({
@@ -109,7 +109,7 @@ async function getPasienPrioritas(aksesPasienDokter) {
 // GET /api/dashboard/statistik — ringkasan "Aktivitas Hari Ini" +
 // "Statistik Pasien Mingguan" di HomeScreen.
 //
-// `pasienAktif`/`operasiHariIni`/`konsulHariIni` menggantikan mekanisme lama
+// `pasienAktif`/`operasiHariIni`/`kunjunganHariIni` menggantikan mekanisme lama
 // di frontend (fetch list dengan RINGKASAN_FETCH_LIMIT=100 lalu filter+hitung
 // di client, yang undercounted kalau dokter punya >100 operasi/kunjungan)
 // dengan COUNT langsung di DB.
@@ -148,7 +148,7 @@ router.get("/statistik", async (req, res) => {
     return res.json({
       pasienAktif: 0,
       operasiHariIni: 0,
-      konsulHariIni: 0,
+      kunjunganHariIni: 0,
       aktivitasMingguan: mingguRange.map(({ label }, i) => ({
         label,
         jumlah: 0,
@@ -173,7 +173,7 @@ router.get("/statistik", async (req, res) => {
   const mingguMulai = mingguRange[0].mulai;
   const mingguAkhir = mingguRange[mingguRange.length - 1].akhir;
 
-  const [pasienAktif, operasiHariIni, konsulHariIni, kunjunganMinggu, operasiMinggu, pasienPrioritas] =
+  const [pasienAktif, operasiHariIni, kunjunganHariIni, kunjunganMinggu, operasiMinggu, pasienPrioritas] =
     await Promise.all([
       prisma.dokterPasienAssignment.count({ where: { dokterId, status: "ACTIVE" } }),
       prisma.operasi.count({
@@ -212,7 +212,7 @@ router.get("/statistik", async (req, res) => {
     highlight: mulaiHari.getTime() === mulai.getTime(),
   }));
 
-  res.json({ pasienAktif, operasiHariIni, konsulHariIni, aktivitasMingguan, pasienPrioritas });
+  res.json({ pasienAktif, operasiHariIni, kunjunganHariIni, aktivitasMingguan, pasienPrioritas });
 });
 
 module.exports = router;
