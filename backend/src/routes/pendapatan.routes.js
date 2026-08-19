@@ -25,7 +25,6 @@ const BARIS_SELECT = {
   namaTindakan: true,
   unitPelayanan: true,
   jasa: true,
-  statusVerifikasi: true,
   pasien: { select: { norm: true, nama: true } },
   penjamin: { select: { nama: true, isJkn: true } },
 };
@@ -145,24 +144,20 @@ router.get("/", async (req, res) => {
   // menjumlah dan memformatnya sebagai angka, jadi dikonversi di sini sekali.
   const data = baris.map((b) => ({ ...b, jasa: Number(b.jasa) }));
 
-  const terverifikasi = data.filter((b) => b.statusVerifikasi === "TERVERIFIKASI");
-  const totalJkn = terverifikasi.filter((b) => b.penjamin.isJkn).reduce((n, b) => n + b.jasa, 0);
-  const totalNonJkn = terverifikasi.filter((b) => !b.penjamin.isJkn).reduce((n, b) => n + b.jasa, 0);
+  // Pengelompokan tunggal laporan ini: JKN vs Non-JKN, dijumlah dari seluruh
+  // baris periode. Tidak ada pemisahan lain (per penjamin, per status klaim) —
+  // total jasa medis cuma dipecah dua.
+  const totalJkn = data.filter((b) => b.penjamin.isJkn).reduce((n, b) => n + b.jasa, 0);
+  const totalNonJkn = data.filter((b) => !b.penjamin.isJkn).reduce((n, b) => n + b.jasa, 0);
 
   res.json({
     dokter: { id: dokter.id, nama: dokter.nama, smf: dokter.spesialisasi },
     periode: { tanggalAwal, tanggalAkhir },
     bulanTersedia,
     ringkasan: {
-      // Ringkasan sengaja cuma menjumlah yang TERVERIFIKASI — angka besar di
-      // layar harus sama dengan yang sudah cair, bukan campuran dengan yang
-      // masih diproses. Yang menunggu dilaporkan terpisah di bawah.
       totalJkn,
       totalNonJkn,
       totalRemunerasiBruto: totalJkn + totalNonJkn,
-      totalMenunggu: data
-        .filter((b) => b.statusVerifikasi === "MENUNGGU")
-        .reduce((n, b) => n + b.jasa, 0),
       jumlahPelayanan: data.length,
     },
     data,

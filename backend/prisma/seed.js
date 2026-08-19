@@ -619,19 +619,7 @@ async function seedPendapatan(kunjunganList, operasiList, konsultasiList, penjam
   const pendapatan = [];
   for (const b of baris) {
     pendapatan.push(
-      await prisma.pendapatan.create({
-        data: {
-          ...b,
-          // Klaim yang paling baru masih wajar kalau belum diverifikasi;
-          // yang sudah lewat sebulan seharusnya sudah cair.
-          statusVerifikasi:
-            HARI_INI.getTime() - b.tanggalTindakan.getTime() < 21 * 86_400_000 &&
-            faker.datatype.boolean(0.4)
-              ? "MENUNGGU"
-              : "TERVERIFIKASI",
-          isDummy: true,
-        },
-      })
+      await prisma.pendapatan.create({ data: { ...b, isDummy: true } })
     );
   }
 

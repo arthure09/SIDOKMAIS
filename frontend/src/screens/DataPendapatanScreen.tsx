@@ -41,9 +41,9 @@ const jumlah = (list: BarisJasaMedis[]) => list.reduce((n, t) => n + t.jasa, 0);
 // ribuan, pindahkan ledger-nya ke SectionList dan panel jadi ListHeaderComponent.
 const BATCH = 10;
 
-// Ramp analog yang sama dengan tile Menu di Home (lihat komentar di colors.ts) —
-// di atas panel #0D3D3B kontrasnya lebih tinggi lagi daripada di tray #006a65.
-const RAMP = [menuAccent.mint, menuAccent.teal, menuAccent.cyan, menuAccent.sky];
+// Dua warna saja, urut sama dengan `perKelompok`: JKN lalu Non-JKN. Ramp
+// analog yang sama dengan tile Menu di Home (lihat komentar di colors.ts).
+const RAMP = [menuAccent.mint, menuAccent.cyan];
 
 // Tinggi baris header (tombol kembali 40 + paddingBottom 8), dipakai cuma
 // sebagai tebakan awal sebelum onLayout mengukur yang sebenarnya — tanpa itu
@@ -52,15 +52,6 @@ const HEADER_ROW = 40 + spacing.base;
 
 function formatRupiah(value: number) {
   return `Rp ${value.toLocaleString('id-ID')}`;
-}
-
-// Dipakai di legend penjamin, di mana nominal penuh bikin barisnya pecah.
-function formatRupiahSingkat(value: number) {
-  if (value >= 1_000_000) {
-    return `${(value / 1_000_000).toLocaleString('id-ID', { maximumFractionDigits: 1 })} jt`;
-  }
-  if (value >= 1_000) return `${Math.round(value / 1_000)} rb`;
-  return String(value);
 }
 
 function labelBulan(key: string) {
@@ -99,6 +90,20 @@ function labelPeriode(periode: PeriodePendapatan | null) {
 
 function labelTanggal(iso: string) {
   return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'long' });
+}
+
+/**
+ * Ikon kategori di kiri tiap baris — konvensi aplikasi finance: mata jenis
+ * transaksi dikenali dari bentuk sebelum teksnya dibaca. Dicocokkan dari nama
+ * tindakan, bukan kolom kategori tersendiri; SIREMDIS tidak punya kolom itu dan
+ * menambahkannya di DB cuma demi ikon tidak sepadan.
+ */
+function ikonTindakan(nama: string): 'medical-services' | 'forum' | 'monitor-heart' | 'emergency' | 'event-note' {
+  if (nama.startsWith('Konsul')) return 'forum';
+  if (nama.startsWith('Visite')) return 'monitor-heart';
+  if (nama.startsWith('Konsultasi')) return 'event-note';
+  if (nama.startsWith('Pemeriksaan Gawat')) return 'emergency';
+  return 'medical-services';
 }
 
 function labelJam(iso: string) {
@@ -165,9 +170,7 @@ export function DataPendapatanScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [sumber, setSumber] = useState<string | null>(null);
   const [kelompok, setKelompok] = useState<Kelompok | null>(null);
-  const [hanyaMenunggu, setHanyaMenunggu] = useState(false);
   const [periodeTerbuka, setPeriodeTerbuka] = useState(false);
   const [tampil, setTampil] = useState(BATCH);
   const [refreshing, setRefreshing] = useState(false);
@@ -219,7 +222,7 @@ export function DataPendapatanScreen({ navigation }: Props) {
   // Ganti periode atau filter = daftar dibaca dari awal lagi. Satu effect untuk
   // semua pemicunya, bukan setTampil di tiap setter — yang begitu selalu ada
   // satu yang kelupaan.
-  useEffect(() => setTampil(BATCH), [periode, sumber, kelompok, hanyaMenunggu]);
+  useEffect(() => setTampil(BATCH), [periode, kelompok]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -230,49 +233,24 @@ export function DataPendapatanScreen({ navigation }: Props) {
   const periodeAktif = periode ?? resp?.periode ?? null;
   const bulanIni = useMemo(() => resp?.data ?? [], [resp]);
 
-  const diterima = useMemo(
-    () => bulanIni.filter((t) => t.statusVerifikasi === 'TERVERIFIKASI'),
-    [bulanIni],
-  );
-  const menunggu = useMemo(
-    () => bulanIni.filter((t) => t.statusVerifikasi === 'MENUNGGU'),
-    [bulanIni],
-  );
-
-  // Angka besar & uang menunggu dipakai dari ringkasan server, bukan dijumlah
-  // ulang di sini: keduanya dihitung dari baris yang sama persis, dan satu
-  // sumber angka lebih baik daripada dua yang kebetulan cocok.
-  const totalDiterima = resp?.ringkasan.totalRemunerasiBruto ?? 0;
-  const totalMenunggu = resp?.ringkasan.totalMenunggu ?? 0;
+  // Angka besar dipakai dari ringkasan server, bukan dijumlah ulang di sini:
+  // keduanya dihitung dari baris yang sama persis, dan satu sumber angka lebih
+  // baik daripada dua yang kebetulan cocok.
+  const total = resp?.ringkasan.totalRemunerasiBruto ?? 0;
   const teksPeriode = labelPeriode(periodeAktif);
 
-  // Komposisi sengaja dihitung dari transaksi TERVERIFIKASI saja, sama dengan
-  // angka besar di atasnya — kalau bar-nya memakai semua transaksi, segmennya
-  // tidak akan pernah menjumlah ke angka yang dibacanya.
-  const perSumber = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const t of diterima) map.set(t.penjamin.nama, (map.get(t.penjamin.nama) ?? 0) + t.jasa);
-    return [...map]
-      .map(([nama, total]) => ({ nama, total }))
-      .sort((a, b) => b.total - a.total);
-  }, [diterima]);
-
-  // Dua kelompok utama laporan jasa medis. Angkanya dari ringkasan server,
-  // sama seperti angka besar di atasnya.
+  // Satu-satunya pemecahan angka di layar ini: JKN vs Non-JKN. Rincian per
+  // penjamin (Pribadi sekian persen, Asuransi Swasta sekian) dihapus atas
+  // keputusan Arthuro 19 Ags 2026 — yang perlu dibaca dokter cuma dua kelompok
+  // itu, dan bar multi-segmen membuat keduanya harus dijumlah dulu di kepala.
   const perKelompok: { value: Kelompok; label: string; total: number }[] = [
     { value: 'JKN', label: 'JKN', total: resp?.ringkasan.totalJkn ?? 0 },
     { value: 'NON_JKN', label: 'Non-JKN', total: resp?.ringkasan.totalNonJkn ?? 0 },
   ];
 
   const rincian = useMemo(
-    () =>
-      bulanIni.filter(
-        (t) =>
-          (!sumber || t.penjamin.nama === sumber) &&
-          (!kelompok || kelompokDari(t) === kelompok) &&
-          (!hanyaMenunggu || t.statusVerifikasi === 'MENUNGGU'),
-      ),
-    [bulanIni, sumber, kelompok, hanyaMenunggu],
+    () => bulanIni.filter((t) => !kelompok || kelompokDari(t) === kelompok),
+    [bulanIni, kelompok],
   );
 
   // Dikelompokkan SETELAH dipotong, jadi grup tanggal terakhir bisa tampil
@@ -290,12 +268,10 @@ export function DataPendapatanScreen({ navigation }: Props) {
 
   const sisa = rincian.length - tampil;
 
-  const adaFilter = sumber !== null || kelompok !== null || hanyaMenunggu;
+  const adaFilter = kelompok !== null;
 
   function hapusFilter() {
-    setSumber(null);
     setKelompok(null);
-    setHanyaMenunggu(false);
   }
 
   function bukaSheetPeriode() {
@@ -378,18 +354,37 @@ export function DataPendapatanScreen({ navigation }: Props) {
         {/* Satu-satunya permukaan gelap di seluruh app: penanda bahwa ini angka
             uang, bukan sekadar kartu ringkasan lain. */}
         <View style={styles.panel}>
-          <Text style={styles.panelLabel}>Jasa medis diterima</Text>
+          <Text style={styles.panelLabel}>Total jasa medis</Text>
           <View style={styles.panelAngkaRow}>
-            <Text style={styles.panelAngka}>{formatRupiah(totalDiterima)}</Text>
+            <Text style={styles.panelAngka}>{formatRupiah(total)}</Text>
             {teksPeriode && <Text style={styles.panelPeriode}>{teksPeriode}</Text>}
           </View>
 
-          {/* Pecahan per jenis tinggal di dalam panel, bukan dua kartu putih
+          {/* Bar dua segmen, bukan multi-segmen per penjamin: cuma JKN dan
+              Non-JKN, dan dua angka di bawahnya menjumlah persis ke angka besar
+              di atas tanpa perlu dijumlah di kepala. */}
+          {total > 0 && (
+            <View style={styles.bar}>
+              {perKelompok.map((k, i) => (
+                <View
+                  key={k.value}
+                  style={{
+                    flex: Math.max(k.total, 0),
+                    backgroundColor: RAMP[i],
+                    opacity: kelompok && kelompok !== k.value ? 0.3 : 1,
+                  }}
+                />
+              ))}
+            </View>
+          )}
+
+          {/* Pecahan kelompok tinggal di dalam panel, bukan dua kartu putih
               mengambang di bawahnya: satu permukaan ringkasan yang seluruhnya
               bisa ditekan buat menyaring daftar di bawah. */}
           <View style={styles.jenisRow}>
             {perKelompok.map((k) => {
               const active = kelompok === k.value;
+              const persen = total > 0 ? Math.round((k.total / total) * 100) : 0;
               return (
                 <Pressable
                   key={k.value}
@@ -397,70 +392,14 @@ export function DataPendapatanScreen({ navigation }: Props) {
                   onPress={() => setKelompok(active ? null : k.value)}
                   style={[styles.jenisItem, active && styles.jenisItemActive]}
                 >
-                  <Text style={styles.jenisLabel}>{k.label}</Text>
+                  <Text style={styles.jenisLabel}>
+                    {k.label} · {persen}%
+                  </Text>
                   <Text style={styles.jenisNominal}>{formatRupiah(k.total)}</Text>
                 </Pressable>
               );
             })}
           </View>
-
-          {perSumber.length > 0 && (
-            <>
-              <View style={styles.bar}>
-                {perSumber.map((s, i) => (
-                  <View
-                    key={s.nama}
-                    style={{
-                      flex: s.total,
-                      backgroundColor: RAMP[i % RAMP.length],
-                      opacity: sumber && sumber !== s.nama ? 0.3 : 1,
-                    }}
-                  />
-                ))}
-              </View>
-
-              {/* Legend-nya sekaligus filternya: tidak ada dropdown "Sumber"
-                  terpisah, dan bar di atas berhenti jadi dekorasi. */}
-              <View style={styles.legendRow}>
-                {perSumber.map((s, i) => {
-                  const active = sumber === s.nama;
-                  return (
-                    <Pressable
-                      key={s.nama}
-                      accessibilityRole="button"
-                      onPress={() => setSumber(active ? null : s.nama)}
-                      style={[styles.legendItem, active && styles.legendItemActive]}
-                    >
-                      <View style={[styles.legendDot, { backgroundColor: RAMP[i % RAMP.length] }]} />
-                      <Text style={styles.legendNama} numberOfLines={1}>
-                        {s.nama}
-                      </Text>
-                      <Text style={styles.legendNominal}>{formatRupiahSingkat(s.total)}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </>
-          )}
-
-          {totalMenunggu > 0 && (
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setHanyaMenunggu((v) => !v)}
-              style={[styles.menungguRow, hanyaMenunggu && styles.menungguRowActive]}
-            >
-              <MaterialIcons name="schedule" size={18} color={colors.surfaceVariant} />
-              <Text style={styles.menungguText}>
-                <Text style={styles.menungguNominal}>{formatRupiah(totalMenunggu)}</Text> menunggu
-                verifikasi · {menunggu.length} pelayanan
-              </Text>
-              <MaterialIcons
-                name={hanyaMenunggu ? 'close' : 'chevron-right'}
-                size={18}
-                color={colors.surfaceVariant}
-              />
-            </Pressable>
-          )}
         </View>
 
         <View style={styles.rincianHeader}>
@@ -488,10 +427,18 @@ export function DataPendapatanScreen({ navigation }: Props) {
                   <View key={trx.id}>
                     {index > 0 && <View style={styles.trxDivider} />}
                     <View style={styles.trxRow}>
-                      {/* Kolom yang sama dengan tabel "Detail Tindakan"
-                          SIREMDIS, disusun tiga baris karena layar ponsel tidak
-                          muat 8 kolom: tindakan + jasa, lalu pasien + NORM,
-                          lalu jam + unit + penjamin. */}
+                      {/* Baris gaya aplikasi finance: ikon kategori di kiri,
+                          nominal tebal rata kanan, keterangan bertingkat di
+                          tengah. Isinya sendiri tetap kolom tabel "Detail
+                          Tindakan" SIREMDIS — layar ponsel tidak muat 7 kolom
+                          menyamping, jadi ditumpuk. */}
+                      <View style={styles.trxIkon}>
+                        <MaterialIcons
+                          name={ikonTindakan(trx.namaTindakan)}
+                          size={20}
+                          color={colors.primary}
+                        />
+                      </View>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.trxJenis} numberOfLines={1}>
                           {trx.namaTindakan}
@@ -500,17 +447,30 @@ export function DataPendapatanScreen({ navigation }: Props) {
                           {trx.pasien.nama}
                           <Text style={styles.trxMeta}> · RM {trx.pasien.norm}</Text>
                         </Text>
-                        <Text style={styles.trxMeta} numberOfLines={1}>
-                          {labelJam(trx.tanggalTindakan)} · {trx.unitPelayanan} ·{' '}
-                          {trx.penjamin.nama}
-                        </Text>
+                        <View style={styles.trxTagRow}>
+                          <Text style={styles.trxMeta}>
+                            {labelJam(trx.tanggalTindakan)} · {trx.unitPelayanan}
+                          </Text>
+                          <View
+                            style={[
+                              styles.trxTag,
+                              trx.penjamin.isJkn ? styles.trxTagJkn : styles.trxTagNonJkn,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.trxTagText,
+                                trx.penjamin.isJkn
+                                  ? styles.trxTagTextJkn
+                                  : styles.trxTagTextNonJkn,
+                              ]}
+                            >
+                              {trx.penjamin.nama}
+                            </Text>
+                          </View>
+                        </View>
                       </View>
-                      <View style={styles.trxNominalWrap}>
-                        <Text style={styles.trxNominal}>{formatRupiah(trx.jasa)}</Text>
-                        {trx.statusVerifikasi === 'MENUNGGU' && (
-                          <Text style={styles.trxMenunggu}>Menunggu verifikasi</Text>
-                        )}
-                      </View>
+                      <Text style={styles.trxNominal}>{formatRupiah(trx.jasa)}</Text>
                     </View>
                   </View>
                 ))}
@@ -757,32 +717,6 @@ const styles = StyleSheet.create({
   panelPeriode: { ...angka, fontSize: 12, color: colors.surfaceVariant },
 
   bar: { flexDirection: 'row', height: 10, borderRadius: radius.full, overflow: 'hidden', gap: 2 },
-  legendRow: { gap: spacing.base },
-  legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.base,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    marginHorizontal: -8,
-    borderRadius: radius.sm,
-  },
-  legendItemActive: { backgroundColor: `${colors.onPrimary}14` },
-  legendDot: { width: 8, height: 8, borderRadius: 4 },
-  legendNama: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.onPrimary },
-  legendNominal: { ...angka, fontSize: 13, fontWeight: '700', color: colors.surfaceVariant },
-
-  menungguRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingTop: spacing.gutter,
-    borderTopWidth: 1,
-    borderTopColor: `${colors.onPrimary}24`,
-  },
-  menungguRowActive: { opacity: 0.75 },
-  menungguText: { flex: 1, fontSize: 12, color: colors.surfaceVariant },
-  menungguNominal: { ...angka, fontSize: 13, fontWeight: '800', color: colors.onPrimary },
 
   jenisRow: { flexDirection: 'row', gap: spacing.base },
   jenisItem: {
@@ -814,12 +748,27 @@ const styles = StyleSheet.create({
     borderRadius: radius.sm,
     paddingHorizontal: spacing.gutter,
   },
-  trxDivider: { height: 1, backgroundColor: colors.surfaceVariant },
-  trxRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.gutter, paddingVertical: 14 },
+  // Divider mulai setelah ikon, bukan dari tepi kartu — garis penuh memotong
+  // kolom ikon dan bikin daftarnya terbaca seperti tabel, bukan ledger.
+  trxDivider: { height: 1, marginLeft: 40 + 14, backgroundColor: colors.surfaceVariant },
+  trxRow: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 14 },
+  trxIkon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.surfaceSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   trxJenis: { fontSize: 15, fontWeight: '700', color: colors.onSurface },
   trxPasien: { fontSize: 13, fontWeight: '600', color: colors.onSurfaceVariant, marginTop: 3 },
-  trxMeta: { ...angka, fontSize: 12, fontWeight: '400', color: colors.outline, marginTop: 2 },
-  trxNominalWrap: { alignItems: 'flex-end', gap: 2 },
-  trxNominal: { ...angka, fontSize: 15, fontWeight: '700', color: colors.onSurface },
-  trxMenunggu: { fontSize: 10, fontWeight: '700', color: colors.outline },
+  trxMeta: { ...angka, fontSize: 12, fontWeight: '400', color: colors.outline },
+  trxTagRow: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8, marginTop: 5 },
+  trxTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: radius.full },
+  trxTagJkn: { backgroundColor: `${colors.primary}14` },
+  trxTagNonJkn: { backgroundColor: colors.surfaceVariant },
+  trxTagText: { fontSize: 10, fontWeight: '700', letterSpacing: 0.3 },
+  trxTagTextJkn: { color: colors.primary },
+  trxTagTextNonJkn: { color: colors.onSurfaceVariant },
+  trxNominal: { ...angka, fontSize: 15, fontWeight: '800', color: colors.onSurface },
 });

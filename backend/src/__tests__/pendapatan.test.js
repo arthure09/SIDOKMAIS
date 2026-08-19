@@ -4,9 +4,10 @@
 //   1. `dokterId` DOKTER selalu dari JWT, tidak pernah dari query (Aturan #2) —
 //      ini modul uang, jadi query yang salah scope berarti dokter melihat
 //      penghasilan orang lain.
-//   2. Ringkasan benar-benar menjumlah baris yang sama dengan yang dikirim,
-//      dan cuma yang TERVERIFIKASI. Angka besar di layar yang tidak nyambung ke
-//      daftarnya adalah bug yang tidak kelihatan sampai ada yang menjumlah.
+//   2. Ringkasan benar-benar menjumlah baris yang sama dengan yang dikirim.
+//      Angka besar di layar yang tidak nyambung ke daftarnya adalah bug yang
+//      tidak kelihatan sampai ada yang menjumlah — dan JKN + Non-JKN harus
+//      selalu pas ke bruto, karena layar menampilkan ketiganya berdampingan.
 //   3. Batas atas periode INKLUSIF. "s/d 17-08" yang diam-diam memotong tanggal
 //      17 berarti sehari penuh jasa medis hilang dari laporan.
 //
@@ -50,14 +51,13 @@ const JKN = { nama: "BPJS/JKN", isJkn: true };
 const NON_JKN = { nama: "Pribadi", isJkn: false };
 const PASIEN = { norm: "349422", nama: "Raisya Calista Putri" };
 
-function baris(jasa, penjamin, statusVerifikasi = "TERVERIFIKASI", hari = 10) {
+function baris(jasa, penjamin, hari = 10) {
   return {
-    id: `baris-${jasa}-${statusVerifikasi}`,
+    id: `baris-${jasa}-${penjamin.nama}-${hari}`,
     tanggalTindakan: new Date(`2026-08-${String(hari).padStart(2, "0")}T03:00:00.000Z`),
     namaTindakan: "Konsul Ruang Perawatan",
     unitPelayanan: "Rawat Inap Melati",
     jasa,
-    statusVerifikasi,
     pasien: PASIEN,
     penjamin,
   };
@@ -65,9 +65,8 @@ function baris(jasa, penjamin, statusVerifikasi = "TERVERIFIKASI", hari = 10) {
 
 const BARIS = [
   baris(1_000_000, JKN),
-  baris(500_000, JKN),
+  baris(500_000, JKN, 11),
   baris(300_000, NON_JKN),
-  baris(700_000, JKN, "MENUNGGU"),
 ];
 
 async function tokenUntuk(username) {
@@ -118,7 +117,7 @@ describe("GET /api/pendapatan", () => {
     );
   });
 
-  it("ringkasan cuma menjumlah yang terverifikasi, dan bruto = JKN + Non-JKN", async () => {
+  it("total dipecah dua: JKN + Non-JKN, dan keduanya pas ke bruto", async () => {
     const res = await request(app)
       .get("/api/pendapatan?tanggalAwal=2026-08-01&tanggalAkhir=2026-08-31")
       .set("Authorization", `Bearer ${await tokenUntuk("budi.santoso")}`);
@@ -127,9 +126,15 @@ describe("GET /api/pendapatan", () => {
     expect(ringkasan.totalJkn).toBe(1_500_000);
     expect(ringkasan.totalNonJkn).toBe(300_000);
     expect(ringkasan.totalRemunerasiBruto).toBe(1_800_000);
-    // Yang MENUNGGU tidak ikut bruto, dilaporkan terpisah.
-    expect(ringkasan.totalMenunggu).toBe(700_000);
-    expect(ringkasan.jumlahPelayanan).toBe(4);
+    expect(ringkasan.jumlahPelayanan).toBe(3);
+    // Tidak ada pemecahan lain: status klaim & rincian per penjamin dihapus.
+    expect(ringkasan).not.toHaveProperty("totalMenunggu");
+    expect(Object.keys(ringkasan).sort()).toEqual([
+      "jumlahPelayanan",
+      "totalJkn",
+      "totalNonJkn",
+      "totalRemunerasiBruto",
+    ]);
   });
 
   it("mengirim NORM & nama pasien, mengikuti tabel Detail Tindakan SIREMDIS", async () => {
@@ -142,6 +147,7 @@ describe("GET /api/pendapatan", () => {
       expect(b).toHaveProperty("namaTindakan");
       expect(b).toHaveProperty("unitPelayanan");
       expect(b.penjamin).toHaveProperty("nama");
+      expect(b).not.toHaveProperty("statusVerifikasi");
     }
   });
 

@@ -82,13 +82,6 @@ enum FlagHasilLab {
   ABNORMAL
 }
 
-// Status klaim jasa medis. Tidak ada di dokumen referensi SIREMDIS — dipakai
-// layar Jasa Medis buat memisahkan yang sudah cair dari yang masih diproses.
-enum StatusVerifikasiJasa {
-  MENUNGGU
-  TERVERIFIKASI
-}
-
 enum TipeCatatanKalender {
   REMINDER
   BLOCKING
@@ -325,9 +318,8 @@ model Pendapatan {
   jasa            Decimal  @db.Decimal(14, 2)
   unitPelayanan   String
 
-  statusVerifikasi StatusVerifikasiJasa @default(TERVERIFIKASI)
-  isDummy          Boolean              @default(true)
-  createdAt        DateTime             @default(now())
+  isDummy   Boolean  @default(true)
+  createdAt DateTime @default(now())
 
   dokter   Dokter   @relation(fields: [dokterId], references: [id], onDelete: Cascade)
   pasien   Pasien   @relation(fields: [pasienId], references: [id], onDelete: Restrict)

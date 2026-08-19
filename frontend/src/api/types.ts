@@ -369,8 +369,6 @@ export type LoginResponse = {
 
 // --- Jasa Medis / Pendapatan (Tahap 4) ---
 
-export type StatusVerifikasiJasa = 'MENUNGGU' | 'TERVERIFIKASI';
-
 /**
  * Satu baris jasa medis, mengikuti kolom tabel "Detail Tindakan" SIREMDIS:
  * NORM, nama pasien, nama tindakan, tanggal tindakan, jasa, unit pelayanan,
@@ -386,7 +384,6 @@ export type BarisJasaMedis = {
   namaTindakan: string;
   unitPelayanan: string;
   jasa: number;
-  statusVerifikasi: StatusVerifikasiJasa;
   pasien: { norm: string; nama: string };
   penjamin: { nama: string; isJkn: boolean };
 };
@@ -400,10 +397,11 @@ export type PendapatanResponse = {
   /** Semua bulan yang ada isinya, terbaru dulu — dipakai sebagai pintasan. */
   bulanTersedia: string[];
   ringkasan: {
+    // Total jasa medis cuma dipecah dua: JKN dan Non-JKN. Tidak ada rincian
+    // per penjamin — itu sengaja dihapus (keputusan Arthuro, 19 Ags 2026).
     totalJkn: number;
     totalNonJkn: number;
     totalRemunerasiBruto: number;
-    totalMenunggu: number;
     jumlahPelayanan: number;
   };
   data: BarisJasaMedis[];
