@@ -1240,9 +1240,178 @@ satu-satu sampai Home), dan tampilan nama panjang di detail pasien.
 
 ---
 
+### Hari 33-35 (Sab 15 Ags – Sen 17 Ags) — Tidak ada progres
+
+---
+
+### Hari 36 (Sel, 18 Ags) — Rencana revisi modul klinis: Tahap 1 (kategori kunjungan) & Tahap 2 (model Konsultasi)
+
+Masa buffer. Hari terbesar sejak Hari 28: 1 entitas baru, 2 migration,
+1 modul backend baru, 1 layar ditulis ulang total, 7 commit.
+
+Titik berangkatnya `docs/rencana-revisi-modul-dokter.md` — rencana 4 tahap yang
+disusun setelah dapat referensi bentuk asli dokumen SIMRS (Lembar Konsultasi,
+Laporan Operasi) dan dashboard jasa medis SIREMDIS.
+
+#### Pre-check rencana: 5 hal yang berbeda dari asumsi dokumen
+
+Rencana itu punya bagian "Pre-check Wajib Sebelum Eksekusi". Dijalankan lebih
+dulu, dan hasilnya mengubah cara Tahap 1 dikerjakan:
+
+1. **Sebagian Tahap 1 sudah ada.** `Kunjungan` sudah punya `ruanganId` FK ke
+   `Ruangan`, dan enum `RuanganJenis` sudah memuat `POLI`/`RAWAT_INAP`. Field
+   `ruangan` String yang diminta rencana itu duplikat relasi yang sudah ada.
+2. **Asumsi "Konsultasi = jadwal" masih hidup dan dalam** — bukan cuma satu
+   layar: `JadwalOperasiKonsulScreen` memanggil `fetchKunjunganList`,
+   `DetailKonsulScreen` menerima param `kunjunganId`, dan `statusJadwal.js`
+   menurunkan status Kunjungan persis seperti Operasi.
+3. **Tahap 3 punya tumpang tindih yang belum diputuskan rencana:** `Operasi`
+   sudah punya `tim String[]`, `catatanPreOp`, `catatanPostOp` — belum jelas
+   field tim baru menggantikannya atau hidup berdampingan.
+4. **Tahap 4 bukan "kemungkinan restrukturisasi", tapi pasti breaking:**
+   `Pendapatan.operasiId` FK **required** dan tidak ada `dokterId` sama sekali,
+   padahal contoh transaksinya ("Konsul Ruang Perawatan") bukan operasi.
+5. **Nomor baris pre-check #2 sudah bergeser** — bug `Math.random()` tanpa
+   `faker.seed()` ada di `seed-kunjungan-operasi.js:86,90`, bukan 67,71.
+
+#### Tahap 1 — Kategori kunjungan (`c57426a`, `4534ee1`, `fb2c46b`)
+
+**Keputusan inti: kategorinya DITURUNKAN dari `Ruangan.jenis`, bukan kolom baru
+di `Kunjungan`.** Nilainya sudah ada di sana dan `ruanganId` wajib di tiap
+kunjungan, jadi kolom terpisah cuma bikin dua sumber kebenaran yang bisa saling
+bertentangan (kunjungan bertipe RAWAT_INAP yang ruangannya poli). Yang benar-benar
+kurang cuma nilai `IGD` di enum — satu migration `ALTER TYPE ... ADD VALUE`,
+additive, tidak breaking.
+
+- **`src/utils/jenisKunjungan.js`** — peta dua arah `RAWAT_JALAN` ↔ `POLI` +
+  `parseJenisKunjungan()`. Kosakata publik (API & UI) pakai istilah rencana;
+  `POLI` itu detail taksonomi ruangan yang tidak perlu bocor ke query string.
+- **Bug yang ditangkap test sebelum sempat jalan:** versi pertama memakai
+  lookup langsung `KE_RUANGAN_JENIS[query.jenisKunjungan]`. Untuk
+  `?jenisKunjungan=__proto__` itu mengembalikan `Object.prototype` — **truthy**,
+  jadi lolos whitelist dan masuk ke `where` Prisma. Diganti `Object.hasOwn`.
+  Ini persis alasan test ditulis lebih dulu untuk fungsi di batas kepercayaan.
+- **Bug model di seed yang ikut ketahuan:** `seed.js` memberi ruangan **OK**
+  ke sebagian `Kunjungan`, padahal `Operasi` punya `ruanganId` sendiri.
+  Kunjungan di ruang operasi memang salah model, dan sebelum Tahap 1 tidak ada
+  yang menyadarinya karena `ruangan.jenis` belum berarti apa-apa. Sekarang
+  kunjungan mengambil dari ruangan non-OK saja.
+- **Filter `?jenisKunjungan=`** di list pasien & kunjungan, plus field
+  `jenisKunjungan` di respons list/detail/riwayat. Di list pasien filternya
+  berarti "pasien yang **punya** kunjungan jenis ini" — daftar itu berbasis
+  pasien, bukan kunjungan.
+- **Yang di-skip:** `nomorKamar` (item terbuka rencana sendiri, belum
+  dikonfirmasi ke Mas Fauzi) dan field `ruangan` String (duplikat FK).
+
+#### Filter chip → dropdown (`adcb094`)
+
+Versi pertama memasang 3 chip jenis di samping 3 chip status. Enam chip tidak
+muat sebaris di layar ponsel; versi `flexWrap`-nya jadi dua baris dan ikut
+menaikkan tinggi header yang menyusut-mengembang waktu scroll. Diganti dua
+tombol dropdown + bottom sheet, memakai ulang pola dropdown bulan di
+`DataPendapatanScreen` (backdrop, sheet membulat, item bercentang).
+
+Tombol menampilkan **nama dimensinya** waktu kosong ("Status", "Jenis
+Kunjungan"), bukan "Semua" — dua tombol bertuliskan "Semua" bersebelahan tidak
+memberi tahu apa pun soal isinya. Baris ketiga sengaja tidak dibuat:
+`useCollapseOnScroll` cuma mengelola dua baris (search + filter).
+
+#### Tahap 2 — Model Konsultasi (`ec6c07f`, `e9985e3`, `1602c64`)
+
+Tahap paling berisiko di rencana, dan memang restrukturisasi total. Referensi
+Lembar Konsultasi menunjukkan bentuk aslinya: **surat konsul antar-dokter** —
+dua pihak (pengirim, tujuan), dua state (menunggu jawaban, sudah dijawab) —
+bukan jadwal appointment seperti yang diasumsikan sejak Minggu 1.
+
+- **Entitas ke-14 `Konsultasi`** + 2 enum (`PrioritasKonsultasi`,
+  `StatusKonsultasi`), migration `20260818064500_add_konsultasi_module`.
+  Dua relasi bernama ke `Dokter` (`KonsultasiPengirim`/`KonsultasiTujuan`).
+  SQL-nya digenerate lewat `prisma migrate diff --from-schema-datasource`,
+  bukan ditulis tangan.
+- **Hak aksesnya sengaja BEDA pola dari seluruh modul lain.** Pasien & lab
+  lewat `DokterPasienAssignment`; di sini `WHERE dokterTujuanId = <dari JWT>`,
+  tanpa jalan lolos lewat assignment. Konsekuensinya disengaja: konsul yang
+  ditujukan ke dokter lain tetap 403 **meski pasiennya di-assign ke dokter yang
+  login**. Ini keputusan terkunci di rencana, dan justru karena polanya
+  menyimpang, ia ditutup test tersendiri.
+- **`konsultasi.rbac.test.js`** — 8 test, prisma di-mock, yang diperiksa
+  *where clause yang dikirim*, bukan hasil query. Termasuk jaminan `?dokterId=`
+  tidak bisa dipakai DOKTER buat mengintip dokter lain (Aturan #2).
+- **Tiga penyimpangan dari tabel field rencana, disengaja:**
+  - `dokterPengirimId` ditambahkan. Rencana menyebut "ada dua pihak (pengirim,
+    tujuan)" tapi cuma mendaftarkan `dokterTujuanId`; tanpa pengirim, layar
+    detail tidak bisa menampilkan konsul ini datang dari siapa.
+  - `tanggalPermintaan` ditambahkan — rencana cuma punya `tanggalJawaban`.
+  - Ikhtisar klinis semuanya nullable; lembar konsul di lapangan terisi
+    sebagian. `tekananDarah` String karena bentuknya "120/80".
+- **Seed pakai 6 skenario utuh**, bukan field yang diacak sendiri-sendiri:
+  permintaan nyambung dengan diagnosis kerjanya, dan jawaban menjawab
+  permintaan itu. Permintaan "evaluasi anestesi" yang dijawab "tunda
+  kemoterapi" bukan data dummy, itu data rusak — prinsip yang sama dengan seed
+  lab (Hari 21).
+- **Frontend diganti sumbernya, bukan di-extend** (pre-check #3):
+  `DetailKonsulScreen` ditulis ulang jadi dua section — Permintaan (selalu) dan
+  Jawaban (kondisional). Waktu `MENUNGGU_JAWABAN` yang tampil penanda belum
+  dijawab, bukan kartu kosong: field jawabannya memang null di server, tidak
+  sekadar disembunyikan UI. Filter status dipisah per tab (Operasi punya siklus
+  jadwal, Konsultasi punya dua state surat) dan direset waktu ganti tab.
+- **Sisa temuan pre-check #3 yang paling halus:** dashboard punya
+  `konsulHariIni` yang sebenarnya menghitung `prisma.kunjungan` tapi dilabeli
+  "Konsultasi" di Home. Sebelum hari ini itu cuma penamaan longgar; sesudah
+  `Konsultasi` jadi entitas tersendiri, itu menyesatkan. Direname jadi
+  `kunjunganHariIni`, berikut `jenis: 'KONSULTASI'` → `'KUNJUNGAN'` dan label
+  UI di Home & Kalender. Rename dua sisi (backend + frontend) sengaja dalam
+  satu commit supaya kontrak API-nya tidak pernah pecah di tengah.
+- **`1602c64`** — komentar seed menjanjikan sebagian konsul punya `kunjunganId`
+  null supaya layar detail teruji di dua kondisi, tapi tiap pasien di seed
+  selalu punya minimal satu kunjungan: hasilnya 0 dari 14 baris. Ditambah
+  undian 25%. Ketahuan waktu memverifikasi hasil seed, bukan dari kode.
+
+#### Debugging: ternyata ada DUA Prisma Client di laptop backend
+
+Catatan Hari 28 sudah merekam satu sisinya (client di dalam container basi).
+Hari ini kena **dua-duanya, dengan gejala yang sama sekali berbeda**, dan itu
+memakan waktu paling lama hari ini:
+
+| Yang jalan | Pakai | Generate di | Gejala kalau basi |
+|---|---|---|---|
+| API server | volume anonim container | `docker compose exec app npx prisma generate` | HTTP 500 **hanya** pada baris yang memakai nilai enum baru |
+| `npm run prisma:seed` | `node_modules` WSL2 | `npx prisma generate` di host | `TypeError: Cannot read properties of undefined (reading 'deleteMany')` |
+
+Yang bikin sisi pertama sulit dibaca: `?limit=2` balik 200 (dua baris pertama
+kebetulan tidak ada IGD-nya) sementara `?limit=100` dan `/api/pasien` balik 500.
+Kelihatan seperti bug di endpoint tertentu, padahal kode + data yang sama jalan
+200 di laptop lokal. Yang memastikan bukan kode: port 3000 **masih menjawab**
+setelah server di WSL2 di-Ctrl-C — berarti ada proses lain, dan `restart: unless-stopped`
+di `docker-compose.yml` yang menahannya hidup.
+
+**Aturannya sekarang: tiap `schema.prisma` berubah, generate di DUA tempat.**
+
+#### Status verifikasi
+
+- `npx tsc --noEmit` lolos di tiap langkah; 31/31 test backend lolos.
+- Endpoint Tahap 1 & 2 diuji **lawan DB asli lewat Tailscale**, bukan cuma unit
+  test: sebelum seed jalan, dengan 2 baris `Konsultasi` sementara yang dibuat
+  lalu dihapus lagi; sesudah seed, dengan data seed sebenarnya.
+- Hasil verifikasi setelah reseed: Konsultasi 14 baris, 9 ditujukan ke dokter
+  utama dan API mengembalikan **tepat 9** (scoping bekerja), 5 menunggu jawaban
+  / 4 sudah dijawab, 4 CITO. Kategori kunjungan: Rawat Jalan 27, IGD 8, Rawat
+  Inap 17.
+- **Tidak ada yang dites di perangkat.** Yang paling perlu dicoba langsung:
+  dua dropdown filter di Daftar Pasien (termasuk kombinasi status + jenis),
+  tampilan dua section di Detail Konsultasi untuk kedua status, dan badge CITO.
+
+---
+
 ## Catatan lintas-hari yang masih terbuka
-- ERD v2 (entity Konsultasi terpisah dari Operasi) belum di-merge resmi ke
-  dokumen rencana, masih pending keputusan supervisor
+- ~~ERD v2 (entity Konsultasi terpisah dari Operasi) belum di-merge resmi ke
+  dokumen rencana, masih pending keputusan supervisor~~ — **selesai 18 Ags
+  2026** (Hari 36): model `Konsultasi` masuk lewat migration
+  `20260818064500_add_konsultasi_module`. Bentuknya **bukan** seperti dugaan
+  ERD v2 (Konsultasi sebagai jadwal sejenis Operasi) melainkan surat konsul
+  antar-dokter sesuai referensi Lembar Konsultasi. Yang masih perlu
+  dikonfirmasi supervisor: apakah `dokterPengirimId` dan `tanggalPermintaan`
+  yang ditambahkan di luar tabel field rencana sudah sesuai form aslinya.
 - ~~Entity "Laporan Lab" belum ada modelnya di `schema.prisma`~~ — **selesai
   30 Jul 2026**: `PemeriksaanLab` + `HasilLabItem` masuk lewat migration
   `20260730024026_add_lab_module`. **Koreksi 4 Agustus 2026:** Hari 19 TIDAK
@@ -1264,6 +1433,15 @@ satu-satu sampai Home), dan tampilan nama panjang di detail pasien.
   manual di dalam container (`docker compose exec app npx prisma generate`)
   sebelum restart/recreate, tidak otomatis ikut `git pull`. Belum diputuskan
   apa didokumentasikan di README atau diwire ke start command container.
+  **Diperluas Hari 36 (18 Ags):** ternyata ada **dua** Prisma Client, dan tiap
+  perubahan schema butuh generate di dua-duanya — client container dipakai API
+  server, client host (`node_modules` WSL2) dipakai `npm run prisma:seed` dan
+  script host lain. Gejalanya beda: container basi → HTTP 500 hanya pada baris
+  yang memakai nilai enum baru; host basi → `TypeError: Cannot read properties
+  of undefined`. Ditambah `restart: unless-stopped` pada service `app`, yang
+  bikin container tetap memegang port 3000 walau server di terminal sudah
+  di-Ctrl-C. Perbaikan tuntasnya: pindahkan `prisma generate` dari `RUN` ke
+  `CMD` di `backend/Dockerfile` supaya sisi container jalan tiap start.
 - ~~**Gestur swipe iOS dimatikan, belum dibelokkan**~~ (Hari 30, 12 Ags) —
   **selesai 14 Ags 2026** (Hari 32): layar tile Menu pindah ke
   `HomeStackNavigator`, gestur geser tepi kiri aktif lagi dan mendarat di Home.
