@@ -1401,9 +1401,248 @@ di `docker-compose.yml` yang menahannya hidup.
   dua dropdown filter di Daftar Pasien (termasuk kombinasi status + jenis),
   tampilan dua section di Detail Konsultasi untuk kedua status, dan badge CITO.
 
+### Hari 37 (Rab, 19 Ags) — Tahap 3 & 4 rencana revisi + security review seluruh codebase
+
+Rencana revisi modul klinis **tuntas semua** hari ini (Tahap 3 dan 4 menyusul
+Tahap 1 & 2 kemarin), lalu satu screenshot referensi memaksa Tahap 4 ditulis
+ulang dua kali, dan hari ditutup dengan security review yang menemukan celah
+HIGH di kode yang sudah jalan sejak Minggu 1.
+
+Enam commit: `7e6d649`, `a1d000e`, `0fee0f2`, `76db2db`, `5b3c354`, `bb0d319`.
+
+#### Tahap 3 — Laporan Operasi (`7e6d649`)
+
+`Operasi` berhenti jadi sekadar jadwal. 26 kolom nullable + 2 enum
+(`SifatOperasi`, `JenisPembedahan`), migration
+`20260819043000_add_laporan_operasi`, additive murni jadi data lama tetap valid.
+
+- **Aturan tampilnya yang jadi inti tahap ini:** laporan cuma dikirim kalau
+  status **efektif**-nya `COMPLETED`, bukan status tersimpan. Operasi yang
+  tercatat `SCHEDULED` tapi tanggalnya sudah lewat tetap dapat laporannya —
+  konsisten dengan label "Selesai" yang tampil di layar (`utils/statusJadwal.js`
+  dari Hari 33). Penyaringannya di **server**, field-nya dibuang dari respons,
+  bukan dikirim null lalu disembunyikan UI.
+- **Satu tabel `LAPORAN_FIELDS`** di `utils/laporanOperasi.js` melayani dua hal
+  sekaligus: validasi body PATCH dan penyaringan respons GET. Menambah field
+  laporan nanti cukup di satu tempat. Nama kolom tidak pernah diambil dari
+  request — itu juga yang menutup mass-assignment (dikonfirmasi agen review
+  sore harinya).
+- **`tim` lama dibiarkan.** Sempat terpikir menggantinya dengan 5 field bernama
+  peran, tapi itu migrasi data + ubah validasi PATCH + ubah kartu jadwal, demi
+  nol fungsionalitas baru. Kartu Tim Medis sekarang menampilkan peran kalau
+  laporannya ada, jatuh ke daftar nama polos kalau belum.
+- **Seed pakai narasi per jenis tindakan**, prinsip yang sama dengan seed lab
+  (Hari 21) dan seed konsul (Hari 36): transfusi cuma muncul kalau perdarahan
+  >500 ml, grup anestesi lokal cuma terisi kalau `jenisAnestesi` Lokal, jam
+  selesai selalu setelah insisi.
+- **8 test** (`laporanOperasi.test.js`), termasuk kasus tersimpan-`SCHEDULED`-
+  tapi-lewat dan operasi dibatalkan (yang tidak boleh punya laporan).
+- Ikut dibersihkan: penanganan `P2003` di `DELETE /api/operasi` jadi tidak
+  terpakai setelah Tahap 4 melepas relasi `Pendapatan → Operasi`.
+
+#### Tahap 4 — Jasa Medis, versi pertama (`a1d000e`)
+
+`Pendapatan` berhenti jadi turunan `Operasi` dan jadi **satu baris per
+pelayanan**, diturunkan dari kunjungan + operasi + konsultasi yang sudah ada.
+`Penjamin` dapat flag `isJkn` eksplisit — mencocokkan teks bebas kolom `tipe`
+untuk menentukan kelompok uang itu cara yang diam-diam salah begitu ada
+penjamin baru.
+
+Dua penyimpangan dari dokumen rencana, disengaja:
+
+- **Ringkasan periode tidak disimpan sebagai model.** Rencana menyebut "dua
+  layer secara data (ringkasan + detail)". Tapi ringkasan itu agregasi atas
+  rentang tanggal yang dipilih user — menyimpannya berarti punya dua sumber
+  angka yang bisa berbeda. Dihitung saat diminta.
+- **Satu endpoint, bukan dua.** Layarnya butuh ringkasan dan daftar sekaligus,
+  dan angka ringkasan harus dijumlah dari baris yang sama persis dengan yang
+  ditampilkan. Dipisah dua panggilan, dua angka itu bisa selisih tanpa ada yang
+  sadar.
+
+Versi ini sengaja **tanpa identitas pasien**, mengikuti keputusan 14 Ags 2026
+yang tercatat di `pendapatanMock.ts` — bukan mengikuti tabel field rencana yang
+menyebut `norm`/`namaPasien`. Alasannya: keputusan itu lebih baru dan lebih
+spesifik, dan arahnya aman (menambah kolom identitas nanti itu additive,
+mencabutnya setelah terlanjur jalan tidak).
+
+**Bug seed lama yang ketahuan di sini:** `seedOperasi` memilih 6 kunjungan acak
+dari **seluruh** dokter, dan akun demo sering tidak kebagian satu pun. Efeknya
+baru kelihatan sekarang karena jasa medis diturunkan dari operasi: dokter utama
+punya 0 baris tindakan operasi. Diperbaiki jadi separuh jatah dari kunjungan
+dokter utama. Ini juga yang bikin laporan Tahap 3 tidak pernah tampil waktu app
+dibuka — screenshot detail operasi yang dikirim siang tadi kebetulan operasi
+dari `seedJadwalMendatang`, yang memang sengaja tanpa laporan.
+
+#### Tahap 4 ditulis ulang — screenshot SIREMDIS asli (`0fee0f2`)
+
+Screenshot tabel "Detail Tindakan" mengoreksi **tiga** asumsi sekaligus:
+
+| Asumsi awal | Kenyataan di referensi |
+|---|---|
+| Tanpa identitas pasien | Ada kolom `NORM` dan `NAMA PASIEN` |
+| Periode = pilihan bulan | Rentang tanggal bebas, "01-08-2026 s/d 17-08-2026" |
+| Tarif bervariasi tiap transaksi | Tabel tetap per tindakan — puluhan baris cuma memakai dua nilai, Rp 23.400 dan Rp 31.950 |
+
+- **Identitas pasien masuk kembali**, relasi `Pendapatan → Pasien`, migration
+  `20260819110000_pendapatan_pasien`. Komentar lama di `schema.prisma` dan
+  `types.ts` yang menjelaskan kenapa identitas pasien *tidak* ada ikut
+  diperbarui — riwayat keputusannya tetap dicatat di situ supaya tidak ada
+  dokumentasi yang saling bertentangan.
+- **Batas atas periode INKLUSIF.** "s/d 17-08" yang diam-diam memotong tanggal
+  17 berarti sehari penuh jasa medis hilang dari laporan. Ini dapat testnya
+  sendiri, dan implementasinya memakai awal hari **berikutnya** sebagai batas
+  eksklusif, dihitung dalam WIB.
+- **Pemilih rentang tanggal** memakai ulang pola filter di `HasilLabListScreen`
+  (`@react-native-community/datetimepicker` sudah terpasang sejak Hari 25, tidak
+  ada dependency baru). Pintasan bulan tetap ada di bawahnya — cuma di situ
+  dokter bisa tahu bulan mana yang memang ada isinya, dan picker tanggal tidak
+  bisa menyampaikan itu.
+- **Tarif jadi tabel tetap.** Seed sebelumnya mengarang rentang Rp 150–400 rb
+  untuk konsul, sekitar 10× terlalu besar. Nominal poliklinik, IGD, dan seluruh
+  tindakan operasi belum punya rujukan — ditandai `PENDING` di seed, jangan
+  dianggap angka nyata.
+- **`unitPelayanan` = SMF tempat pelayanan terjadi, bukan spesialisasi dokter
+  yang menagih.** Di referensi, dokter Sp.THT menagih konsul di unit "Anak" —
+  unit mengikuti tempatnya, bukan siapa yang mengerjakan. Sebelumnya diisi nama
+  ruangan ("Rawat Inap Melati"), sekarang SMF ("Onkologi Medik").
+
+#### Tahap 4 disederhanakan — gaya aplikasi finance (`76db2db`)
+
+Tiga penyederhanaan atas permintaan langsung:
+
+- **`statusVerifikasi` dihapus sampai ke kolom DB** (migration
+  `20260819130000_hapus_status_verifikasi`), bukan sekadar disembunyikan.
+  Kolom itu memang tidak pernah ada di tabel SIREMDIS — sisa dari mock lama.
+  Laporan jasa medis cuma perlu satu angka total, bukan dua kolom uang (cair vs
+  diproses) yang harus dijelaskan bedanya. Baris "menunggu verifikasi" di panel
+  dan filternya ikut hilang.
+- **Rincian per penjamin dihapus.** Bar multi-segmen diganti dua segmen JKN vs
+  Non-JKN, tiap kartu menyebut persentasenya sendiri terhadap total. Dua angka
+  itu sekarang menjumlah persis ke angka besar di atasnya tanpa perlu dijumlah
+  di kepala.
+- **Daftar transaksi bergaya ledger aplikasi finance:** ikon kategori bulat di
+  kiri (dicocokkan dari nama tindakan — tidak ada kolom kategori baru di DB cuma
+  demi ikon), nominal tebal rata kanan dengan angka tabular, keterangan
+  bertingkat di tengah, penjamin jadi chip yang warnanya membedakan JKN dari
+  Non-JKN. Divider mulai setelah kolom ikon supaya terbaca sebagai ledger,
+  bukan tabel.
+
+`pendapatanMock.ts` dihapus (nol consumer). Layar Jasa Medis sekarang murni
+dari `/api/pendapatan`.
+
+#### Security review seluruh codebase — 3 agen paralel
+
+Dibagi tiga domain: (1) auth/RBAC/plumbing, (2) route data klinis, (3) modul
+finansial + data layer + frontend. Dua agen **secara independen** menemukan dua
+temuan yang sama, dan keduanya saya verifikasi ulang sendiri ke file aslinya
+sebelum dilaporkan.
+
+**Yang bersih** (ini bagian yang penting dicatat, karena hasilnya menguatkan
+keputusan arsitektur Minggu 1): ke-13 endpoint klinis punya scoping clause
+server-side dari `req.user`; ketiga endpoint tulis semuanya `authorize("ADMIN")`;
+nol `$queryRaw`/`$executeRaw`/`eval` di seluruh backend; `?dokterId=` tidak bisa
+dipakai DOKTER di satu pun route; guard `role === "DOKTER" && !ownDokterId → 403`
+ada di semua 17 route yang bisa dicapai DOKTER; `jenisKunjungan.js` sudah pakai
+`Object.hasOwn` untuk memblokir `?jenisKunjungan=__proto__`. **Aturan #2
+CLAUDE.md terbukti dipegang konsisten di seluruh codebase.**
+
+**Temuan 1 (HIGH) — kunci JWT bisa ditebak.** `docker-compose.yml` punya
+`JWT_SECRET: ${JWT_SECRET:-change-me-to-a-long-random-secret}` sejak Hari 5,
+dan `jwt.js` memakainya tanpa validasi apa pun. Waktu dicek, `.env` yang sedang
+berjalan **memang masih berisi placeholder itu** — jadi bukan risiko teoretis.
+Dampaknya bukan satu endpoint: seluruh isolasi antar-dokter diturunkan dari
+klaim JWT, jadi siapa pun yang bisa membaca repo ini bisa merakit token
+`role: ADMIN` dan membaca pasien, hasil lab, serta jasa medis dokter mana pun,
+tanpa kredensial. Port 3000 di-publish dan `.env` menunjuk host jaringan, jadi
+permukaannya nyata.
+
+**Temuan 2 (MEDIUM) — akun `admin`/`admin123` dari seed.** Belum diperbaiki,
+lihat catatan lintas-hari.
+
+#### Perbaikan Temuan 1 (`5b3c354`) dan kesalahan yang menyusul (`bb0d319`)
+
+Tiga lapis:
+
+1. `jwt.js` menolak secret kosong, < 32 karakter, atau placeholder. Dicek di
+   **level modul** supaya server gagal start, bukan gagal saat login pertama.
+   Gagal berisik lebih baik daripada aman-aman palsu.
+2. `docker-compose.yml` pakai `${JWT_SECRET:?...}` — compose menolak start tanpa
+   secret, tidak ada lagi nilai bawaan yang ikut ter-commit.
+3. `.env.example` dikosongkan + instruksi generate.
+
+Sekalian algoritma verifikasi dipin ke `HS256`. 6 test baru
+(`jwtSecret.test.js`), termasuk penolakan token `alg: none` yang dirakit tangan.
+Secret di `.env` dirotasi (Mac dan laptop backend terpisah, dua-duanya perlu
+dirotasi sendiri karena `.env` tidak ter-commit). Rotasi membatalkan semua token
+lama — sesi yang login harus login ulang.
+
+**Kesalahan saya di commit itu:** pesan error `${JWT_SECRET:?wajib di-set,
+generate dengan: openssl ...}` mengandung `": "`, dan YAML membacanya sebagai
+awal mapping baru. **Seluruh** `docker-compose.yml` gagal di-parse — `up` dan
+`logs` dua-duanya mati dengan `mapping values are not allowed in this context`.
+Lolos dari pengujian karena Docker daemon tidak jalan di Mac tempat perubahan
+itu dibuat, jadi compose file-nya tidak pernah benar-benar di-parse. Diperbaiki
+di `bb0d319` (nilai dikutip, titik-dua dibuang) dan kali ini **diverifikasi
+dengan parser YAML sungguhan** sebelum push.
+
+**Pelajarannya, dan ini pola yang berulang:** perubahan pada file yang tidak
+dieksekusi test (compose, Dockerfile, migration SQL) harus divalidasi dengan
+alat yang memang memparsingnya, bukan dibaca sekilas. Sama kelasnya dengan
+pelajaran dua Prisma Client di Hari 36 — "kelihatannya benar di satu mesin"
+bukan verifikasi.
+
+#### Status verifikasi
+
+- 52/52 test backend lolos (naik dari 31 di Hari 36: +8 laporan operasi,
+  +6 pendapatan, +6 guard JWT, +1 penyesuaian).
+- `npx tsc --noEmit` lolos di tiap langkah.
+- Semua endpoint diuji **lawan DB asli lewat Tailscale**, bukan cuma unit test:
+  laporan operasi tampil/tidak sesuai status, jasa medis per periode, dan
+  `jkn + nonJkn === bruto` diverifikasi dari respons sungguhan.
+- Guard JWT diuji empat arah: boot dengan placeholder → gagal, boot tanpa
+  secret → gagal, login normal → 200, token dipalsukan dengan secret lama →
+  401.
+- Hasil setelah reseed: Pendapatan 48 baris, Operasi 10. Juni dokter utama
+  9 baris dengan JKN Rp 3.080.600 (50%) / Non-JKN Rp 3.052.000 (50%).
+- **Tidak ada yang dites di perangkat.** Yang paling perlu dicoba langsung:
+  section laporan di Detail Operasi untuk operasi Juni (yang sudah punya
+  laporan), pemilih rentang tanggal di Jasa Medis, dan tampilan ledger-nya.
+
 ---
 
 ## Catatan lintas-hari yang masih terbuka
+- **Temuan security MEDIUM belum diperbaiki — akun `admin`/`admin123`**
+  (ditemukan Hari 37, 19 Ags): `seed.js` membuat akun ADMIN dengan password
+  `admin123`, dan akun dokter berbagi satu password `Sidokmais#2026` dengan
+  username yang diturunkan deterministik dari nama dokter (jadi bisa
+  dienumerasi). Ini bukan fixture test — `seed.js` adalah jalur seed normal
+  (`npm run prisma:seed`) yang jalan terhadap apa pun yang ditunjuk
+  `DATABASE_URL`, saat ini host jaringan bersama. ADMIN bukan role rendah:
+  `parseDokterIdFilter` menghormati `?dokterId=` **hanya** untuk ADMIN, dan itu
+  persis saklar lintas-dokter di endpoint uang. Perbaikannya kecil: password
+  seed dibaca dari env (`process.env.SEED_ADMIN_PASSWORD`) + guard
+  `NODE_ENV !== "production"` di awal `seed.js`.
+- **Bug korektness `kunjungan.routes.js:73`** (ditemukan Hari 37 lewat security
+  review, bukan lewat test): `where.OR = [...]` menimpa key `OR` yang sudah
+  dipasang `whereStatusEfektif("COMPLETED", KUNJUNGAN)` di baris 65. Untuk
+  DOKTER, `GET /api/kunjungan?status=COMPLETED` diam-diam mengembalikan
+  **semua** kunjungannya tanpa filter status. Fail-safe (yang bertahan justru
+  scoping-nya), jadi bug tampilan, bukan celah keamanan. `operasi.routes.js`
+  terhindar karena scoping-nya bersarang di bawah `where.kunjungan`.
+- **`docs/rencana-revisi-modul-dokter.md` Tahap 4 sudah tidak sesuai kode**
+  (Hari 37): dokumen itu masih menulis dua endpoint terpisah, ringkasan sebagai
+  model tersimpan, dan tidak menyebut tarif tetap maupun `statusVerifikasi` yang
+  sempat ada lalu dihapus. Yang berlaku adalah entri Hari 37 di jurnal ini.
+- **Rotasi `JWT_SECRET` harus dikerjakan per mesin** (Hari 37): `.env` tidak
+  ter-commit, jadi rotasi di satu mesin tidak ikut ke mesin lain. Sejak
+  `5b3c354` server menolak start kalau secret-nya lemah — kalau nanti ada
+  environment baru, generate dulu (`openssl rand -base64 48`) sebelum
+  `docker compose up`, bukan sesudah bingung kenapa container crash-loop.
+- **File yang tidak dieksekusi test butuh validasi tersendiri** (Hari 37):
+  `docker-compose.yml` rusak sehari penuh karena `": "` di dalam nilai
+  environment, dan tidak ketahuan sampai dijalankan di laptop backend — Docker
+  daemon tidak jalan di mesin tempat perubahannya dibuat. Berlaku juga untuk
+  `Dockerfile` dan migration SQL yang ditulis tangan.
 - ~~ERD v2 (entity Konsultasi terpisah dari Operasi) belum di-merge resmi ke
   dokumen rencana, masih pending keputusan supervisor~~ — **selesai 18 Ags
   2026** (Hari 36): model `Konsultasi` masuk lewat migration
