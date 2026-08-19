@@ -29,7 +29,9 @@ services:
       # yang lupa mengisinya tetap menyala — menandatangani token dengan kunci
       # yang bisa dibaca siapa pun. Lebih baik gagal berisik daripada aman-aman
       # palsu. Nilainya diambil dari backend/.env (tidak ter-commit).
-      JWT_SECRET: ${JWT_SECRET:?wajib di-set, generate dengan: openssl rand -base64 48}
+      # Dikutip: pesan errornya tidak boleh mengandung ": " — YAML membacanya
+      # sebagai mapping baru dan seluruh file gagal di-parse.
+      JWT_SECRET: "${JWT_SECRET:?wajib di-set, generate dengan openssl rand -base64 48}"
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
       PORT: 3000
     ports:
