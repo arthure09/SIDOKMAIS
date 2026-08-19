@@ -1,5 +1,4 @@
 const express = require("express");
-const { Prisma } = require("@prisma/client");
 const prisma = require("../lib/prisma");
 const authorize = require("../middleware/rbac.middleware");
 const { logAudit } = require("../utils/auditLog");
@@ -340,16 +339,10 @@ router.delete("/:id", authorize("ADMIN"), async (req, res) => {
     return res.status(404).json({ message: "Operasi tidak ditemukan" });
   }
 
-  try {
-    await prisma.operasi.delete({ where: { id } });
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
-      return res.status(409).json({
-        message: "Operasi tidak bisa dihapus, ada data pendapatan terkait",
-      });
-    }
-    throw err;
-  }
+  // Sejak Tahap 4, Pendapatan tidak lagi menggantung ke Operasi (satu baris
+  // jasa medis per pelayanan, bukan turunan operasi), jadi Operasi sudah tidak
+  // punya anak sama sekali dan penanganan P2003 di sini jadi tidak terpakai.
+  await prisma.operasi.delete({ where: { id } });
 
   await logAudit({
     actorId: req.user.id,

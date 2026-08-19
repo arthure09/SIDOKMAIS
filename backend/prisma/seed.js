@@ -419,11 +419,21 @@ function buatLaporanOperasi(jenisTindakan, tanggalOperasi, tim) {
   };
 }
 
-async function seedOperasi(kunjunganList, ruanganList, pasienList) {
+async function seedOperasi(kunjunganList, ruanganList, pasienList, dokterUtama) {
   const okRuangan = ruanganList.filter((r) => r.jenis === "OK");
   const jenisKelaminByPasien = new Map(pasienList.map((p) => [p.id, p.jenisKelamin]));
   const kandidat = kunjunganList.filter((k) => ["ONGOING", "COMPLETED"].includes(k.statusKunjungan));
-  const dipilih = pickMany(kandidat, Math.min(6, kandidat.length));
+
+  // Separuh jatah operasi diambil dari kunjungan dokter utama. Sebelumnya
+  // 6 kunjungan dipilih acak dari SELURUH dokter, dan akun login demo sering
+  // tidak kebagian satu pun — akibatnya laporan operasi (Tahap 3) dan jasa
+  // medis tindakan (Tahap 4) tidak pernah kelihatan waktu app dibuka.
+  const kandidatUtama = kandidat.filter((k) => k.dokterId === dokterUtama.id);
+  const kandidatLain = kandidat.filter((k) => k.dokterId !== dokterUtama.id);
+  const dipilih = [
+    ...pickMany(kandidatUtama, Math.min(4, kandidatUtama.length)),
+    ...pickMany(kandidatLain, Math.min(4, kandidatLain.length)),
+  ];
 
   const operasi = [];
   for (const kunjungan of dipilih) {
@@ -467,9 +477,9 @@ async function seedOperasi(kunjunganList, ruanganList, pasienList) {
 
 async function seedPenjamin() {
   const data = [
-    { nama: "BPJS", tipe: "Asuransi Pemerintah" },
-    { nama: "Pribadi", tipe: "Non-Asuransi" },
-    { nama: "Asuransi Swasta", tipe: "Asuransi Swasta" },
+    { nama: "BPJS/JKN", tipe: "Asuransi Pemerintah", isJkn: true },
+    { nama: "Pribadi", tipe: "Non-Asuransi", isJkn: false },
+    { nama: "Asuransi Swasta", tipe: "Asuransi Swasta", isJkn: false },
   ];
 
   const penjamin = [];
@@ -479,24 +489,114 @@ async function seedPenjamin() {
   return penjamin;
 }
 
-async function seedPendapatan(operasiList, penjaminList) {
-  const pendapatan = [];
-  for (const operasi of operasiList.filter((o) => o.status === "COMPLETED")) {
-    const tarifTotal = faker.number.int({ min: 8_000_000, max: 45_000_000 });
-    const jumlahDiterimaDokter = Math.round(tarifTotal * 0.2);
+// Nama pelayanan rawat per jenis ruangan — dipakai supaya baris jasa medis
+// menyebut pelayanan yang memang cocok dengan tempat kunjungannya.
+const TINDAKAN_PER_JENIS_RUANGAN = {
+  POLI: "Konsultasi Poliklinik",
+  RAWAT_INAP: "Visite Rawat Inap",
+  IGD: "Pemeriksaan Gawat Darurat",
+};
 
+/**
+ * Jasa medis — Tahap 4. Satu baris per PELAYANAN, diturunkan dari data klinis
+ * yang sudah ada (kunjungan, operasi, konsultasi) supaya tanggal, unit, dan
+ * dokternya benar-benar nyambung ke riwayat yang sama; kalau digenerate lepas,
+ * dokter bisa "dibayar" untuk pelayanan yang tidak pernah ada di aplikasinya.
+ *
+ * Tidak ada identitas pasien yang ikut disimpan — lihat catatan di
+ * schema.prisma model Pendapatan.
+ */
+async function seedPendapatan(kunjunganList, operasiList, konsultasiList, penjaminList, ruanganList) {
+  const ruanganById = new Map(ruanganList.map((r) => [r.id, r]));
+  const kunjunganById = new Map(kunjunganList.map((k) => [k.id, k]));
+
+  // Penjamin dipilih per kunjungan, bukan per baris: satu episode pelayanan
+  // ditagihkan ke satu penjamin. BPJS diberi bobot dominan seperti di RS
+  // pemerintah, biar pengelompokan JKN vs Non-JKN ada isinya di dua-duanya.
+  const penjaminJkn = penjaminList.filter((p) => p.isJkn);
+  const penjaminNonJkn = penjaminList.filter((p) => !p.isJkn);
+  // Non-JKN diambil dari daftar non-JKN saja, bukan dari seluruh daftar —
+  // kalau tidak, cabang "non-JKN" masih bisa mengembalikan BPJS dan
+  // pengelompokan JKN vs Non-JKN di layar nyaris selalu 100% JKN.
+  function undiPenjamin() {
+    return pickOne(faker.datatype.boolean(0.7) ? penjaminJkn : penjaminNonJkn);
+  }
+
+  const penjaminByKunjungan = new Map();
+  function penjaminUntuk(kunjunganId) {
+    if (!kunjunganId) return undiPenjamin();
+    if (!penjaminByKunjungan.has(kunjunganId)) {
+      penjaminByKunjungan.set(kunjunganId, undiPenjamin());
+    }
+    return penjaminByKunjungan.get(kunjunganId);
+  }
+
+  const baris = [];
+
+  // Pelayanan rawat: tiap kunjungan yang benar-benar terjadi.
+  for (const kunjungan of kunjunganList) {
+    if (!["ONGOING", "COMPLETED"].includes(kunjungan.statusKunjungan)) continue;
+    const ruangan = ruanganById.get(kunjungan.ruanganId);
+    baris.push({
+      dokterId: kunjungan.dokterId,
+      penjaminId: penjaminUntuk(kunjungan.id).id,
+      namaTindakan: TINDAKAN_PER_JENIS_RUANGAN[ruangan?.jenis] ?? "Konsultasi Poliklinik",
+      tanggalTindakan: kunjungan.tanggalMasuk,
+      jasa: faker.number.int({ min: 100_000, max: 350_000 }),
+      unitPelayanan: ruangan?.nama ?? "Poliklinik",
+    });
+  }
+
+  // Tindakan operasi — nominalnya satu tingkat di atas pelayanan rawat.
+  for (const operasi of operasiList) {
+    // Operasi yang jadwalnya belum tiba jelas belum menghasilkan jasa medis.
+    if (operasi.tanggalOperasi > HARI_INI) continue;
+    const kunjungan = kunjunganById.get(operasi.kunjunganId);
+    if (!kunjungan) continue;
+    baris.push({
+      dokterId: kunjungan.dokterId,
+      penjaminId: penjaminUntuk(kunjungan.id).id,
+      namaTindakan: operasi.jenisTindakan,
+      tanggalTindakan: operasi.tanggalOperasi,
+      jasa: faker.number.int({ min: 2_500_000, max: 9_000_000 }),
+      unitPelayanan: ruanganById.get(operasi.ruanganId)?.nama ?? "Bedah Sentral",
+    });
+  }
+
+  // Konsul antar-dokter yang sudah dijawab — yang dibayar dokter TUJUAN, sesuai
+  // arah modul Konsultasi (dia yang mengerjakan permintaannya).
+  for (const konsul of konsultasiList) {
+    if (konsul.status !== "SUDAH_DIJAWAB") continue;
+    const ruangan = ruanganById.get(kunjunganById.get(konsul.kunjunganId)?.ruanganId);
+    baris.push({
+      dokterId: konsul.dokterTujuanId,
+      penjaminId: penjaminUntuk(konsul.kunjunganId).id,
+      namaTindakan: "Konsul Ruang Perawatan",
+      tanggalTindakan: konsul.tanggalJawaban,
+      jasa: faker.number.int({ min: 150_000, max: 400_000 }),
+      unitPelayanan: ruangan?.nama ?? "Rawat Inap Melati",
+    });
+  }
+
+  const pendapatan = [];
+  for (const b of baris) {
     pendapatan.push(
       await prisma.pendapatan.create({
         data: {
-          operasiId: operasi.id,
-          penjaminId: pickOne(penjaminList).id,
-          tarifTotal,
-          jumlahDiterimaDokter,
+          ...b,
+          // Klaim yang paling baru masih wajar kalau belum diverifikasi;
+          // yang sudah lewat sebulan seharusnya sudah cair.
+          statusVerifikasi:
+            HARI_INI.getTime() - b.tanggalTindakan.getTime() < 21 * 86_400_000 &&
+            faker.datatype.boolean(0.4)
+              ? "MENUNGGU"
+              : "TERVERIFIKASI",
           isDummy: true,
         },
       })
     );
   }
+
   return pendapatan;
 }
 
@@ -1221,10 +1321,9 @@ async function main() {
   const kunjunganListHistoris = await seedKunjungan(pasienList, dokterList, ruanganList);
   const jadwalMendatang = await seedJadwalMendatang(dokterUtama, pasienUtama, ruanganList);
   const kunjunganList = [...kunjunganListHistoris, ...jadwalMendatang.kunjungan];
-  const operasiListHistoris = await seedOperasi(kunjunganListHistoris, ruanganList, pasienList);
+  const operasiListHistoris = await seedOperasi(kunjunganListHistoris, ruanganList, pasienList, dokterUtama);
   const operasiList = [...operasiListHistoris, ...jadwalMendatang.operasi];
   const penjaminList = await seedPenjamin();
-  const pendapatanList = await seedPendapatan(operasiListHistoris, penjaminList);
   const { pemeriksaanLabList, totalHasilLabItem } = await seedPemeriksaanLab(
     pasienList,
     kunjunganListHistoris,
@@ -1237,6 +1336,15 @@ async function main() {
     pasienList,
     pasienUtama,
     kunjunganList
+  );
+  // Setelah konsultasi: jasa medis diturunkan dari kunjungan + operasi +
+  // konsultasi, jadi ketiganya harus sudah ada.
+  const pendapatanList = await seedPendapatan(
+    kunjunganList,
+    operasiList,
+    konsultasiList,
+    penjaminList,
+    ruanganList
   );
   const notifikasiList = await seedNotifikasi(dokterList);
   const penggunaList = await seedPengguna(dokterList, dokterUtama);

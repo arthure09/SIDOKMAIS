@@ -1,15 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import {
+  ActivityIndicator,
+  Animated,
+  Modal,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, menuAccent, radius, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
-import {
-  transaksiPendapatan,
-  type JenisTransaksi,
-  type TransaksiPendapatan,
-} from '../mocks/pendapatanMock';
+import { ApiError } from '../api/client';
+import { fetchPendapatan } from '../api/pendapatan';
+import { useAuthStore } from '../store/authStore';
+import type { BarisJasaMedis, PendapatanResponse } from '../api/types';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useAnimatedHeaderFade } from '../hooks/useAnimatedHeaderFade';
 import { useHideTabBar } from '../hooks/useHideTabBar';
@@ -17,10 +25,12 @@ import type { HomeStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'DataPendapatan'>;
 
-const bulanKey = (trx: TransaksiPendapatan) => trx.tanggal.slice(0, 7);
-const jumlah = (list: TransaksiPendapatan[]) => list.reduce((n, t) => n + t.nominal, 0);
+/** Pengelompokan utama laporan jasa medis (Tahap 4). */
+type Kelompok = 'JKN' | 'NON_JKN';
 
-const BULAN_KEYS = [...new Set(transaksiPendapatan.map(bulanKey))].sort().reverse();
+const kelompokDari = (trx: BarisJasaMedis): Kelompok => (trx.penjamin.isJkn ? 'JKN' : 'NON_JKN');
+const tanggalKey = (trx: BarisJasaMedis) => trx.tanggalTindakan.slice(0, 10);
+const jumlah = (list: BarisJasaMedis[]) => list.reduce((n, t) => n + t.jasa, 0);
 
 // Daftar dimuat 10 baris sekali jalan.
 // ponytail: semua baris yang sudah dimuat tetap hidup di satu ScrollView, jadi
@@ -67,9 +77,9 @@ function labelBulanTahun(key: string) {
  * pembayaran adalah jalur klasik menuju overtreatment. Baris ini menjawab
  * "ini angka periode apa", bukan "saya sebagus apa".
  */
-function labelPeriode(list: TransaksiPendapatan[], key: string) {
+function labelPeriode(list: BarisJasaMedis[], key: string) {
   if (list.length === 0) return null;
-  const hari = list.map((t) => Number(t.tanggal.slice(8, 10))).sort((a, b) => a - b);
+  const hari = list.map((t) => Number(tanggalKey(t).slice(8, 10))).sort((a, b) => a - b);
   const awal = hari[0];
   const akhir = hari[hari.length - 1];
   const rentang = awal === akhir ? `${awal}` : `${awal}–${akhir}`;
@@ -120,88 +130,127 @@ export function DataPendapatanScreen({ navigation }: Props) {
     [scrollY, onScroll],
   );
 
-  const [bulan, setBulan] = useState(BULAN_KEYS[0]);
+  const token = useAuthStore((s) => s.token);
+
+  // `bulan` null = "biar server yang pilih" (bulan terisi paling baru). Daftar
+  // bulan yang tersedia baru diketahui setelah respons pertama datang, jadi
+  // tidak bisa ditebak di sini.
+  const [bulan, setBulan] = useState<string | null>(null);
+  const [resp, setResp] = useState<PendapatanResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [sumber, setSumber] = useState<string | null>(null);
-  const [jenis, setJenis] = useState<JenisTransaksi | null>(null);
+  const [kelompok, setKelompok] = useState<Kelompok | null>(null);
   const [hanyaMenunggu, setHanyaMenunggu] = useState(false);
   const [bulanTerbuka, setBulanTerbuka] = useState(false);
   const [tampil, setTampil] = useState(BATCH);
   const [refreshing, setRefreshing] = useState(false);
 
+  const muat = useCallback(async () => {
+    if (!token) return;
+    setError(null);
+    try {
+      const hasil = await fetchPendapatan(token, bulan ?? undefined);
+      setResp(hasil);
+      // Server yang memutuskan bulan mana waktu kita belum menentukan;
+      // disimpan supaya pemilih bulan menyorot yang benar.
+      setBulan((b) => b ?? hasil.bulan);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Gagal memuat data jasa medis');
+    }
+  }, [token, bulan]);
+
+  useEffect(() => {
+    let batal = false;
+    setLoading(true);
+    muat().finally(() => {
+      if (!batal) setLoading(false);
+    });
+    return () => {
+      batal = true;
+    };
+  }, [muat]);
+
   // Ganti bulan atau filter = daftar dibaca dari awal lagi. Satu effect untuk
   // semua pemicunya, bukan setTampil di tiap setter — yang begitu selalu ada
   // satu yang kelupaan.
-  useEffect(() => setTampil(BATCH), [bulan, sumber, jenis, hanyaMenunggu]);
+  useEffect(() => setTampil(BATCH), [bulan, sumber, kelompok, hanyaMenunggu]);
 
-  // Data pendapatan masih murni mock (belum ada endpoint), jadi "refresh" di
-  // sini cuma re-affirm data yang sama — disimulasikan biar gesture pull-to-
-  // refresh tetap konsisten dengan screen lain. Ganti ke fetch asli kalau
-  // modul Pendapatan sudah tersambung backend.
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 500);
-  }, []);
+    muat().finally(() => setRefreshing(false));
+  }, [muat]);
 
-  const bulanIni = useMemo(
-    () => transaksiPendapatan.filter((t) => bulanKey(t) === bulan),
-    [bulan],
-  );
+  const bulanKeys = resp?.bulanTersedia ?? [];
+  const bulanAktif = bulan ?? resp?.bulan ?? '';
+  const bulanIni = useMemo(() => resp?.data ?? [], [resp]);
+
   const diterima = useMemo(
-    () => bulanIni.filter((t) => t.status === 'TERVERIFIKASI'),
+    () => bulanIni.filter((t) => t.statusVerifikasi === 'TERVERIFIKASI'),
     [bulanIni],
   );
-  const menunggu = useMemo(() => bulanIni.filter((t) => t.status === 'MENUNGGU'), [bulanIni]);
+  const menunggu = useMemo(
+    () => bulanIni.filter((t) => t.statusVerifikasi === 'MENUNGGU'),
+    [bulanIni],
+  );
 
-  const totalDiterima = jumlah(diterima);
-  const totalMenunggu = jumlah(menunggu);
-  const periode = labelPeriode(bulanIni, bulan);
+  // Angka besar & uang menunggu dipakai dari ringkasan server, bukan dijumlah
+  // ulang di sini: keduanya dihitung dari baris yang sama persis, dan satu
+  // sumber angka lebih baik daripada dua yang kebetulan cocok.
+  const totalDiterima = resp?.ringkasan.totalRemunerasiBruto ?? 0;
+  const totalMenunggu = resp?.ringkasan.totalMenunggu ?? 0;
+  const periode = labelPeriode(bulanIni, bulanAktif);
 
   // Komposisi sengaja dihitung dari transaksi TERVERIFIKASI saja, sama dengan
   // angka besar di atasnya — kalau bar-nya memakai semua transaksi, segmennya
   // tidak akan pernah menjumlah ke angka yang dibacanya.
   const perSumber = useMemo(() => {
     const map = new Map<string, number>();
-    for (const t of diterima) map.set(t.sumber, (map.get(t.sumber) ?? 0) + t.nominal);
+    for (const t of diterima) map.set(t.penjamin.nama, (map.get(t.penjamin.nama) ?? 0) + t.jasa);
     return [...map]
       .map(([nama, total]) => ({ nama, total }))
       .sort((a, b) => b.total - a.total);
   }, [diterima]);
 
-  const perJenis: { value: JenisTransaksi; label: string; total: number }[] = [
-    { value: 'OPERASI', label: 'Operasi', total: jumlah(diterima.filter((t) => t.jenis === 'OPERASI')) },
-    { value: 'KONSUL', label: 'Konsultasi', total: jumlah(diterima.filter((t) => t.jenis === 'KONSUL')) },
+  // Dua kelompok utama laporan jasa medis. Angkanya dari ringkasan server,
+  // sama seperti angka besar di atasnya.
+  const perKelompok: { value: Kelompok; label: string; total: number }[] = [
+    { value: 'JKN', label: 'JKN', total: resp?.ringkasan.totalJkn ?? 0 },
+    { value: 'NON_JKN', label: 'Non-JKN', total: resp?.ringkasan.totalNonJkn ?? 0 },
   ];
 
   const rincian = useMemo(
     () =>
       bulanIni.filter(
         (t) =>
-          (!sumber || t.sumber === sumber) &&
-          (!jenis || t.jenis === jenis) &&
-          (!hanyaMenunggu || t.status === 'MENUNGGU'),
+          (!sumber || t.penjamin.nama === sumber) &&
+          (!kelompok || kelompokDari(t) === kelompok) &&
+          (!hanyaMenunggu || t.statusVerifikasi === 'MENUNGGU'),
       ),
-    [bulanIni, sumber, jenis, hanyaMenunggu],
+    [bulanIni, sumber, kelompok, hanyaMenunggu],
   );
 
   // Dikelompokkan SETELAH dipotong, jadi grup tanggal terakhir bisa tampil
   // sebagian — itu memang maunya "10 pertama", bukan "10 tanggal pertama".
   const grup = useMemo(() => {
-    const map = new Map<string, TransaksiPendapatan[]>();
+    const map = new Map<string, BarisJasaMedis[]>();
     for (const t of rincian.slice(0, tampil)) {
-      const isi = map.get(t.tanggal);
+      const kunci = tanggalKey(t);
+      const isi = map.get(kunci);
       if (isi) isi.push(t);
-      else map.set(t.tanggal, [t]);
+      else map.set(kunci, [t]);
     }
     return [...map].sort((a, b) => b[0].localeCompare(a[0]));
   }, [rincian, tampil]);
 
   const sisa = rincian.length - tampil;
 
-  const adaFilter = sumber !== null || jenis !== null || hanyaMenunggu;
+  const adaFilter = sumber !== null || kelompok !== null || hanyaMenunggu;
 
   function hapusFilter() {
     setSumber(null);
-    setJenis(null);
+    setKelompok(null);
     setHanyaMenunggu(false);
   }
 
@@ -267,9 +316,14 @@ export function DataPendapatanScreen({ navigation }: Props) {
           style={({ pressed }) => [styles.bulanTrigger, pressed && styles.ditekan]}
         >
           <MaterialIcons name="calendar-month" size={18} color={colors.primary} />
-          <Text style={styles.bulanTriggerText}>{labelBulanTahun(bulan)}</Text>
+          <Text style={styles.bulanTriggerText}>
+            {bulanAktif ? labelBulanTahun(bulanAktif) : 'Memuat…'}
+          </Text>
           <MaterialIcons name="expand-more" size={20} color={colors.onSurfaceVariant} />
         </Pressable>
+
+        {loading && !resp && <ActivityIndicator color={colors.primary} style={styles.pemuat} />}
+        {error && <Text style={styles.errorText}>{error}</Text>}
 
         {/* Satu-satunya permukaan gelap di seluruh app: penanda bahwa ini angka
             uang, bukan sekadar kartu ringkasan lain. */}
@@ -284,17 +338,17 @@ export function DataPendapatanScreen({ navigation }: Props) {
               mengambang di bawahnya: satu permukaan ringkasan yang seluruhnya
               bisa ditekan buat menyaring daftar di bawah. */}
           <View style={styles.jenisRow}>
-            {perJenis.map((j) => {
-              const active = jenis === j.value;
+            {perKelompok.map((k) => {
+              const active = kelompok === k.value;
               return (
                 <Pressable
-                  key={j.value}
+                  key={k.value}
                   accessibilityRole="button"
-                  onPress={() => setJenis(active ? null : j.value)}
+                  onPress={() => setKelompok(active ? null : k.value)}
                   style={[styles.jenisItem, active && styles.jenisItemActive]}
                 >
-                  <Text style={styles.jenisLabel}>{j.label}</Text>
-                  <Text style={styles.jenisNominal}>{formatRupiah(j.total)}</Text>
+                  <Text style={styles.jenisLabel}>{k.label}</Text>
+                  <Text style={styles.jenisNominal}>{formatRupiah(k.total)}</Text>
                 </Pressable>
               );
             })}
@@ -385,15 +439,19 @@ export function DataPendapatanScreen({ navigation }: Props) {
                     {index > 0 && <View style={styles.trxDivider} />}
                     <View style={styles.trxRow}>
                       {/* Yang mengidentifikasi baris ini pelayanannya, bukan
-                          pasiennya: jenis + penjamin + tanggal di grup header
-                          sudah cukup buat mencocokkan klaim ke SIMRS. */}
-                      <Text style={styles.trxJenis} numberOfLines={1}>
-                        {trx.jenis === 'OPERASI' ? 'Operasi' : 'Konsultasi'}
-                        <Text style={styles.trxMeta}> · {trx.sumber}</Text>
-                      </Text>
+                          pasiennya: tindakan + unit + penjamin + tanggal di grup
+                          header sudah cukup buat mencocokkan klaim ke SIMRS. */}
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.trxJenis} numberOfLines={1}>
+                          {trx.namaTindakan}
+                        </Text>
+                        <Text style={styles.trxMeta} numberOfLines={1}>
+                          {trx.unitPelayanan} · {trx.penjamin.nama}
+                        </Text>
+                      </View>
                       <View style={styles.trxNominalWrap}>
-                        <Text style={styles.trxNominal}>{formatRupiah(trx.nominal)}</Text>
-                        {trx.status === 'MENUNGGU' && (
+                        <Text style={styles.trxNominal}>{formatRupiah(trx.jasa)}</Text>
+                        {trx.statusVerifikasi === 'MENUNGGU' && (
                           <Text style={styles.trxMenunggu}>Menunggu verifikasi</Text>
                         )}
                       </View>
@@ -428,8 +486,8 @@ export function DataPendapatanScreen({ navigation }: Props) {
         <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.gutter }]}>
           <Text style={styles.sheetTitle}>Pilih bulan</Text>
           <ScrollView style={styles.sheetList} showsVerticalScrollIndicator={false}>
-            {BULAN_KEYS.map((key) => {
-              const active = key === bulan;
+            {bulanKeys.map((key) => {
+              const active = key === bulanAktif;
               return (
                 <Pressable
                   key={key}
@@ -596,6 +654,8 @@ const styles = StyleSheet.create({
   rincianTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.5, color: colors.outline },
   hapusFilter: { fontSize: 12, fontWeight: '700', color: colors.primary },
   emptyText: { fontSize: 14, color: colors.onSurfaceVariant },
+  pemuat: { paddingVertical: 24 },
+  errorText: { fontSize: 14, color: colors.error },
 
   grup: { gap: spacing.base },
   grupHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
@@ -608,8 +668,8 @@ const styles = StyleSheet.create({
   },
   trxDivider: { height: 1, backgroundColor: colors.surfaceVariant },
   trxRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.gutter, paddingVertical: 14 },
-  trxJenis: { flex: 1, fontSize: 15, fontWeight: '700', color: colors.onSurface },
-  trxMeta: { ...angka, fontSize: 12, color: colors.outline },
+  trxJenis: { fontSize: 15, fontWeight: '700', color: colors.onSurface },
+  trxMeta: { ...angka, fontSize: 12, color: colors.outline, marginTop: 2 },
   trxNominalWrap: { alignItems: 'flex-end', gap: 2 },
   trxNominal: { ...angka, fontSize: 15, fontWeight: '700', color: colors.onSurface },
   trxMenunggu: { fontSize: 10, fontWeight: '700', color: colors.outline },

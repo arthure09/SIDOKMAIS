@@ -82,6 +82,13 @@ enum FlagHasilLab {
   ABNORMAL
 }
 
+// Status klaim jasa medis. Tidak ada di dokumen referensi SIREMDIS — dipakai
+// layar Jasa Medis buat memisahkan yang sudah cair dari yang masih diproses.
+enum StatusVerifikasiJasa {
+  MENUNGGU
+  TERVERIFIKASI
+}
+
 enum TipeCatatanKalender {
   REMINDER
   BLOCKING
@@ -116,6 +123,7 @@ model Dokter {
   notifikasi      Notifikasi[]
   pemeriksaanLab  PemeriksaanLab[]
   catatanKalender CatatanKalender[]
+  pendapatan      Pendapatan[]
 
   konsultasiDiajukan  Konsultasi[] @relation("KonsultasiPengirim")
   konsultasiDitujukan Konsultasi[] @relation("KonsultasiTujuan")
@@ -272,33 +280,53 @@ model Operasi {
 
   kunjungan Kunjungan @relation(fields: [kunjunganId], references: [id], onDelete: Restrict)
   ruangan   Ruangan   @relation(fields: [ruanganId], references: [id], onDelete: Restrict)
-
-  pendapatan Pendapatan[]
 }
 
-// PENDING: struktur real belum tersedia dari RS
 model Penjamin {
   id   String @id @default(uuid())
   nama String
   tipe String
+  // Pengelompokan utama laporan jasa medis: JKN vs Non-JKN. Flag eksplisit,
+  // bukan diturunkan dari string `tipe` — mencocokkan teks bebas buat menentukan
+  // kelompok uang itu cara yang diam-diam salah begitu ada penjamin baru.
+  isJkn Boolean @default(false)
 
   pendapatan Pendapatan[]
 }
 
-// PENDING: struktur real belum tersedia dari RS — kalkulasi rasio pembagian
-// (mis. BPJS 20% dari yang diterima RS, dst) menyusul keputusan bersama supervisor.
-// isDummy wajib true & UI wajib watermark "CONTOH DATA DUMMY" (lihat CLAUDE.md aturan #3).
+// Satu baris jasa medis per pelayanan — Tahap 4 docs/rencana-revisi-modul-dokter.md.
+//
+// TIDAK ADA relasi ke Pasien, dan itu disengaja (keputusan Arthuro, 14 Ags 2026):
+// buat memverifikasi klaimnya sendiri dokter perlu tahu pelayanan MANA, bukan
+// siapa pasiennya — tanggal + tindakan + unit + penjamin sudah cukup untuk
+// dicocokkan ke SIMRS. Dokumen rencana Tahap 4 menyebut kolom `norm`/`namaPasien`
+// mengikuti bentuk SIREMDIS; itu sengaja tidak diikuti sampai ada permintaan
+// eksplisit. Menyensor di UI sementara API tetap mengirimnya itu dekorasi.
+//
+// Ringkasan periode (total JKN / Non-JKN / bruto) TIDAK disimpan sebagai model
+// sendiri — itu agregasi atas rentang tanggal yang dipilih user, jadi dihitung
+// saat diminta. Menyimpannya berarti punya dua sumber angka yang bisa berbeda.
+//
+// isDummy wajib true selama fase dummy (CLAUDE.md aturan #3).
 model Pendapatan {
-  id                   String   @id @default(uuid())
-  operasiId            String
-  penjaminId           String
-  tarifTotal           Decimal  @db.Decimal(14, 2)
-  jumlahDiterimaDokter Decimal  @db.Decimal(14, 2)
-  isDummy              Boolean  @default(true)
-  createdAt            DateTime @default(now())
+  id         String @id @default(uuid())
+  dokterId   String
+  penjaminId String
 
-  operasi  Operasi  @relation(fields: [operasiId], references: [id], onDelete: Restrict)
+  namaTindakan    String
+  tanggalTindakan DateTime
+  jasa            Decimal  @db.Decimal(14, 2)
+  unitPelayanan   String
+
+  statusVerifikasi StatusVerifikasiJasa @default(TERVERIFIKASI)
+  isDummy          Boolean              @default(true)
+  createdAt        DateTime             @default(now())
+
+  dokter   Dokter   @relation(fields: [dokterId], references: [id], onDelete: Cascade)
   penjamin Penjamin @relation(fields: [penjaminId], references: [id], onDelete: Restrict)
+
+  // Query utamanya "jasa medis saya dalam rentang tanggal ini".
+  @@index([dokterId, tanggalTindakan])
 }
 
 // Surat konsul antar-dokter (Lembar Konsultasi SIMRS), BUKAN jadwal appointment.

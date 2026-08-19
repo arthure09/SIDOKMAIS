@@ -366,3 +366,40 @@ export type LoginResponse = {
     } | null;
   };
 };
+
+// --- Jasa Medis / Pendapatan (Tahap 4) ---
+
+export type StatusVerifikasiJasa = 'MENUNGGU' | 'TERVERIFIKASI';
+
+/**
+ * Satu baris jasa medis. **Tidak ada identitas pasien di sini** — bukan nama,
+ * bukan No. RM, bukan diagnosis (keputusan Arthuro, 14 Ags 2026). Untuk
+ * memverifikasi klaimnya sendiri dokter butuh tahu pelayanan mana, bukan siapa
+ * pasiennya; tanggal + tindakan + unit + penjamin sudah cukup buat dicocokkan
+ * ke SIMRS. Backend memang tidak mengirimnya, bukan disensor di layar.
+ */
+export type BarisJasaMedis = {
+  id: string;
+  tanggalTindakan: string;
+  namaTindakan: string;
+  unitPelayanan: string;
+  jasa: number;
+  statusVerifikasi: StatusVerifikasiJasa;
+  penjamin: { nama: string; isJkn: boolean };
+};
+
+export type PendapatanResponse = {
+  dokter: { id: string; nama: string; smf: string | null };
+  /** `YYYY-MM` yang sedang ditampilkan. */
+  bulan: string;
+  /** Semua bulan yang ada isinya, terbaru dulu. */
+  bulanTersedia: string[];
+  ringkasan: {
+    totalJkn: number;
+    totalNonJkn: number;
+    totalRemunerasiBruto: number;
+    totalMenunggu: number;
+    jumlahPelayanan: number;
+  };
+  data: BarisJasaMedis[];
+};
