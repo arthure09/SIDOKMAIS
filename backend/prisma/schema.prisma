@@ -148,6 +148,7 @@ model Pasien {
   kunjungan      Kunjungan[]
   pemeriksaanLab PemeriksaanLab[]
   konsultasi     Konsultasi[]
+  pendapatan     Pendapatan[]
 }
 
 model Ruangan {
@@ -296,12 +297,17 @@ model Penjamin {
 
 // Satu baris jasa medis per pelayanan — Tahap 4 docs/rencana-revisi-modul-dokter.md.
 //
-// TIDAK ADA relasi ke Pasien, dan itu disengaja (keputusan Arthuro, 14 Ags 2026):
-// buat memverifikasi klaimnya sendiri dokter perlu tahu pelayanan MANA, bukan
-// siapa pasiennya — tanggal + tindakan + unit + penjamin sudah cukup untuk
-// dicocokkan ke SIMRS. Dokumen rencana Tahap 4 menyebut kolom `norm`/`namaPasien`
-// mengikuti bentuk SIREMDIS; itu sengaja tidak diikuti sampai ada permintaan
-// eksplisit. Menyensor di UI sementara API tetap mengirimnya itu dekorasi.
+// Bentuknya mengikuti tabel "Detail Tindakan" SIREMDIS (screenshot referensi,
+// 19 Ags 2026): NORM, nama pasien, nama tindakan, tanggal tindakan, jasa, unit
+// pelayanan, penjamin.
+//
+// Catatan riwayat keputusan: versi pertama modul ini sengaja TIDAK punya relasi
+// ke Pasien (keputusan Arthuro 14 Ags 2026 — dokter cukup tahu pelayanan mana,
+// bukan siapa pasiennya). Dibatalkan 19 Ags 2026 setelah bentuk asli SIREMDIS
+// terlihat: dua kolom identitas pasien memang ada di laporan aslinya.
+//
+// `unitPelayanan` = SMF/unit tempat pelayanan terjadi, BUKAN spesialisasi
+// dokternya — di referensi, dokter Sp.THT menagih konsul di unit "Anak".
 //
 // Ringkasan periode (total JKN / Non-JKN / bruto) TIDAK disimpan sebagai model
 // sendiri — itu agregasi atas rentang tanggal yang dipilih user, jadi dihitung
@@ -311,6 +317,7 @@ model Penjamin {
 model Pendapatan {
   id         String @id @default(uuid())
   dokterId   String
+  pasienId   String
   penjaminId String
 
   namaTindakan    String
@@ -323,6 +330,7 @@ model Pendapatan {
   createdAt        DateTime             @default(now())
 
   dokter   Dokter   @relation(fields: [dokterId], references: [id], onDelete: Cascade)
+  pasien   Pasien   @relation(fields: [pasienId], references: [id], onDelete: Restrict)
   penjamin Penjamin @relation(fields: [penjaminId], references: [id], onDelete: Restrict)
 
   // Query utamanya "jasa medis saya dalam rentang tanggal ini".

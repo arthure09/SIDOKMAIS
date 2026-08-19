@@ -372,11 +372,13 @@ export type LoginResponse = {
 export type StatusVerifikasiJasa = 'MENUNGGU' | 'TERVERIFIKASI';
 
 /**
- * Satu baris jasa medis. **Tidak ada identitas pasien di sini** — bukan nama,
- * bukan No. RM, bukan diagnosis (keputusan Arthuro, 14 Ags 2026). Untuk
- * memverifikasi klaimnya sendiri dokter butuh tahu pelayanan mana, bukan siapa
- * pasiennya; tanggal + tindakan + unit + penjamin sudah cukup buat dicocokkan
- * ke SIMRS. Backend memang tidak mengirimnya, bukan disensor di layar.
+ * Satu baris jasa medis, mengikuti kolom tabel "Detail Tindakan" SIREMDIS:
+ * NORM, nama pasien, nama tindakan, tanggal tindakan, jasa, unit pelayanan,
+ * penjamin.
+ *
+ * `unitPelayanan` adalah SMF tempat pelayanannya terjadi, bukan spesialisasi
+ * dokter yang menagih — di referensi, dokter Sp.THT menagih konsul di unit
+ * "Anak".
  */
 export type BarisJasaMedis = {
   id: string;
@@ -385,14 +387,17 @@ export type BarisJasaMedis = {
   unitPelayanan: string;
   jasa: number;
   statusVerifikasi: StatusVerifikasiJasa;
+  pasien: { norm: string; nama: string };
   penjamin: { nama: string; isJkn: boolean };
 };
 
+export type PeriodePendapatan = { tanggalAwal: string; tanggalAkhir: string };
+
 export type PendapatanResponse = {
   dokter: { id: string; nama: string; smf: string | null };
-  /** `YYYY-MM` yang sedang ditampilkan. */
-  bulan: string;
-  /** Semua bulan yang ada isinya, terbaru dulu. */
+  /** Rentang tanggal yang sedang ditampilkan, `YYYY-MM-DD`. */
+  periode: PeriodePendapatan;
+  /** Semua bulan yang ada isinya, terbaru dulu — dipakai sebagai pintasan. */
   bulanTersedia: string[];
   ringkasan: {
     totalJkn: number;

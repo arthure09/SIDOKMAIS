@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Animated,
   Modal,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -10,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, menuAccent, radius, spacing } from '../theme/colors';
@@ -17,7 +19,7 @@ import { Text } from '../components/Text';
 import { ApiError } from '../api/client';
 import { fetchPendapatan } from '../api/pendapatan';
 import { useAuthStore } from '../store/authStore';
-import type { BarisJasaMedis, PendapatanResponse } from '../api/types';
+import type { BarisJasaMedis, PendapatanResponse, PeriodePendapatan } from '../api/types';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useAnimatedHeaderFade } from '../hooks/useAnimatedHeaderFade';
 import { useHideTabBar } from '../hooks/useHideTabBar';
@@ -70,24 +72,46 @@ function labelBulanTahun(key: string) {
 }
 
 /**
- * Rentang tanggal yang benar-benar ada isinya di bulan itu, mis. "3–15 Agustus
- * 2026". Menggantikan indikator pertumbuhan (+X% dari bulan lalu) yang dihapus
- * atas keputusan Arthuro, 14 Ags 2026: menempelkan panah hijau/merah di angka
- * jasa medis mendorong dokter membaca angkanya sebagai skor, dan insentif
- * pembayaran adalah jalur klasik menuju overtreatment. Baris ini menjawab
- * "ini angka periode apa", bukan "saya sebagus apa".
+ * Periode yang sedang dilihat, mis. "1–19 Agustus 2026" — bentuk yang sama
+ * dengan "01-08-2026 s/d 17-08-2026" di SIREMDIS, cuma lebih ringkas.
+ *
+ * Menggantikan indikator pertumbuhan (+X% dari bulan lalu) yang dihapus atas
+ * keputusan Arthuro, 14 Ags 2026: menempelkan panah hijau/merah di angka jasa
+ * medis mendorong dokter membaca angkanya sebagai skor, dan insentif pembayaran
+ * adalah jalur klasik menuju overtreatment. Baris ini menjawab "ini angka
+ * periode apa", bukan "saya sebagus apa".
  */
-function labelPeriode(list: BarisJasaMedis[], key: string) {
-  if (list.length === 0) return null;
-  const hari = list.map((t) => Number(tanggalKey(t).slice(8, 10))).sort((a, b) => a - b);
-  const awal = hari[0];
-  const akhir = hari[hari.length - 1];
-  const rentang = awal === akhir ? `${awal}` : `${awal}–${akhir}`;
-  return `${rentang} ${labelBulan(key)} ${key.slice(0, 4)}`;
+function labelPeriode(periode: PeriodePendapatan | null) {
+  if (!periode) return null;
+  const { tanggalAwal, tanggalAkhir } = periode;
+  const hariAwal = Number(tanggalAwal.slice(8, 10));
+  const hariAkhir = Number(tanggalAkhir.slice(8, 10));
+  const bulanAwal = tanggalAwal.slice(0, 7);
+  const bulanAkhir = tanggalAkhir.slice(0, 7);
+
+  // Rentang di dalam satu bulan cukup menyebut bulannya sekali.
+  if (bulanAwal === bulanAkhir) {
+    const rentang = hariAwal === hariAkhir ? `${hariAwal}` : `${hariAwal}–${hariAkhir}`;
+    return `${rentang} ${labelBulanTahun(bulanAwal)}`;
+  }
+  return `${hariAwal} ${labelBulanTahun(bulanAwal)} – ${hariAkhir} ${labelBulanTahun(bulanAkhir)}`;
 }
 
 function labelTanggal(iso: string) {
   return new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'long' });
+}
+
+function labelJam(iso: string) {
+  return new Date(iso).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+}
+
+const ymd = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** Rentang penuh satu bulan `YYYY-MM`, dipakai pintasan bulan. */
+function rentangBulan(key: string): PeriodePendapatan {
+  const [tahun, bulan] = key.split('-').map(Number);
+  return { tanggalAwal: `${key}-01`, tanggalAkhir: ymd(new Date(tahun, bulan, 0)) };
 }
 
 export function DataPendapatanScreen({ navigation }: Props) {
@@ -132,10 +156,11 @@ export function DataPendapatanScreen({ navigation }: Props) {
 
   const token = useAuthStore((s) => s.token);
 
-  // `bulan` null = "biar server yang pilih" (bulan terisi paling baru). Daftar
-  // bulan yang tersedia baru diketahui setelah respons pertama datang, jadi
-  // tidak bisa ditebak di sini.
-  const [bulan, setBulan] = useState<string | null>(null);
+  // `periode` null = "biar server yang pilih" (bulan terisi paling baru,
+  // dipotong di hari ini kalau masih berjalan). Rentang mana yang masuk akal
+  // baru diketahui setelah respons pertama datang, jadi tidak bisa ditebak di
+  // sini.
+  const [periode, setPeriode] = useState<PeriodePendapatan | null>(null);
   const [resp, setResp] = useState<PendapatanResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -143,23 +168,42 @@ export function DataPendapatanScreen({ navigation }: Props) {
   const [sumber, setSumber] = useState<string | null>(null);
   const [kelompok, setKelompok] = useState<Kelompok | null>(null);
   const [hanyaMenunggu, setHanyaMenunggu] = useState(false);
-  const [bulanTerbuka, setBulanTerbuka] = useState(false);
+  const [periodeTerbuka, setPeriodeTerbuka] = useState(false);
   const [tampil, setTampil] = useState(BATCH);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Pola draft/apply seperti filter tanggal di HasilLabListScreen: menulis
+  // periode langsung dari picker memicu fetch tiap kali tanggal digeser,
+  // selagi sheet-nya masih terbuka.
+  const [draftDari, setDraftDari] = useState<Date | null>(null);
+  const [draftSampai, setDraftSampai] = useState<Date | null>(null);
+  const [pickerTerbuka, setPickerTerbuka] = useState<'dari' | 'sampai' | null>(null);
+
+  const onChangeDari = useCallback((event: DateTimePickerEvent, dipilih?: Date) => {
+    if (Platform.OS !== 'ios') setPickerTerbuka(null);
+    if (event.type === 'dismissed') return;
+    if (dipilih) setDraftDari(dipilih);
+  }, []);
+
+  const onChangeSampai = useCallback((event: DateTimePickerEvent, dipilih?: Date) => {
+    if (Platform.OS !== 'ios') setPickerTerbuka(null);
+    if (event.type === 'dismissed') return;
+    if (dipilih) setDraftSampai(dipilih);
+  }, []);
 
   const muat = useCallback(async () => {
     if (!token) return;
     setError(null);
     try {
-      const hasil = await fetchPendapatan(token, bulan ?? undefined);
+      const hasil = await fetchPendapatan(token, periode);
       setResp(hasil);
-      // Server yang memutuskan bulan mana waktu kita belum menentukan;
-      // disimpan supaya pemilih bulan menyorot yang benar.
-      setBulan((b) => b ?? hasil.bulan);
+      // Server yang memutuskan rentangnya waktu kita belum menentukan;
+      // disimpan supaya pemilih periode menampilkan yang benar.
+      setPeriode((p) => p ?? hasil.periode);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Gagal memuat data jasa medis');
     }
-  }, [token, bulan]);
+  }, [token, periode]);
 
   useEffect(() => {
     let batal = false;
@@ -172,10 +216,10 @@ export function DataPendapatanScreen({ navigation }: Props) {
     };
   }, [muat]);
 
-  // Ganti bulan atau filter = daftar dibaca dari awal lagi. Satu effect untuk
+  // Ganti periode atau filter = daftar dibaca dari awal lagi. Satu effect untuk
   // semua pemicunya, bukan setTampil di tiap setter — yang begitu selalu ada
   // satu yang kelupaan.
-  useEffect(() => setTampil(BATCH), [bulan, sumber, kelompok, hanyaMenunggu]);
+  useEffect(() => setTampil(BATCH), [periode, sumber, kelompok, hanyaMenunggu]);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -183,7 +227,7 @@ export function DataPendapatanScreen({ navigation }: Props) {
   }, [muat]);
 
   const bulanKeys = resp?.bulanTersedia ?? [];
-  const bulanAktif = bulan ?? resp?.bulan ?? '';
+  const periodeAktif = periode ?? resp?.periode ?? null;
   const bulanIni = useMemo(() => resp?.data ?? [], [resp]);
 
   const diterima = useMemo(
@@ -200,7 +244,7 @@ export function DataPendapatanScreen({ navigation }: Props) {
   // sumber angka lebih baik daripada dua yang kebetulan cocok.
   const totalDiterima = resp?.ringkasan.totalRemunerasiBruto ?? 0;
   const totalMenunggu = resp?.ringkasan.totalMenunggu ?? 0;
-  const periode = labelPeriode(bulanIni, bulanAktif);
+  const teksPeriode = labelPeriode(periodeAktif);
 
   // Komposisi sengaja dihitung dari transaksi TERVERIFIKASI saja, sama dengan
   // angka besar di atasnya — kalau bar-nya memakai semua transaksi, segmennya
@@ -254,9 +298,17 @@ export function DataPendapatanScreen({ navigation }: Props) {
     setHanyaMenunggu(false);
   }
 
-  function pilihBulan(key: string) {
-    setBulan(key);
-    setBulanTerbuka(false);
+  function bukaSheetPeriode() {
+    setDraftDari(periodeAktif ? new Date(`${periodeAktif.tanggalAwal}T00:00:00`) : null);
+    setDraftSampai(periodeAktif ? new Date(`${periodeAktif.tanggalAkhir}T00:00:00`) : null);
+    setPickerTerbuka(null);
+    setPeriodeTerbuka(true);
+  }
+
+  function terapkanPeriode(baru: PeriodePendapatan) {
+    setPeriode(baru);
+    setPeriodeTerbuka(false);
+    setPickerTerbuka(null);
     hapusFilter();
   }
 
@@ -307,18 +359,16 @@ export function DataPendapatanScreen({ navigation }: Props) {
           />
         }
       >
-        {/* Dropdown, bukan deretan chip: daftar bulan tumbuh terus seiring
-            pemakaian, dan baris chip yang harus digeser horizontal menyembunyikan
-            bulan lama di luar layar tanpa penanda apa pun. */}
+        {/* Sheet, bukan deretan chip: periodenya rentang tanggal bebas (ikut
+            SIREMDIS), dan baris chip yang harus digeser horizontal
+            menyembunyikan pilihan lama di luar layar tanpa penanda apa pun. */}
         <Pressable
           accessibilityRole="button"
-          onPress={() => setBulanTerbuka(true)}
+          onPress={bukaSheetPeriode}
           style={({ pressed }) => [styles.bulanTrigger, pressed && styles.ditekan]}
         >
           <MaterialIcons name="calendar-month" size={18} color={colors.primary} />
-          <Text style={styles.bulanTriggerText}>
-            {bulanAktif ? labelBulanTahun(bulanAktif) : 'Memuat…'}
-          </Text>
+          <Text style={styles.bulanTriggerText}>{teksPeriode ?? 'Memuat…'}</Text>
           <MaterialIcons name="expand-more" size={20} color={colors.onSurfaceVariant} />
         </Pressable>
 
@@ -331,7 +381,7 @@ export function DataPendapatanScreen({ navigation }: Props) {
           <Text style={styles.panelLabel}>Jasa medis diterima</Text>
           <View style={styles.panelAngkaRow}>
             <Text style={styles.panelAngka}>{formatRupiah(totalDiterima)}</Text>
-            {periode && <Text style={styles.panelPeriode}>{periode}</Text>}
+            {teksPeriode && <Text style={styles.panelPeriode}>{teksPeriode}</Text>}
           </View>
 
           {/* Pecahan per jenis tinggal di dalam panel, bukan dua kartu putih
@@ -438,15 +488,21 @@ export function DataPendapatanScreen({ navigation }: Props) {
                   <View key={trx.id}>
                     {index > 0 && <View style={styles.trxDivider} />}
                     <View style={styles.trxRow}>
-                      {/* Yang mengidentifikasi baris ini pelayanannya, bukan
-                          pasiennya: tindakan + unit + penjamin + tanggal di grup
-                          header sudah cukup buat mencocokkan klaim ke SIMRS. */}
+                      {/* Kolom yang sama dengan tabel "Detail Tindakan"
+                          SIREMDIS, disusun tiga baris karena layar ponsel tidak
+                          muat 8 kolom: tindakan + jasa, lalu pasien + NORM,
+                          lalu jam + unit + penjamin. */}
                       <View style={{ flex: 1 }}>
                         <Text style={styles.trxJenis} numberOfLines={1}>
                           {trx.namaTindakan}
                         </Text>
+                        <Text style={styles.trxPasien} numberOfLines={1}>
+                          {trx.pasien.nama}
+                          <Text style={styles.trxMeta}> · RM {trx.pasien.norm}</Text>
+                        </Text>
                         <Text style={styles.trxMeta} numberOfLines={1}>
-                          {trx.unitPelayanan} · {trx.penjamin.nama}
+                          {labelJam(trx.tanggalTindakan)} · {trx.unitPelayanan} ·{' '}
+                          {trx.penjamin.nama}
                         </Text>
                       </View>
                       <View style={styles.trxNominalWrap}>
@@ -477,22 +533,92 @@ export function DataPendapatanScreen({ navigation }: Props) {
       </Animated.ScrollView>
 
       <Modal
-        visible={bulanTerbuka}
+        visible={periodeTerbuka}
         transparent
         animationType="fade"
-        onRequestClose={() => setBulanTerbuka(false)}
+        onRequestClose={() => setPeriodeTerbuka(false)}
       >
-        <Pressable style={styles.backdrop} onPress={() => setBulanTerbuka(false)} />
+        <Pressable style={styles.backdrop} onPress={() => setPeriodeTerbuka(false)} />
         <View style={[styles.sheet, { paddingBottom: insets.bottom + spacing.gutter }]}>
-          <Text style={styles.sheetTitle}>Pilih bulan</Text>
+          <Text style={styles.sheetTitle}>Periode</Text>
           <ScrollView style={styles.sheetList} showsVerticalScrollIndicator={false}>
+            <View style={styles.sheetBody}>
+              <Pressable
+                style={styles.periodeField}
+                onPress={() => setPickerTerbuka((v) => (v === 'dari' ? null : 'dari'))}
+              >
+                <Text style={styles.periodeFieldLabel}>Dari</Text>
+                <Text style={styles.periodeFieldValue}>
+                  {draftDari ? labelTanggal(draftDari.toISOString()) : 'Pilih tanggal'}
+                </Text>
+              </Pressable>
+              {pickerTerbuka === 'dari' && (
+                <DateTimePicker
+                  value={draftDari ?? draftSampai ?? new Date()}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                  themeVariant="light"
+                  textColor={colors.onSurface}
+                  accentColor={colors.primary}
+                  maximumDate={draftSampai ?? undefined}
+                  onChange={onChangeDari}
+                />
+              )}
+
+              <Pressable
+                style={styles.periodeField}
+                onPress={() => setPickerTerbuka((v) => (v === 'sampai' ? null : 'sampai'))}
+              >
+                <Text style={styles.periodeFieldLabel}>Sampai</Text>
+                <Text style={styles.periodeFieldValue}>
+                  {draftSampai ? labelTanggal(draftSampai.toISOString()) : 'Pilih tanggal'}
+                </Text>
+              </Pressable>
+              {pickerTerbuka === 'sampai' && (
+                <DateTimePicker
+                  value={draftSampai ?? draftDari ?? new Date()}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                  themeVariant="light"
+                  textColor={colors.onSurface}
+                  accentColor={colors.primary}
+                  minimumDate={draftDari ?? undefined}
+                  onChange={onChangeSampai}
+                />
+              )}
+
+              <Pressable
+                accessibilityRole="button"
+                disabled={!draftDari || !draftSampai}
+                onPress={() =>
+                  draftDari &&
+                  draftSampai &&
+                  terapkanPeriode({ tanggalAwal: ymd(draftDari), tanggalAkhir: ymd(draftSampai) })
+                }
+                style={({ pressed }) => [
+                  styles.terapkan,
+                  (!draftDari || !draftSampai) && styles.terapkanNonaktif,
+                  pressed && styles.ditekan,
+                ]}
+              >
+                <Text style={styles.terapkanText}>Terapkan</Text>
+              </Pressable>
+            </View>
+
+            {/* Pintasan bulan tetap ada di bawah pemilih rentang: cuma di sini
+                dokter bisa tahu bulan mana yang memang ada isinya — picker
+                tanggal tidak bisa menyampaikan itu. */}
+            {bulanKeys.length > 0 && <Text style={styles.sheetTitle}>Bulan yang ada isinya</Text>}
             {bulanKeys.map((key) => {
-              const active = key === bulanAktif;
+              const rentang = rentangBulan(key);
+              const active =
+                periodeAktif?.tanggalAwal === rentang.tanggalAwal &&
+                periodeAktif?.tanggalAkhir === rentang.tanggalAkhir;
               return (
                 <Pressable
                   key={key}
                   accessibilityRole="button"
-                  onPress={() => pilihBulan(key)}
+                  onPress={() => terapkanPeriode(rentang)}
                   style={({ pressed }) => [styles.sheetItem, pressed && styles.ditekan]}
                 >
                   <Text style={[styles.sheetItemText, active && styles.sheetItemTextActive]}>
@@ -571,8 +697,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.marginMobile,
     paddingBottom: spacing.base,
   },
-  // Dibatasi tingginya supaya daftar bulan yang panjang tidak menutupi layar.
-  sheetList: { maxHeight: 320 },
+  // Dibatasi tingginya supaya isi sheet yang panjang tidak menutupi layar.
+  sheetList: { maxHeight: 460 },
+  sheetBody: { paddingHorizontal: spacing.marginMobile, gap: spacing.base, paddingBottom: spacing.gutter },
+
+  periodeField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.outlineVariant,
+  },
+  periodeFieldLabel: { fontSize: 13, color: colors.onSurfaceVariant },
+  periodeFieldValue: { fontSize: 14, fontWeight: '700', color: colors.onSurface },
+  terapkan: {
+    alignItems: 'center',
+    paddingVertical: 13,
+    borderRadius: radius.full,
+    backgroundColor: colors.primary,
+  },
+  terapkanNonaktif: { opacity: 0.4 },
+  terapkanText: { fontSize: 14, fontWeight: '700', color: colors.onPrimary },
   sheetItem: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -669,7 +817,8 @@ const styles = StyleSheet.create({
   trxDivider: { height: 1, backgroundColor: colors.surfaceVariant },
   trxRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.gutter, paddingVertical: 14 },
   trxJenis: { fontSize: 15, fontWeight: '700', color: colors.onSurface },
-  trxMeta: { ...angka, fontSize: 12, color: colors.outline, marginTop: 2 },
+  trxPasien: { fontSize: 13, fontWeight: '600', color: colors.onSurfaceVariant, marginTop: 3 },
+  trxMeta: { ...angka, fontSize: 12, fontWeight: '400', color: colors.outline, marginTop: 2 },
   trxNominalWrap: { alignItems: 'flex-end', gap: 2 },
   trxNominal: { ...angka, fontSize: 15, fontWeight: '700', color: colors.onSurface },
   trxMenunggu: { fontSize: 10, fontWeight: '700', color: colors.outline },

@@ -493,18 +493,50 @@ async function seedPenjamin() {
 // menyebut pelayanan yang memang cocok dengan tempat kunjungannya.
 const TINDAKAN_PER_JENIS_RUANGAN = {
   POLI: "Konsultasi Poliklinik",
-  RAWAT_INAP: "Visite Rawat Inap",
+  RAWAT_INAP: "Visite Ruang Perawatan",
   IGD: "Pemeriksaan Gawat Darurat",
+};
+
+// Unit pelayanan = SMF tempat pelayanannya terjadi, BUKAN spesialisasi dokter
+// yang menagih. Di referensi SIREMDIS, dokter Sp.THT menagih konsul dengan unit
+// "Anak" — dokternya tamu di unit itu.
+const UNIT_PER_RUANGAN = {
+  "Poli Onkologi 1": "Onkologi Medik",
+  "Poli Onkologi 2": "Onkologi Medik",
+  "Poli Bedah": "Bedah Onkologi",
+  "Poli Radioterapi": "Radioterapi",
+  "OK Bedah 1": "Bedah Onkologi",
+  "OK Bedah 2": "Bedah Onkologi",
+  "Rawat Inap Melati": "Onkologi Medik",
+  "Rawat Inap Anggrek": "Bedah Onkologi",
+  IGD: "IGD",
+};
+
+// Tarif jasa medis itu tabel tetap per jenis tindakan, bukan angka yang
+// bervariasi tiap transaksi — di referensi SIREMDIS, puluhan baris cuma memakai
+// dua nilai (Rp 23.400 dan Rp 31.950).
+//
+// PENDING: hanya dua baris pertama yang punya rujukan asli. Nominal poliklinik,
+// IGD, dan seluruh tindakan operasi masih tebakan yang menunggu konfirmasi
+// Mas Fauzi — besarannya sengaja dibuat sederhana supaya jelas ini belum nyata.
+const TARIF_JASA = {
+  "Konsul Ruang Perawatan": 31_950,
+  "Visite Ruang Perawatan": 23_400,
+  "Konsultasi Poliklinik": 28_600,
+  "Pemeriksaan Gawat Darurat": 26_000,
+  "Reseksi Tumor": 1_250_000,
+  "Biopsi Eksisi": 450_000,
+  "Laparotomi Eksplorasi": 1_500_000,
+  "Debulking Tumor": 1_750_000,
+  Mastektomi: 1_400_000,
 };
 
 /**
  * Jasa medis — Tahap 4. Satu baris per PELAYANAN, diturunkan dari data klinis
- * yang sudah ada (kunjungan, operasi, konsultasi) supaya tanggal, unit, dan
- * dokternya benar-benar nyambung ke riwayat yang sama; kalau digenerate lepas,
- * dokter bisa "dibayar" untuk pelayanan yang tidak pernah ada di aplikasinya.
- *
- * Tidak ada identitas pasien yang ikut disimpan — lihat catatan di
- * schema.prisma model Pendapatan.
+ * yang sudah ada (kunjungan, operasi, konsultasi) supaya tanggal, unit, pasien,
+ * dan dokternya benar-benar nyambung ke riwayat yang sama; kalau digenerate
+ * lepas, dokter bisa "dibayar" untuk pelayanan yang tidak pernah ada di
+ * aplikasinya, atas nama pasien yang tidak pernah dia tangani.
  */
 async function seedPendapatan(kunjunganList, operasiList, konsultasiList, penjaminList, ruanganList) {
   const ruanganById = new Map(ruanganList.map((r) => [r.id, r]));
@@ -531,19 +563,23 @@ async function seedPendapatan(kunjunganList, operasiList, konsultasiList, penjam
     return penjaminByKunjungan.get(kunjunganId);
   }
 
+  const unitDari = (ruangan) => UNIT_PER_RUANGAN[ruangan?.nama] ?? "Onkologi Medik";
+
   const baris = [];
 
   // Pelayanan rawat: tiap kunjungan yang benar-benar terjadi.
   for (const kunjungan of kunjunganList) {
     if (!["ONGOING", "COMPLETED"].includes(kunjungan.statusKunjungan)) continue;
     const ruangan = ruanganById.get(kunjungan.ruanganId);
+    const namaTindakan = TINDAKAN_PER_JENIS_RUANGAN[ruangan?.jenis] ?? "Konsultasi Poliklinik";
     baris.push({
       dokterId: kunjungan.dokterId,
+      pasienId: kunjungan.pasienId,
       penjaminId: penjaminUntuk(kunjungan.id).id,
-      namaTindakan: TINDAKAN_PER_JENIS_RUANGAN[ruangan?.jenis] ?? "Konsultasi Poliklinik",
+      namaTindakan,
       tanggalTindakan: kunjungan.tanggalMasuk,
-      jasa: faker.number.int({ min: 100_000, max: 350_000 }),
-      unitPelayanan: ruangan?.nama ?? "Poliklinik",
+      jasa: TARIF_JASA[namaTindakan],
+      unitPelayanan: unitDari(ruangan),
     });
   }
 
@@ -555,11 +591,12 @@ async function seedPendapatan(kunjunganList, operasiList, konsultasiList, penjam
     if (!kunjungan) continue;
     baris.push({
       dokterId: kunjungan.dokterId,
+      pasienId: kunjungan.pasienId,
       penjaminId: penjaminUntuk(kunjungan.id).id,
       namaTindakan: operasi.jenisTindakan,
       tanggalTindakan: operasi.tanggalOperasi,
-      jasa: faker.number.int({ min: 2_500_000, max: 9_000_000 }),
-      unitPelayanan: ruanganById.get(operasi.ruanganId)?.nama ?? "Bedah Sentral",
+      jasa: TARIF_JASA[operasi.jenisTindakan],
+      unitPelayanan: unitDari(ruanganById.get(operasi.ruanganId)),
     });
   }
 
@@ -570,11 +607,12 @@ async function seedPendapatan(kunjunganList, operasiList, konsultasiList, penjam
     const ruangan = ruanganById.get(kunjunganById.get(konsul.kunjunganId)?.ruanganId);
     baris.push({
       dokterId: konsul.dokterTujuanId,
+      pasienId: konsul.pasienId,
       penjaminId: penjaminUntuk(konsul.kunjunganId).id,
       namaTindakan: "Konsul Ruang Perawatan",
       tanggalTindakan: konsul.tanggalJawaban,
-      jasa: faker.number.int({ min: 150_000, max: 400_000 }),
-      unitPelayanan: ruangan?.nama ?? "Rawat Inap Melati",
+      jasa: TARIF_JASA["Konsul Ruang Perawatan"],
+      unitPelayanan: unitDari(ruangan),
     });
   }
 

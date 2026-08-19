@@ -1,11 +1,14 @@
 import { apiFetch } from './client';
-import type { PendapatanResponse } from './types';
+import type { PendapatanResponse, PeriodePendapatan } from './types';
 
 /**
- * Jasa medis satu bulan. Tanpa `bulan`, backend memilih bulan terisi paling
- * baru — dipakai saat layar pertama dibuka, sebelum daftar bulannya diketahui.
+ * Jasa medis dalam satu rentang tanggal (`YYYY-MM-DD`, keduanya inklusif).
+ * Tanpa periode, backend memilih bulan terisi paling baru — dipakai saat layar
+ * pertama dibuka, sebelum rentang mana pun dipilih.
  */
-export function fetchPendapatan(token: string, bulan?: string) {
-  const qs = bulan ? `?bulan=${bulan}` : '';
+export function fetchPendapatan(token: string, periode?: PeriodePendapatan | null) {
+  const qs = periode
+    ? `?tanggalAwal=${periode.tanggalAwal}&tanggalAkhir=${periode.tanggalAkhir}`
+    : '';
   return apiFetch<PendapatanResponse>(`/api/pendapatan${qs}`, { token });
 }
