@@ -54,6 +54,21 @@ enum OperasiStatus {
   CANCELLED
 }
 
+// Klasifikasi laporan operasi. Terpisah dari OperasiStatus: yang ini sifat
+// tindakannya (direncanakan vs darurat), bukan progres jadwalnya.
+enum SifatOperasi {
+  ELEKTIF
+  CITO
+}
+
+// Kelas luka operasi (standar surgical wound classification).
+enum JenisPembedahan {
+  BERSIH
+  BERSIH_TERKONTAMINASI
+  KONTAMINASI
+  KOTOR
+}
+
 enum StatusPemeriksaanLab {
   PENDING
   COMPLETED
@@ -210,6 +225,48 @@ model Operasi {
   status         OperasiStatus @default(SCHEDULED)
   catatanPreOp   String?
   catatanPostOp  String?
+
+  // --- Laporan operasi (Tahap 3 docs/rencana-revisi-modul-dokter.md) ---
+  // Semua nullable: baru terisi setelah tindakan selesai, dan record lama tetap
+  // valid tanpa ini. Endpoint detail hanya mengirimkannya saat status efektif
+  // COMPLETED — lihat src/utils/laporanOperasi.js.
+  //
+  // `tim` di atas tetap dipakai untuk kartu jadwal (daftar nama tanpa peran);
+  // field bernama peran di bawah ini yang dipakai laporan.
+  dokterOperator        String?
+  asistenOperator       String?
+  perawatInstrumentator String?
+  perawatSirkuler       String?
+  dokterAnestesi        String?
+  jenisAnestesi         String?
+  kategoriOperasi       String?
+
+  diagnosaPraBedah   String?
+  diagnosaPascaBedah String?
+
+  jamMulaiInsisi DateTime?
+  jamSelesai     DateTime?
+
+  sifatOperasi          SifatOperasi?
+  jenisPembedahan       JenisPembedahan?
+  antibiotikProfilaksis Boolean?
+
+  // Hanya terisi kalau jenis anestesinya lokal.
+  teknikAnestesiLokal     String?
+  lokasiAnestesi          String?
+  obatAnestesi            String?
+  responHipersensitivitas String?
+  kejadianToksikasi       String?
+
+  tindakanDilakukan String?
+  deskripsiOperasi  String?
+
+  komplikasi             String?
+  jumlahKehilanganDarah  Int?
+  transfusi              String?
+  spesimen               String?
+  pemasanganImplan       String?
+
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
 

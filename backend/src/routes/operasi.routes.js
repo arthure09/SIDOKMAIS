@@ -6,6 +6,7 @@ const { logAudit } = require("../utils/auditLog");
 const { dokterPunyaAksesPasien } = require("../utils/aksesPasien");
 const { parsePagination, parseDokterIdFilter } = require("../utils/queryParams");
 const { OPERASI, KUNJUNGAN, terapkanStatusEfektif, whereStatusEfektif } = require("../utils/statusJadwal");
+const { parseLaporanBody, tanpaLaporan } = require("../utils/laporanOperasi");
 
 const router = express.Router();
 
@@ -194,6 +195,11 @@ function validatePatchBody(body) {
       data.catatanPostOp = body.catatanPostOp;
     }
   }
+
+  // Field laporan operasi ikut lewat sini (ADMIN, mensimulasikan sync SIMRS).
+  const laporan = parseLaporanBody(body);
+  errors.push(...laporan.errors);
+  Object.assign(data, laporan.data);
 
   return { errors, data };
 }
@@ -399,8 +405,13 @@ router.get("/:id", async (req, res) => {
   // Kunjungan yang ter-embed ikut diturunkan statusnya — kalau tidak, layar
   // detail operasi bisa menampilkan konsultasi induknya "Terjadwal" padahal di
   // daftar Konsultasi record yang sama sudah tampil "Selesai".
+  // Laporan lengkap hanya untuk operasi yang sudah selesai — dasarnya status
+  // EFEKTIF, bukan yang tersimpan, supaya konsisten dengan status yang tampil
+  // di layar (lihat utils/laporanOperasi.js).
+  const efektif = terapkanStatusEfektif(operasi, OPERASI);
+
   res.json({
-    ...terapkanStatusEfektif(operasi, OPERASI),
+    ...(efektif.status === "COMPLETED" ? efektif : tanpaLaporan(efektif)),
     kunjungan: terapkanStatusEfektif(operasi.kunjungan, KUNJUNGAN),
   });
 });

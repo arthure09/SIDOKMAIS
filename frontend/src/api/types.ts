@@ -87,6 +87,36 @@ export type OperasiDetail = {
   status: OperasiStatus;
   catatanPreOp: string | null;
   catatanPostOp: string | null;
+
+  // Laporan operasi (Tahap 3). Field-nya dihilangkan sepenuhnya dari respons
+  // kalau operasinya belum selesai — jadi optional, bukan `| null`.
+  dokterOperator?: string | null;
+  asistenOperator?: string | null;
+  perawatInstrumentator?: string | null;
+  perawatSirkuler?: string | null;
+  dokterAnestesi?: string | null;
+  jenisAnestesi?: string | null;
+  kategoriOperasi?: string | null;
+  diagnosaPraBedah?: string | null;
+  diagnosaPascaBedah?: string | null;
+  jamMulaiInsisi?: string | null;
+  jamSelesai?: string | null;
+  sifatOperasi?: 'ELEKTIF' | 'CITO' | null;
+  jenisPembedahan?: 'BERSIH' | 'BERSIH_TERKONTAMINASI' | 'KONTAMINASI' | 'KOTOR' | null;
+  antibiotikProfilaksis?: boolean | null;
+  teknikAnestesiLokal?: string | null;
+  lokasiAnestesi?: string | null;
+  obatAnestesi?: string | null;
+  responHipersensitivitas?: string | null;
+  kejadianToksikasi?: string | null;
+  tindakanDilakukan?: string | null;
+  deskripsiOperasi?: string | null;
+  komplikasi?: string | null;
+  jumlahKehilanganDarah?: number | null;
+  transfusi?: string | null;
+  spesimen?: string | null;
+  pemasanganImplan?: string | null;
+
   kunjungan: {
     id: string;
     diagnosa: string | null;

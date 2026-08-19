@@ -23,6 +23,18 @@ const STATUS_LABEL: Record<string, string> = {
   CANCELLED: 'Dibatalkan',
 };
 
+const LABEL_SIFAT_OPERASI: Record<string, string> = {
+  ELEKTIF: 'Elektif',
+  CITO: 'Cito',
+};
+
+const LABEL_JENIS_PEMBEDAHAN: Record<string, string> = {
+  BERSIH: 'Bersih',
+  BERSIH_TERKONTAMINASI: 'Bersih Terkontaminasi',
+  KONTAMINASI: 'Kontaminasi',
+  KOTOR: 'Kotor',
+};
+
 function formatTanggal(value: string) {
   return new Date(value).toLocaleDateString('id-ID', {
     weekday: 'long',
@@ -180,21 +192,103 @@ export function DetailJadwalOperasiScreen({ route, navigation }: Props) {
           )}
         </View>
 
+        {/* Kalau laporannya sudah ada, nama tim tampil dengan perannya —
+            lebih informatif daripada daftar nama polos. Sebelum operasi
+            selesai backend tidak mengirim field peran, jadi jatuh ke `tim`. */}
         <View style={styles.card}>
           <Text style={styles.cardLabel}>Tim Medis</Text>
-          <View style={{ gap: 8 }}>
-            {item.tim.map((nama) => (
-              <View key={nama} style={styles.timRow}>
-                <View style={styles.timAvatar}>
-                  <Text style={styles.timAvatarText}>{initialsFromName(nama)}</Text>
+          {item.dokterOperator ? (
+            <BarisLaporan
+              baris={[
+                ['Operator', item.dokterOperator],
+                ['Asisten Operator', item.asistenOperator],
+                ['Perawat Instrumentator', item.perawatInstrumentator],
+                ['Perawat Sirkuler', item.perawatSirkuler],
+                ['Dokter Anestesi', item.dokterAnestesi],
+              ]}
+            />
+          ) : (
+            <View style={{ gap: 8 }}>
+              {item.tim.map((nama) => (
+                <View key={nama} style={styles.timRow}>
+                  <View style={styles.timAvatar}>
+                    <Text style={styles.timAvatarText}>{initialsFromName(nama)}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.timNama}>{nama}</Text>
+                  </View>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.timNama}>{nama}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
+              ))}
+            </View>
+          )}
         </View>
+
+        {/* Laporan lengkap. Tiap kartu hilang sendiri kalau isinya kosong,
+            jadi tidak perlu dicek ulang di sini: backend memang cuma
+            mengirim field-field ini untuk operasi yang sudah selesai. */}
+        <KartuLaporan
+          judul="Diagnosa"
+          baris={[
+            ['Pra-Bedah', item.diagnosaPraBedah],
+            ['Pasca-Bedah', item.diagnosaPascaBedah],
+          ]}
+        />
+
+        <KartuLaporan
+          judul="Pelaksanaan"
+          baris={[
+            ['Tindakan', item.tindakanDilakukan],
+            ['Kategori Operasi', item.kategoriOperasi],
+            ['Sifat Operasi', item.sifatOperasi && LABEL_SIFAT_OPERASI[item.sifatOperasi]],
+            [
+              'Jenis Pembedahan',
+              item.jenisPembedahan && LABEL_JENIS_PEMBEDAHAN[item.jenisPembedahan],
+            ],
+            ['Jenis Anestesi', item.jenisAnestesi],
+            [
+              'Antibiotik Profilaksis',
+              item.antibiotikProfilaksis == null
+                ? null
+                : item.antibiotikProfilaksis
+                  ? 'Diberikan'
+                  : 'Tidak diberikan',
+            ],
+            ['Mulai Insisi', item.jamMulaiInsisi && `${formatJam(item.jamMulaiInsisi)} WIB`],
+            ['Selesai', item.jamSelesai && `${formatJam(item.jamSelesai)} WIB`],
+          ]}
+        />
+
+        <KartuLaporan
+          judul="Anestesi Lokal"
+          baris={[
+            ['Teknik', item.teknikAnestesiLokal],
+            ['Lokasi', item.lokasiAnestesi],
+            ['Obat', item.obatAnestesi],
+            ['Respon Hipersensitivitas', item.responHipersensitivitas],
+            ['Kejadian Toksikasi', item.kejadianToksikasi],
+          ]}
+        />
+
+        {item.deskripsiOperasi && (
+          <View style={styles.card}>
+            <Text style={styles.cardLabel}>Jalannya Operasi</Text>
+            <Text style={styles.paragraf}>{item.deskripsiOperasi}</Text>
+          </View>
+        )}
+
+        <KartuLaporan
+          judul="Hasil"
+          baris={[
+            ['Komplikasi', item.komplikasi],
+            [
+              'Perdarahan',
+              item.jumlahKehilanganDarah == null ? null : `${item.jumlahKehilanganDarah} ml`,
+            ],
+            ['Transfusi', item.transfusi],
+            ['Spesimen', item.spesimen],
+            ['Pemasangan Implan', item.pemasanganImplan],
+          ]}
+        />
 
         {(item.catatanPreOp || item.catatanPostOp) && (
           <View style={styles.notesCard}>
@@ -217,6 +311,34 @@ export function DetailJadwalOperasiScreen({ route, navigation }: Props) {
           </View>
         )}
       </ScrollView>
+    </View>
+  );
+}
+
+type BarisLaporanItem = [string, string | null | undefined | false];
+
+function BarisLaporan({ baris }: { baris: BarisLaporanItem[] }) {
+  return (
+    <View style={{ gap: ms(12) }}>
+      {baris
+        .filter(([, nilai]) => !!nilai)
+        .map(([label, nilai]) => (
+          <View key={label} style={styles.laporanRow}>
+            <Text style={styles.laporanLabel}>{label}</Text>
+            <Text style={styles.laporanValue}>{nilai}</Text>
+          </View>
+        ))}
+    </View>
+  );
+}
+
+/** Kartu yang menghilang sendiri kalau semua barisnya kosong. */
+function KartuLaporan({ judul, baris }: { judul: string; baris: BarisLaporanItem[] }) {
+  if (!baris.some(([, nilai]) => !!nilai)) return null;
+  return (
+    <View style={styles.card}>
+      <Text style={styles.cardLabel}>{judul}</Text>
+      <BarisLaporan baris={baris} />
     </View>
   );
 }
@@ -351,6 +473,17 @@ const styles = StyleSheet.create({
   },
   timAvatarText: { fontSize: ms(12), fontWeight: '700', color: colors.onPrimary },
   timNama: { fontSize: ms(14), fontWeight: '600', color: colors.onSurface },
+
+  laporanRow: { flexDirection: 'row', alignItems: 'flex-start', gap: ms(16) },
+  laporanLabel: { flex: 1, fontSize: ms(13), color: colors.onSurfaceVariant },
+  laporanValue: {
+    flex: 1.4,
+    fontSize: ms(14),
+    fontWeight: '600',
+    color: colors.onSurface,
+    textAlign: 'right',
+  },
+  paragraf: { fontSize: ms(14), lineHeight: ms(22), color: colors.onSurface },
 
   notesCard: {
     backgroundColor: '#F5F6D9',

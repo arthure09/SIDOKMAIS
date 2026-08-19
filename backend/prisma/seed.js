@@ -253,7 +253,7 @@ async function seedJadwalMendatang(dokterUtama, pasienUtama, ruanganList) {
             ruanganId: pickOne(okRuangan).id,
             tanggalOperasi: jamMendatang,
             jenisTindakan: pickOne(JENIS_TINDAKAN_NETRAL),
-            tim: [faker.person.fullName(), faker.person.fullName()],
+            tim: [generateNamaOrang(), generateNamaOrang()],
             status: "SCHEDULED",
             catatanPreOp: "Pasien dalam kondisi stabil, siap tindakan.",
             catatanPostOp: null,
@@ -304,6 +304,121 @@ async function seedKunjungan(pasienList, dokterList, ruanganList) {
   return kunjungan;
 }
 
+// Narasi laporan operasi per jenis tindakan. Dipisah per tindakan supaya isi
+// laporannya nyambung dengan apa yang dikerjakan — sama prinsipnya dengan seed
+// lab: dummy boleh, tapi tidak boleh omong kosong klinis (mis. "reseksi tumor"
+// dengan spesimen "tidak ada" atau perdarahan 2 liter tanpa transfusi).
+const NARASI_OPERASI = {
+  "Reseksi Tumor": {
+    diagnosaPra: "Tumor solid, rencana reseksi",
+    diagnosaPasca: "Tumor solid, reseksi lengkap",
+    jenisPembedahan: "BERSIH",
+    deskripsi:
+      "Insisi sesuai marka, diseksi lapis demi lapis sampai massa tumor terpapar. " +
+      "Tumor dibebaskan dari jaringan sekitar, reseksi dilakukan dengan tepi sayatan bebas. " +
+      "Perdarahan dirawat, luka ditutup lapis demi lapis.",
+    spesimen: "Jaringan tumor + tepi sayatan, dikirim ke Patologi Anatomi.",
+    darah: [150, 400],
+  },
+  "Biopsi Eksisi": {
+    diagnosaPra: "Massa dengan kecurigaan keganasan, belum terkonfirmasi",
+    diagnosaPasca: "Massa terangkat, menunggu hasil histopatologi",
+    jenisPembedahan: "BERSIH",
+    deskripsi:
+      "Insisi kecil di atas massa, massa dibebaskan utuh beserta kapsulnya. " +
+      "Hemostasis tercapai, luka ditutup primer.",
+    spesimen: "Massa utuh, dikirim ke Patologi Anatomi.",
+    darah: [20, 80],
+  },
+  "Laparotomi Eksplorasi": {
+    diagnosaPra: "Massa intraabdomen, evaluasi operabilitas",
+    diagnosaPasca: "Massa intraabdomen, eksplorasi selesai",
+    jenisPembedahan: "BERSIH_TERKONTAMINASI",
+    deskripsi:
+      "Laparotomi median, eksplorasi rongga abdomen sistematis. " +
+      "Dilakukan penilaian ekstensi massa dan keterlibatan organ sekitar. " +
+      "Dinding abdomen ditutup lapis demi lapis, drain dipasang.",
+    spesimen: "Biopsi jaringan untuk pemeriksaan Patologi Anatomi.",
+    darah: [300, 700],
+  },
+  "Debulking Tumor": {
+    diagnosaPra: "Tumor massif, rencana pengurangan massa",
+    diagnosaPasca: "Tumor massif, debulking optimal",
+    jenisPembedahan: "KONTAMINASI",
+    deskripsi:
+      "Eksplorasi lapangan operasi, massa tumor dikurangi bertahap. " +
+      "Sisa tumor mikroskopis diserahkan ke terapi adjuvan. Drain dipasang sebelum penutupan.",
+    spesimen: "Jaringan tumor hasil debulking, dikirim ke Patologi Anatomi.",
+    darah: [400, 900],
+  },
+  Mastektomi: {
+    diagnosaPra: "Karsinoma mammae, rencana mastektomi",
+    diagnosaPasca: "Karsinoma mammae, mastektomi selesai",
+    jenisPembedahan: "BERSIH",
+    deskripsi:
+      "Insisi elips mencakup kompleks puting-areola. Flap kulit dibuat, jaringan mammae " +
+      "dibebaskan dari fasia pektoralis. Hemostasis tercapai, drain aksila dipasang, luka ditutup.",
+    spesimen: "Jaringan mammae + kelenjar getah bening aksila, dikirim ke Patologi Anatomi.",
+    darah: [200, 500],
+  },
+};
+
+const JENIS_ANESTESI = ["Umum", "Regional", "Lokal"];
+const KATEGORI_OPERASI = ["Sedang", "Besar", "Khusus"];
+
+// Laporan lengkap (Tahap 3) — cuma diisi untuk operasi yang sudah COMPLETED;
+// endpoint detail juga hanya mengirimkannya pada status itu.
+function buatLaporanOperasi(jenisTindakan, tanggalOperasi, tim) {
+  const narasi = NARASI_OPERASI[jenisTindakan];
+  const jenisAnestesi = pickOne(JENIS_ANESTESI);
+  const jamMulaiInsisi = new Date(tanggalOperasi.getTime() + 30 * 60_000);
+  const jamSelesai = new Date(
+    jamMulaiInsisi.getTime() + faker.number.int({ min: 45, max: 210 }) * 60_000
+  );
+  const kehilanganDarah = faker.number.int({ min: narasi.darah[0], max: narasi.darah[1] });
+
+  return {
+    dokterOperator: tim[0],
+    asistenOperator: tim[1],
+    perawatInstrumentator: generateNamaOrang(),
+    perawatSirkuler: generateNamaOrang(),
+    dokterAnestesi: generateNamaOrang(),
+    jenisAnestesi,
+    kategoriOperasi: pickOne(KATEGORI_OPERASI),
+
+    diagnosaPraBedah: narasi.diagnosaPra,
+    diagnosaPascaBedah: narasi.diagnosaPasca,
+
+    jamMulaiInsisi,
+    jamSelesai,
+
+    sifatOperasi: faker.datatype.boolean(0.85) ? "ELEKTIF" : "CITO",
+    jenisPembedahan: narasi.jenisPembedahan,
+    antibiotikProfilaksis: true,
+
+    // Grup anestesi lokal cuma relevan kalau anestesinya memang lokal.
+    ...(jenisAnestesi === "Lokal"
+      ? {
+          teknikAnestesiLokal: "Infiltrasi lokal",
+          lokasiAnestesi: "Sekitar lapangan operasi",
+          obatAnestesi: "Lidokain 2% + epinefrin 1:200.000",
+          responHipersensitivitas: "Tidak ada",
+          kejadianToksikasi: "Tidak ada",
+        }
+      : {}),
+
+    tindakanDilakukan: jenisTindakan,
+    deskripsiOperasi: narasi.deskripsi,
+
+    komplikasi: faker.datatype.boolean(0.15) ? "Perdarahan intraoperatif, teratasi" : "Tidak ada",
+    jumlahKehilanganDarah: kehilanganDarah,
+    // Transfusi baru masuk akal kalau kehilangan darahnya memang banyak.
+    transfusi: kehilanganDarah > 500 ? "PRC 1 kantong" : "Tidak ada",
+    spesimen: narasi.spesimen,
+    pemasanganImplan: "Tidak ada",
+  };
+}
+
 async function seedOperasi(kunjunganList, ruanganList, pasienList) {
   const okRuangan = ruanganList.filter((r) => r.jenis === "OK");
   const jenisKelaminByPasien = new Map(pasienList.map((p) => [p.id, p.jenisKelamin]));
@@ -321,17 +436,27 @@ async function seedOperasi(kunjunganList, ruanganList, pasienList) {
         ? [...JENIS_TINDAKAN_NETRAL, ...JENIS_TINDAKAN_PEREMPUAN]
         : JENIS_TINDAKAN_NETRAL;
 
+    const jenisTindakan = pickOne(daftarTindakan);
+    const tim = [generateNamaOrang(), generateNamaOrang()];
+
     operasi.push(
       await prisma.operasi.create({
         data: {
           kunjunganId: kunjungan.id,
           ruanganId: pickOne(okRuangan).id,
           tanggalOperasi: kunjungan.tanggalMasuk,
-          jenisTindakan: pickOne(daftarTindakan),
-          tim: [faker.person.fullName(), faker.person.fullName()],
+          jenisTindakan,
+          tim,
           status,
           catatanPreOp: "Pasien dalam kondisi stabil, siap tindakan.",
           catatanPostOp: status === "COMPLETED" ? "Tindakan berjalan lancar, tanpa komplikasi." : null,
+          // Laporan diisi untuk SEMUA operasi di sini, termasuk yang tersimpan
+          // IN_PROGRESS: tanggalnya historis semua, jadi status EFEKTIF-nya
+          // (utils/statusJadwal.js) pasti COMPLETED dan endpoint detail akan
+          // menampilkan section laporan. Kalau tidak diisi, section-nya muncul
+          // kosong. Jadwal mendatang di seedJadwalMendatang() sengaja tanpa
+          // laporan — memang belum dikerjakan.
+          ...buatLaporanOperasi(jenisTindakan, kunjungan.tanggalMasuk, tim),
         },
       })
     );
