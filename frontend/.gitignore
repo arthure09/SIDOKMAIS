@@ -10,6 +10,10 @@ web-build/
 expo-env.d.ts
 
 # Native
+# ios/ & android/ hasil `expo prebuild` — regenerate dari app.json, jangan
+# di-commit selama tidak ada file native yang diedit manual.
+/ios/
+/android/
 .kotlin/
 *.orig.*
 *.jks

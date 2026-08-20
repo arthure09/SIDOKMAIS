@@ -31,7 +31,7 @@ type DisplayItem = {
   dokterNama?: string;
 };
 
-const TIPE_META: Record<NotifikasiTipe, { kategori: DisplayKategori; judul: string; icon: string }> = {
+export const TIPE_META: Record<NotifikasiTipe, { kategori: DisplayKategori; judul: string; icon: string }> = {
   PASIEN_BARU: { kategori: 'Pasien Baru', judul: 'Pasien Baru Ditugaskan', icon: 'person-add' },
   REMINDER_OPERASI: { kategori: 'Jadwal', judul: 'Pengingat Operasi', icon: 'event' },
   PERUBAHAN_JADWAL: { kategori: 'Jadwal', judul: 'Perubahan Jadwal', icon: 'event-busy' },

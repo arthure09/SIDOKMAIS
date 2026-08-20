@@ -6,6 +6,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { useNunitoSansFonts } from './src/theme/typography';
 import { useAuthStore } from './src/store/authStore';
+import { useNotifikasiHp } from './src/hooks/useNotifikasiHp';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -17,6 +18,8 @@ export default function App() {
   useEffect(() => {
     hydrateAuth();
   }, [hydrateAuth]);
+
+  useNotifikasiHp();
 
   useEffect(() => {
     if ((fontsLoaded || fontError) && authHydrated) {
