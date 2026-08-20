@@ -3,7 +3,7 @@ const prisma = require("../lib/prisma");
 const authorize = require("../middleware/rbac.middleware");
 const { logAudit } = require("../utils/auditLog");
 const { dokterPunyaAksesPasien } = require("../utils/aksesPasien");
-const { parsePagination, parseDokterIdFilter } = require("../utils/queryParams");
+const { parsePagination, parseDokterIdFilter, parseRentangTanggal } = require("../utils/queryParams");
 const { OPERASI, KUNJUNGAN, terapkanStatusEfektif, whereStatusEfektif } = require("../utils/statusJadwal");
 const { parseLaporanBody, tanpaLaporan } = require("../utils/laporanOperasi");
 
@@ -26,9 +26,22 @@ function parseListQuery(query, role) {
   const pagination = parsePagination(query);
   errors.push(...pagination.errors);
 
+  const rentang = parseRentangTanggal(query);
+  errors.push(...rentang.errors);
+
   const dokterId = parseDokterIdFilter(query, role);
 
-  return { errors, values: { status, page: pagination.page, limit: pagination.limit, dokterId } };
+  return {
+    errors,
+    values: {
+      status,
+      page: pagination.page,
+      limit: pagination.limit,
+      dokterId,
+      dari: rentang.dari,
+      sampai: rentang.sampai,
+    },
+  };
 }
 
 router.get("/", async (req, res) => {
@@ -43,28 +56,38 @@ router.get("/", async (req, res) => {
     return res.status(400).json({ message: "Query params tidak valid", errors });
   }
 
-  const { status, page, limit, dokterId } = values;
+  const { status, page, limit, dokterId, dari, sampai } = values;
+
+  // Klausa digabung lewat AND, bukan di-spread jadi satu objek: filter status
+  // efektif dan filter dari/sampai sama-sama menulis `tanggalOperasi`, jadi
+  // kalau di-spread yang belakangan menimpa yang duluan tanpa error. Pola sama
+  // dengan kunjungan.routes.js, tempat bug itu benar-benar terjadi.
+  const klausa = [];
 
   // Filter status menyeleksi berdasar status EFEKTIF (lihat utils/statusJadwal.js),
   // bukan status tersimpan — kalau tidak, record yang tampil "Selesai" karena
   // harinya sudah lewat malah tidak ikut waktu difilter "Selesai".
-  const where = {
-    ...(status ? whereStatusEfektif(status, OPERASI) : {}),
-  };
+  if (status) klausa.push(whereStatusEfektif(status, OPERASI));
+  if (dari) klausa.push({ tanggalOperasi: { gte: dari } });
+  if (sampai) klausa.push({ tanggalOperasi: { lte: sampai } });
 
   if (role === "DOKTER") {
     // Dokter juga berhak lihat operasi pasien yang di-assign kepadanya
     // (DokterPasienAssignment), bukan cuma operasi yang kunjungan-nya
     // kebetulan tercatat dokterId dia secara langsung — lihat utils/aksesPasien.js.
-    where.kunjungan = {
-      OR: [
-        { dokterId: ownDokterId },
-        { pasien: { assignments: { some: { dokterId: ownDokterId } } } },
-      ],
-    };
+    klausa.push({
+      kunjungan: {
+        OR: [
+          { dokterId: ownDokterId },
+          { pasien: { assignments: { some: { dokterId: ownDokterId } } } },
+        ],
+      },
+    });
   } else if (dokterId) {
-    where.kunjungan = { dokterId };
+    klausa.push({ kunjungan: { dokterId } });
   }
+
+  const where = klausa.length > 0 ? { AND: klausa } : {};
 
   const [total, operasi] = await Promise.all([
     prisma.operasi.count({ where }),

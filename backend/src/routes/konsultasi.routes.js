@@ -1,6 +1,6 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
-const { parsePagination, parseDokterIdFilter } = require("../utils/queryParams");
+const { parsePagination, parseDokterIdFilter, parseRentangTanggal } = require("../utils/queryParams");
 const { jenisKunjungan } = require("../utils/jenisKunjungan");
 
 const router = express.Router();
@@ -50,6 +50,9 @@ function parseListQuery(query, role) {
   const pagination = parsePagination(query);
   errors.push(...pagination.errors);
 
+  const rentang = parseRentangTanggal(query);
+  errors.push(...rentang.errors);
+
   const dokterId = parseDokterIdFilter(query, role);
 
   return {
@@ -60,6 +63,8 @@ function parseListQuery(query, role) {
       page: pagination.page,
       limit: pagination.limit,
       dokterId,
+      dari: rentang.dari,
+      sampai: rentang.sampai,
     },
   };
 }
@@ -83,11 +88,17 @@ router.get("/", async (req, res) => {
     return res.status(400).json({ message: "Query params tidak valid", errors });
   }
 
-  const { status, prioritas, page, limit, dokterId } = values;
+  const { status, prioritas, page, limit, dokterId, dari, sampai } = values;
 
+  // Aman di-spread di sini (beda dari operasi/kunjungan): tidak ada klausa lain
+  // di modul ini yang menyentuh `tanggalPermintaan` — status surat konsul tidak
+  // diturunkan dari tanggal.
   const where = {
     ...(status && { status }),
     ...(prioritas && { prioritas }),
+    ...((dari || sampai) && {
+      tanggalPermintaan: { ...(dari && { gte: dari }), ...(sampai && { lte: sampai }) },
+    }),
     // dokterTujuanId DOKTER selalu dari JWT, tidak pernah dari query (CLAUDE.md
     // Aturan #2). `?dokterId=` cuma dihormati untuk ADMIN — parseDokterIdFilter
     // sudah membuangnya kalau pemanggilnya DOKTER.

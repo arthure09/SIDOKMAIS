@@ -1,8 +1,7 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
 const { dokterPunyaAksesPasien } = require("../utils/aksesPasien");
-const { parsePagination } = require("../utils/queryParams");
-const { parseTanggalAwalWIB, parseTanggalAkhirWIB } = require("../utils/wib");
+const { parsePagination, parseRentangTanggal } = require("../utils/queryParams");
 
 const router = express.Router();
 
@@ -18,30 +17,15 @@ function parseListQuery(query) {
   errors.push(...pagination.errors);
   const { page, limit } = pagination;
 
-  // dariTanggal/sampaiTanggal dikirim frontend sebagai "YYYY-MM-DD" — tanggal
-  // kalender LOKAL device (lewat getFullYear/getMonth/getDate di toDateParam),
-  // bukan UTC. Date.parse membaca string tanpa jam sebagai UTC 00:00, jadi kalau
-  // dipakai apa adanya batasnya meleset sebesar offset timezone pengguna (mis.
-  // +7 jam buat WIB) — bukan cuma kosmetik, karena tanggalPermintaan punya jam
-  // sungguhan (seed pakai randomDateBetween), jadi baris di tepi jendela bisa
-  // salah ikut tersaring atau salah terbuang. Lihat utils/wib.js.
-  let dariTanggal;
-  if (query.dariTanggal !== undefined && query.dariTanggal !== "") {
-    dariTanggal = parseTanggalAwalWIB(query.dariTanggal);
-    if (!dariTanggal) errors.push("dariTanggal harus tanggal yang valid (format YYYY-MM-DD)");
-  }
+  // Nama paramnya `dariTanggal`/`sampaiTanggal` di modul ini (bukan
+  // `dari`/`sampai`) — lihat catatan timezone di utils/wib.js.
+  const rentang = parseRentangTanggal(query, "dariTanggal", "sampaiTanggal");
+  errors.push(...rentang.errors);
 
-  let sampaiTanggal;
-  if (query.sampaiTanggal !== undefined && query.sampaiTanggal !== "") {
-    sampaiTanggal = parseTanggalAkhirWIB(query.sampaiTanggal);
-    if (!sampaiTanggal) errors.push("sampaiTanggal harus tanggal yang valid (format YYYY-MM-DD)");
-  }
-
-  if (dariTanggal && sampaiTanggal && dariTanggal > sampaiTanggal) {
-    errors.push("dariTanggal tidak boleh setelah sampaiTanggal");
-  }
-
-  return { errors, values: { pasienId, page, limit, dariTanggal, sampaiTanggal } };
+  return {
+    errors,
+    values: { pasienId, page, limit, dariTanggal: rentang.dari, sampaiTanggal: rentang.sampai },
+  };
 }
 
 function toRingkasan(pemeriksaan) {

@@ -299,10 +299,24 @@ export function PasienListScreen({ navigation }: Props) {
                       <Text style={styles.cardRm}>RM: {item.norm}</Text>
                     </View>
                   </View>
-                  <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                    <Text style={[styles.statusBadgeText, { color: badge.fg }]}>
-                      {badge.label}
-                    </Text>
+                  {/* Dua badge bertumpuk rata kanan (keputusan Arthuro,
+                      20 Ags 2026). Sebelumnya badge kategori menempel di
+                      footer dekat tanggal kunjungan, dengan alasan kategori
+                      itu milik kunjungan dan bukan sifat tetap pasien —
+                      alasan yang tetap benar, tapi dokter membacanya sebagai
+                      satu kesatuan "keadaan pasien ini sekarang", jadi
+                      keduanya disatukan di sudut yang sama. */}
+                  <View style={styles.cardPills}>
+                    <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                      <Text style={[styles.statusBadgeText, { color: badge.fg }]}>
+                        {badge.label}
+                      </Text>
+                    </View>
+                    {jenisLabel && (
+                      <View style={styles.jenisBadge}>
+                        <Text style={styles.jenisBadgeText}>{jenisLabel}</Text>
+                      </View>
+                    )}
                   </View>
                 </View>
 
@@ -316,18 +330,9 @@ export function PasienListScreen({ navigation }: Props) {
                 <View style={styles.cardFooter}>
                   <View>
                     <Text style={styles.footerLabel}>Kunjungan Terakhir</Text>
-                    <View style={styles.footerValueRow}>
-                      <Text style={styles.footerValue}>
-                        {formatTanggal(item.tanggalKunjunganTerakhir)}
-                      </Text>
-                      {/* Menempel di kunjungan terakhir, bukan di header kartu:
-                          kategorinya milik kunjungan, bukan sifat tetap pasien. */}
-                      {jenisLabel && (
-                        <View style={styles.jenisBadge}>
-                          <Text style={styles.jenisBadgeText}>{jenisLabel}</Text>
-                        </View>
-                      )}
-                    </View>
+                    <Text style={styles.footerValue}>
+                      {formatTanggal(item.tanggalKunjunganTerakhir)}
+                    </Text>
                   </View>
                   <View style={styles.footerRight}>
                     <Text style={styles.footerLabel}>Jadwal Berikutnya</Text>
@@ -523,20 +528,27 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
   },
-  footerValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  // Rata kanan supaya tepi kedua badge lurus, dan kartu tanpa badge kategori
+  // tetap sejajar dengan yang punya.
+  cardPills: {
+    alignItems: 'flex-end',
     gap: 6,
+    flexShrink: 0,
   },
   jenisBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
     borderRadius: radius.full,
     backgroundColor: colors.surfaceSoft,
   },
+  // Huruf besar & jarak huruf disamakan dengan statusBadgeText: begitu keduanya
+  // bertumpuk, beda kapitalisasi bikin yang bawah terbaca seperti elemen lain
+  // yang kebetulan nyasar ke situ, bukan pasangan badge di atasnya.
   jenisBadgeText: {
     fontSize: 10,
     fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
     color: colors.primary,
   },
 

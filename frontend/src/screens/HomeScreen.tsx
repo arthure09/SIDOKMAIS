@@ -27,6 +27,7 @@ import { fetchStatistikDashboard } from '../api/dashboard';
 import { fetchCatatanKalenderList } from '../api/kalender';
 import { TIPE_META } from './CatatanKalenderScreen';
 import type { AktivitasHarianMingguan, CatatanKalenderItem, PasienPrioritasItem } from '../api/types';
+import { toDateParam } from '../utils/tanggal';
 
 // Jumlah pengingat yang ditampilkan di Home — sisanya lewat "Lihat semua".
 const PENGINGAT_PREVIEW_COUNT = 3;
@@ -35,15 +36,6 @@ const PENGINGAT_PREVIEW_COUNT = 3;
 // aksesibilitas titik indikator.
 const SLIDE_LABELS = ['Pasien Prioritas', 'Pengingat', 'Statistik Mingguan'];
 
-// Query param, bukan tampilan — tanggal kalender LOKAL device (sama seperti
-// toDateParam di CatatanKalenderScreen/HasilLabListScreen), bukan toISOString()
-// yang bisa geser ke hari sebelumnya kalau device di timezone +.
-function toDateParam(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
 
 function formatTanggalPengingat(iso: string, waktu: string | null) {
   const tanggal = new Date(iso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short' });

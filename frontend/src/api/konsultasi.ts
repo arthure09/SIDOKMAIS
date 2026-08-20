@@ -9,6 +9,9 @@ import type {
 type ListParams = {
   status?: StatusKonsultasi;
   prioritas?: PrioritasKonsultasi;
+  /** 'YYYY-MM-DD' tanggal kalender WIB, inklusif — pakai toDateParam(). */
+  dari?: string;
+  sampai?: string;
   page?: number;
   limit?: number;
 };
@@ -17,6 +20,8 @@ export function fetchKonsultasiList(token: string, params: ListParams) {
   const query = new URLSearchParams();
   if (params.status) query.set('status', params.status);
   if (params.prioritas) query.set('prioritas', params.prioritas);
+  if (params.dari) query.set('dari', params.dari);
+  if (params.sampai) query.set('sampai', params.sampai);
   if (params.page) query.set('page', String(params.page));
   if (params.limit) query.set('limit', String(params.limit));
 

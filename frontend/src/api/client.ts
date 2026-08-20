@@ -1,3 +1,5 @@
+import { useAuthStore } from '../store/authStore';
+
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:3000';
 
 export class ApiError extends Error {
@@ -35,6 +37,16 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   const json = await res.json().catch(() => null);
 
   if (!res.ok) {
+    // Token yang kita kirim ditolak server (kedaluwarsa / dicabut) = sesi sudah
+    // mati. Tanpa ini tiap layar cuma menampilkan "Token tidak valid atau
+    // kedaluwarsa" dan user terjebak, karena token basi tetap ada di store.
+    // logout() mengosongkan token, dan RootNavigator otomatis balik ke Login.
+    // Dibatasi ke request yang MEMBAWA token — 401 dari /auth/login itu
+    // "password salah", bukan sesi mati.
+    if (res.status === 401 && options.token) {
+      useAuthStore.getState().logout();
+    }
+
     const message = (json && typeof json.message === 'string') ? json.message : `Request gagal (${res.status})`;
     throw new ApiError(message, res.status);
   }

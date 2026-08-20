@@ -3,6 +3,8 @@
 // ter-seed lewat seed.js TIDAK diubah/regenerasi. Re-runnable: setiap run membersihkan
 // hanya Kunjungan + Operasi (+ Pendapatan yang menempel di Operasi lama, karena
 // Pendapatan.operasi pakai onDelete: Restrict) lalu generate ulang dari nol.
+require("./guard-db-lokal");
+
 const { PrismaClient } = require("@prisma/client");
 const { fakerID_ID: faker } = require("@faker-js/faker");
 

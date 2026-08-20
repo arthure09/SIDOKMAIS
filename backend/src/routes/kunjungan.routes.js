@@ -1,7 +1,7 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
 const { dokterPunyaAksesPasien } = require("../utils/aksesPasien");
-const { parsePagination, parseDokterIdFilter } = require("../utils/queryParams");
+const { parsePagination, parseDokterIdFilter, parseRentangTanggal } = require("../utils/queryParams");
 const { jenisKunjungan, parseJenisKunjungan } = require("../utils/jenisKunjungan");
 const { KUNJUNGAN, terapkanStatusEfektif, whereStatusEfektif } = require("../utils/statusJadwal");
 
@@ -31,6 +31,11 @@ function parseListQuery(query, role) {
   const jenis = parseJenisKunjungan(query);
   errors.push(...jenis.errors);
 
+  // Dipakai layar Poliklinik untuk meminta jadwal satu hari (dari == sampai),
+  // dan filter rentang tanggal untuk menengok ke belakang.
+  const rentang = parseRentangTanggal(query);
+  errors.push(...rentang.errors);
+
   const dokterId = parseDokterIdFilter(query, role);
 
   return {
@@ -41,6 +46,8 @@ function parseListQuery(query, role) {
       page: pagination.page,
       limit: pagination.limit,
       dokterId,
+      dari: rentang.dari,
+      sampai: rentang.sampai,
     },
   };
 }
@@ -57,26 +64,38 @@ router.get("/", async (req, res) => {
     return res.status(400).json({ message: "Query params tidak valid", errors });
   }
 
-  const { status, ruanganJenis, page, limit, dokterId } = values;
+  const { status, ruanganJenis, page, limit, dokterId, dari, sampai } = values;
 
-  // Filter menyeleksi berdasar status EFEKTIF, bukan status tersimpan —
+  // Semua klausa digabung lewat AND, TIDAK di-spread jadi satu objek. Dua di
+  // antaranya sama-sama memakai kunci yang sama: whereStatusEfektif(COMPLETED)
+  // menghasilkan `OR`, dan scoping akses dokter juga `OR`; keduanya juga
+  // sama-sama menyentuh `tanggalMasuk` bersama filter dari/sampai. Waktu
+  // di-spread, yang belakangan menimpa yang duluan tanpa error — dokter yang
+  // memfilter "Selesai" diam-diam mendapat semua status.
+  const klausa = [];
+
+  // Filter status menyeleksi berdasar status EFEKTIF, bukan status tersimpan —
   // lihat utils/statusJadwal.js.
-  const where = {
-    ...(status ? whereStatusEfektif(status, KUNJUNGAN) : {}),
-    ...(ruanganJenis && { ruangan: { jenis: ruanganJenis } }),
-  };
+  if (status) klausa.push(whereStatusEfektif(status, KUNJUNGAN));
+  if (ruanganJenis) klausa.push({ ruangan: { jenis: ruanganJenis } });
+  if (dari) klausa.push({ tanggalMasuk: { gte: dari } });
+  if (sampai) klausa.push({ tanggalMasuk: { lte: sampai } });
 
   if (role === "DOKTER") {
     // Dokter juga berhak lihat kunjungan pasien yang di-assign kepadanya
     // (DokterPasienAssignment), bukan cuma kunjungan yang kebetulan tercatat
     // dokterId dia secara langsung — lihat utils/aksesPasien.js.
-    where.OR = [
-      { dokterId: ownDokterId },
-      { pasien: { assignments: { some: { dokterId: ownDokterId } } } },
-    ];
+    klausa.push({
+      OR: [
+        { dokterId: ownDokterId },
+        { pasien: { assignments: { some: { dokterId: ownDokterId } } } },
+      ],
+    });
   } else if (dokterId) {
-    where.dokterId = dokterId;
+    klausa.push({ dokterId });
   }
+
+  const where = klausa.length > 0 ? { AND: klausa } : {};
 
   const [total, kunjungan] = await Promise.all([
     prisma.kunjungan.count({ where }),

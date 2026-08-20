@@ -1,7 +1,8 @@
 const express = require("express");
 const prisma = require("../lib/prisma");
 const { logAudit } = require("../utils/auditLog");
-const { parseTanggalAwalWIB, parseTanggalAkhirWIB, rentangHariWIB } = require("../utils/wib");
+const { rentangHariWIB } = require("../utils/wib");
+const { parseRentangTanggal } = require("../utils/queryParams");
 
 const router = express.Router();
 
@@ -11,25 +12,8 @@ const WAKTU_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 // `dari`/`sampai` dikirim frontend sebagai "YYYY-MM-DD" (tanggal kalender
 // lokal device, WIB) — lihat utils/wib.js.
 function parseListQuery(query) {
-  const errors = [];
-
-  let dari;
-  if (query.dari !== undefined && query.dari !== "") {
-    dari = parseTanggalAwalWIB(query.dari);
-    if (!dari) errors.push("dari harus tanggal yang valid (format YYYY-MM-DD)");
-  }
-
-  let sampai;
-  if (query.sampai !== undefined && query.sampai !== "") {
-    sampai = parseTanggalAkhirWIB(query.sampai);
-    if (!sampai) errors.push("sampai harus tanggal yang valid (format YYYY-MM-DD)");
-  }
-
-  if (dari && sampai && dari > sampai) {
-    errors.push("dari tidak boleh setelah sampai");
-  }
-
-  return { errors, values: { dari, sampai } };
+  const rentang = parseRentangTanggal(query);
+  return { errors: rentang.errors, values: { dari: rentang.dari, sampai: rentang.sampai } };
 }
 
 function validateBody(body, { partial }) {

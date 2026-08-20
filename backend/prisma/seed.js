@@ -1,3 +1,5 @@
+require("./guard-db-lokal");
+
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcrypt");
 const { fakerID_ID: faker } = require("@faker-js/faker");

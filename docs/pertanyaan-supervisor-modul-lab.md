@@ -1,8 +1,8 @@
 # Pertanyaan Modul Hasil Lab — SIDOKMAIS
 
-**Untuk:** Supervisor (bagian B & C) dan Mas Fauzi selaku DBA SIMRS (bagian A)
+**Untuk:** Supervisor (bagian B & C) dan Mas Fauzi selaku DBA SIMRS (bagian A & D)
 **Dari:** Arthuro — magang solo developer, divisi SIMRS
-**Tanggal:** 30 Juli 2026
+**Tanggal:** 30 Juli 2026 — **bagian D ditambahkan 20 Agustus 2026**
 
 ---
 
@@ -179,6 +179,100 @@ boleh melihatnya, atau membedakan hasil yang belum diverifikasi dokter patologi?
 
 ---
 
+## D. Kalau akses ke SIMRS diberikan sebagai READ-ONLY — untuk Mas Fauzi & supervisor
+
+**Ditambahkan 20 Agustus 2026.** Konteksnya berbeda dari bagian A–C: bagian itu
+ditulis waktu integrasi masih jauh. Sekarang kemungkinan yang paling realistis
+adalah SIDOKMAIS dapat akses **baca-saja** ke basis data SIMRS. Lima pertanyaan
+di bawah ini yang paling menentukan besar-kecilnya pekerjaan integrasi — bukan
+karena sulit dikerjakan, tapi karena jawaban yang berbeda menghasilkan aplikasi
+yang berbeda bentuknya.
+
+Selama belum terjawab, aplikasi tetap jalan di atas data contoh dan tidak ada
+yang macet. Jadi ini bukan permintaan mendesak — hanya perlu terjawab **sebelum**
+saya mulai menulis kode integrasi, bukan sesudah.
+
+**D1. Hasil lab ada di basis data SIMRS, atau di sistem laboratorium (LIS) yang
+terpisah?**
+
+- [ ] Ada di dalam SIMRS — ikut terbaca dengan akses read-only yang sama
+- [ ] Ada di LIS terpisah, perlu izin/akses tersendiri
+- [ ] Sebagian di SIMRS, sebagian di LIS
+- [ ] Lain-lain: ................................................
+
+Ini menyambung pertanyaan **A1** yang belum terjawab, dengan satu tambahan yang
+baru terasa sekarang: kalau hasil lab ternyata ada di LIS terpisah, akses
+read-only ke SIMRS saja **tidak menghasilkan data lab sama sekali**, dan modul
+Cari Hasil Lab tetap berjalan di atas data contoh meskipun integrasi modul lain
+sudah selesai. Kalau begitu keadaannya, lebih baik saya tahu lebih dulu supaya
+tidak menjadwalkan pekerjaan yang bahan bakunya belum ada.
+
+**D2. Bagaimana SIMRS mencatat hubungan "dokter ini menangani pasien ini"?**
+
+- [ ] Ada tabel penugasan dokter–pasien tersendiri
+- [ ] Diturunkan dari kunjungan/registrasi (misalnya kolom DPJP di baris kunjungan)
+- [ ] Cara lain: ................................................
+
+**Ini pertanyaan yang paling berdampak di bagian D.** Seluruh pembatasan akses di
+SIDOKMAIS — pasien, hasil lab, kunjungan, operasi, dan dashboard — berdiri di
+atas satu tabel `DokterPasienAssignment` yang saya buat sendiri, dan kebijakannya
+sudah dikonfirmasi di **C1**. Yang belum diketahui bukan kebijakannya, tapi
+**bentuk datanya di SIMRS**: kalau di sana hubungan itu tidak berupa tabel
+tersendiri melainkan diturunkan dari kolom DPJP di kunjungan, maka seluruh
+pembatasan akses harus dihitung ulang dari bentuk yang berbeda. Karena ini kode
+yang menentukan siapa boleh melihat data pasien siapa, perubahannya tidak cukup
+disambung — harus diuji ulang.
+
+**D3. Login dokter memakai akun aplikasi sendiri, atau harus lewat SSO/LDAP RS?**
+
+- [ ] Akun sendiri (SIDOKMAIS menyimpan akun & kata sandinya sendiri, seperti sekarang)
+- [ ] Wajib SSO/akun domain RS
+- [ ] Belum ada ketentuan
+
+Kalau jawabannya SSO, seluruh alur login dan cara aplikasi mengenali "dokter yang
+sedang masuk" diganti — dan identitas dokter itu dipakai di semua modul, jadi ini
+termasuk perubahan yang paling mahal kalau baru diketahui belakangan.
+
+**D4. Kalau aksesnya read-only, apakah SIDOKMAIS boleh punya basis data kecil
+sendiri di samping SIMRS?**
+
+- [ ] Boleh — silakan siapkan sendiri, di server ........................
+- [ ] Boleh, tapi harus dikelola tim SIMRS
+- [ ] Tidak boleh — semua data harus di SIMRS
+- [ ] Belum ada ketentuan
+
+Alasan pertanyaan ini: ada empat hal yang **dibuat oleh aplikasi ini sendiri** dan
+tidak mungkin ditulis ke SIMRS yang read-only —
+
+| Data | Keterangan |
+|---|---|
+| Catatan kalender | catatan pribadi dokter, murni milik aplikasi |
+| Notifikasi | dibuat & ditandai terbaca oleh aplikasi |
+| Log audit | catatan setiap aksi tulis (aturan wajib proyek ini) |
+| Akun pengguna | kalau **D3** dijawab "akun sendiri" |
+
+Tanpa tempat menyimpan keempatnya, fitur kalender dan notifikasi tidak bisa
+jalan sama sekali. Kalau jawabannya "tidak boleh", saya perlu tahu supaya kedua
+fitur itu bisa dinyatakan gugur sejak awal, bukan dibongkar setelah dikerjakan.
+
+**D5. Data jasa medis (pendapatan) diambil dari mana?**
+
+Sepanjang yang saya pahami, angka remunerasi berasal dari **SIREMDIS**, yang
+merupakan sistem terpisah dari SIMRS. Kalau benar begitu, akses read-only ke
+SIMRS tidak mencakup data ini, dan modul Jasa Medis tetap memakai data contoh
+sampai ada akses tersendiri.
+
+- [ ] Benar, SIREMDIS sistem terpisah — perlu izin/akses sendiri
+- [ ] Datanya juga tersedia di SIMRS
+- [ ] Lain-lain: ................................................
+
+Saya tidak mengajukan permintaan akses apa pun lewat pertanyaan ini — mengingat
+sifat datanya, saya menganggap ini keputusan supervisor sepenuhnya. Yang saya
+butuh hanya kepastian statusnya, supaya modul ini tidak saya laporkan sebagai
+"tinggal disambungkan" padahal sumbernya belum ada.
+
+---
+
 ## Ringkasan yang saya butuh untuk lanjut
 
 | Butuh sebelum | Pertanyaan | Kalau belum terjawab |
@@ -190,6 +284,11 @@ boleh melihatnya, atau membedakan hasil yang belum diverifikasi dokter patologi?
 | Tidak mendesak | **A1–A4** — sumber data SIMRS | Modul tetap jalan di atas data contoh; integrasi jadi pekerjaan pasca-magang |
 | Tidak mendesak | **A4** — nama kategori & lab resmi | Tetap pakai 6 kategori umum + "Laboratorium A/B/C" |
 | Tidak mendesak | **A5** — tabel `Operasi` & `Penjamin` | Modul operasi & pendapatan tetap di struktur asumsi |
+| Sebelum mulai integrasi | **D2** — bentuk relasi dokter–pasien di SIMRS | Pembatasan akses tetap di `DokterPasienAssignment` buatan sendiri |
+| Sebelum mulai integrasi | **D3** — login sendiri atau SSO | Tetap akun sendiri; kalau ternyata SSO, alur login dibangun ulang |
+| Sebelum mulai integrasi | **D4** — boleh punya DB sendiri | Kalender & notifikasi diasumsikan tetap bisa jalan |
+| Sebelum mulai integrasi | **D1** — lab di SIMRS atau LIS | Modul lab tetap di data contoh |
+| Tidak mendesak | **D5** — sumber data jasa medis | Modul Jasa Medis tetap di data contoh |
 
 Terima kasih. Kalau lebih mudah dijawab langsung di dokumen ini, silakan —
 kotak centangnya bisa diisi tanpa perlu menulis panjang.

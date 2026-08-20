@@ -18,6 +18,7 @@ import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
 import { TextInput } from '../components/TextInput';
 import { ApiError } from '../api/client';
+import { toDateParam } from '../utils/tanggal';
 import {
   createCatatanKalender,
   deleteCatatanKalender,
@@ -55,15 +56,6 @@ function isSameDay(a: Date, b: Date) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
-// Query param, bukan tampilan — tanggal kalender LOKAL device (sama seperti
-// toDateParam di HasilLabListScreen), bukan toISOString() yang bisa geser
-// ke hari sebelum/sesudahnya kalau device di timezone +.
-function toDateParam(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
 
 function buildMonthGrid(monthCursor: Date) {
   const first = startOfMonth(monthCursor);

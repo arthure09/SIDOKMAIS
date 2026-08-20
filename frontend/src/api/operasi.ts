@@ -3,6 +3,9 @@ import type { OperasiDetail, OperasiListResponse, OperasiStatus } from './types'
 
 type ListParams = {
   status?: OperasiStatus;
+  /** 'YYYY-MM-DD' tanggal kalender WIB, inklusif — pakai toDateParam(). */
+  dari?: string;
+  sampai?: string;
   page?: number;
   limit?: number;
 };
@@ -10,6 +13,8 @@ type ListParams = {
 export function fetchOperasiList(token: string, params: ListParams) {
   const query = new URLSearchParams();
   if (params.status) query.set('status', params.status);
+  if (params.dari) query.set('dari', params.dari);
+  if (params.sampai) query.set('sampai', params.sampai);
   if (params.page) query.set('page', String(params.page));
   if (params.limit) query.set('limit', String(params.limit));
 

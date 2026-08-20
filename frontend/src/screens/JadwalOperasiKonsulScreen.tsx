@@ -12,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, spacing } from '../theme/colors';
@@ -19,17 +20,22 @@ import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
 import { TextInput } from '../components/TextInput';
 import { ScrollToTopButton } from '../components/ScrollToTopButton';
+import { FilterTanggal } from '../components/FilterTanggal';
 import { ApiError } from '../api/client';
 import { fetchOperasiList } from '../api/operasi';
 import { fetchKonsultasiList } from '../api/konsultasi';
+import { fetchKunjunganList } from '../api/kunjungan';
 import { useAuthStore } from '../store/authStore';
 import type {
   KonsultasiListItem,
+  KunjunganListItem,
   OperasiListItem,
   OperasiStatus,
   StatusKonsultasi,
+  StatusKunjungan,
 } from '../api/types';
 import { labelJenisKunjungan } from '../utils/jenisKunjungan';
+import { toDateParam } from '../utils/tanggal';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useScrollToTopButton } from '../hooks/useScrollToTopButton';
@@ -39,16 +45,13 @@ import type { OperasiStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<OperasiStackParamList, 'JadwalOperasiKonsul'>;
 
-function formatHariIni() {
-  return new Date().toLocaleDateString('id-ID', {
-    day: 'numeric',
-    month: 'long',
-    year: 'numeric',
-  });
-}
-
 function formatJam(value: string) {
   return new Date(value).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+}
+
+/** Apakah `iso` jatuh pada tanggal kalender `hariIni` ('YYYY-MM-DD')? */
+function padaHariIni(iso: string, hariIni: string) {
+  return toDateParam(new Date(iso)) === hariIni;
 }
 
 function formatTanggalSingkat(value: string) {
@@ -108,15 +111,36 @@ const KONSUL_STATUS_META: Record<
   },
 };
 
-// Dua tab, dua kosakata status yang tidak beririsan: Operasi punya siklus
-// jadwal (terjadwal/berlangsung/batal), Konsultasi punya dua state surat
-// (menunggu jawaban/sudah dijawab). Satu daftar filter untuk keduanya akan
-// menawarkan "Batal" pada konsul, yang tidak pernah ada.
-type StatusFilter = 'ALL' | 'SCHEDULED' | 'COMPLETED' | 'CANCELLED' | StatusKonsultasi;
+// Kunjungan poliklinik memakai kosakata status yang sama dengan Operasi, hanya
+// "berlangsung"-nya bernama ONGOING, bukan IN_PROGRESS.
+const KUNJUNGAN_STATUS_META: Record<
+  StatusKunjungan,
+  { label: string; icon: string; bg: string; fg: string }
+> = {
+  ONGOING: OPERASI_STATUS_META.IN_PROGRESS,
+  SCHEDULED: OPERASI_STATUS_META.SCHEDULED,
+  COMPLETED: OPERASI_STATUS_META.COMPLETED,
+  CANCELLED: OPERASI_STATUS_META.CANCELLED,
+};
+
+// Tiga tab, tiga kosakata status yang tidak saling beririsan: Poliklinik &
+// Operasi punya siklus jadwal (terjadwal/berlangsung/selesai/batal), Surat
+// Konsul cuma punya dua state surat (menunggu jawaban/sudah dijawab). Satu
+// daftar filter untuk semuanya akan menawarkan "Batal" pada surat konsul,
+// yang tidak pernah ada.
+type StatusFilter = 'ALL' | OperasiStatus | StatusKunjungan | StatusKonsultasi;
 
 const OPERASI_STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: 'ALL', label: 'Semua' },
   { value: 'SCHEDULED', label: 'Terjadwal' },
+  { value: 'COMPLETED', label: 'Selesai' },
+  { value: 'CANCELLED', label: 'Batal' },
+];
+
+const POLI_STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
+  { value: 'ALL', label: 'Semua' },
+  { value: 'SCHEDULED', label: 'Terjadwal' },
+  { value: 'ONGOING', label: 'Berlangsung' },
   { value: 'COMPLETED', label: 'Selesai' },
   { value: 'CANCELLED', label: 'Batal' },
 ];
@@ -126,6 +150,32 @@ const KONSUL_STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
   { value: 'MENUNGGU_JAWABAN', label: 'Menunggu Jawaban' },
   { value: 'SUDAH_DIJAWAB', label: 'Sudah Dijawab' },
 ];
+
+// Urutan di sini = urutan tombol di toggle = posisi indikatornya. "Poliklinik"
+// duluan karena itu yang paling sering ditanya dokter ("hari ini saya ada
+// apa"). Label sengaja tidak memakai kata "Konsul" sendirian: di repo ini kata
+// itu pernah berarti dua hal berbeda — Kunjungan poliklinik (lihat komentar
+// "Modul Konsul" di backend/src/routes/kunjungan.routes.js) DAN surat konsul
+// antar-dokter (model Konsultasi, masuk 18 Ags). Tab ini yang memisahkan
+// keduanya, jadi namanya harus eksplisit.
+const TABS = [
+  { value: 'POLI', label: 'Poliklinik' },
+  { value: 'OPERASI', label: 'Operasi' },
+  { value: 'KONSUL', label: 'Surat Konsul' },
+] as const;
+
+type TabValue = (typeof TABS)[number]['value'];
+
+// Cakupan bawaan tiap tab, ditulis sependek mungkin karena tempatnya di dalam
+// chip filter tanggal — bukan lagi baris keterangan tersendiri. Sebelumnya ini
+// kalimat panjang di barisnya sendiri, tepat di sebelah chip yang mengatur hal
+// yang sama persis: dua elemen, satu pekerjaan. Yang menjelaskan dilebur ke
+// yang mengatur.
+function labelCakupan(tab: TabValue) {
+  if (tab === 'POLI') return 'Hari ini';
+  if (tab === 'OPERASI') return 'Belum selesai';
+  return 'Belum dijawab';
+}
 
 const TOGGLE_INSET = ms(4);
 
@@ -139,10 +189,40 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   // scroll ke bawah masih lanjut. Toggle Konsultasi/Operasi sengaja tidak ikut —
   // itu penanda posisi, bukan kontrol yang bisa hilang tanpa bikin bingung.
   const { onScroll: onHeaderScroll, top: searchRow, bottom: filterRow } = useCollapseOnScroll();
+  const poliScrollRef = useRef<ScrollView>(null);
   const konsulScrollRef = useRef<ScrollView>(null);
   const operasiScrollRef = useRef<ScrollView>(null);
   const token = useAuthStore((s) => s.token);
-  const [tab, setTab] = useState<'OPERASI' | 'KONSUL'>('OPERASI');
+  const [tab, setTab] = useState<TabValue>('POLI');
+
+  // "Hari ini" disimpan sebagai state, bukan dihitung ulang tiap render.
+  // Alasannya: kalau app ditinggal terbuka melewati tengah malam, `new Date()`
+  // di dalam render memang berganti hari, tapi datanya TIDAK ikut dimuat ulang
+  // — jadi labelnya bilang "21 Agustus" sementara isinya masih jadwal tanggal
+  // 20. Dengan satu state, label dan data selalu menunjuk tanggal yang sama,
+  // dan pergantian hari cuma perlu diperiksa di satu tempat.
+  const [hariIni, setHariIni] = useState(() => toDateParam(new Date()));
+
+  // Rentang tanggal pilihan dokter. Kalau diisi, dia MENGGANTI aturan bawaan
+  // ("belum selesai + hari ini") dan layar menampilkan persis isi rentang itu —
+  // dokter sedang menengok arsip, bukan melihat pekerjaan hari ini, jadi
+  // memaksakan aturan bawaan di atasnya cuma bikin hasilnya sulit ditebak.
+  const [dariFilter, setDariFilter] = useState<Date | null>(null);
+  const [sampaiFilter, setSampaiFilter] = useState<Date | null>(null);
+  const rentangAktif = dariFilter !== null || sampaiFilter !== null;
+  const paramRentang = {
+    dari: dariFilter ? toDateParam(dariFilter) : undefined,
+    sampai: sampaiFilter ? toDateParam(sampaiFilter) : undefined,
+  };
+
+  // Diperiksa tiap layar ini kembali dibuka: itu momen paling wajar tanggalnya
+  // sudah berganti (app ditutup semalam, dibuka lagi pagi harinya).
+  useFocusEffect(
+    useCallback(() => {
+      const sekarang = toDateParam(new Date());
+      setHariIni((prev) => (prev === sekarang ? prev : sekarang));
+    }, []),
+  );
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
   const [search, setSearch] = useState('');
 
@@ -163,18 +243,21 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   );
 
   function scrollToTop() {
-    const ref = tab === 'KONSUL' ? konsulScrollRef : operasiScrollRef;
+    const ref =
+      tab === 'KONSUL' ? konsulScrollRef : tab === 'POLI' ? poliScrollRef : operasiScrollRef;
     ref.current?.scrollTo({ y: 0, animated: true });
   }
 
   const [toggleWidth, setToggleWidth] = useState(0);
   const toggleIndicatorX = useRef(new Animated.Value(0)).current;
-  const toggleItemWidth = Math.max(toggleWidth / 2 - TOGGLE_INSET, 0);
+  // Lebar dalam dikurangi padding kiri+kanan toggle, lalu dibagi jumlah tab —
+  // ikut TABS.length, tidak dipatok angka, supaya benar waktu tabnya jadi 3.
+  const toggleItemWidth = Math.max((toggleWidth - TOGGLE_INSET * 2) / TABS.length, 0);
 
   useEffect(() => {
     if (!toggleItemWidth) return;
     Animated.spring(toggleIndicatorX, {
-      toValue: tab === 'OPERASI' ? toggleItemWidth : 0,
+      toValue: TABS.findIndex((t) => t.value === tab) * toggleItemWidth,
       useNativeDriver: true,
       friction: 8,
       tension: 60,
@@ -190,7 +273,12 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   const [konsultasiItems, setKonsultasiItems] = useState<KonsultasiListItem[]>([]);
   const [konsultasiLoading, setKonsultasiLoading] = useState(true);
   const [konsultasiError, setKonsultasiError] = useState<string | null>(null);
-  const konsultasiLoaded = useRef(false);
+
+  const [poliItems, setPoliItems] = useState<KunjunganListItem[]>([]);
+  const [poliLoading, setPoliLoading] = useState(true);
+  const [poliError, setPoliError] = useState<string | null>(null);
+
+  const loadedKeys = useRef<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
 
   const loadOperasi = useCallback(async (opts?: { silent?: boolean }) => {
@@ -198,50 +286,79 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
     if (!opts?.silent) setOperasiLoading(true);
     setOperasiError(null);
     try {
-      const result = await fetchOperasiList(token, { page: 1, limit: 50 });
+      const result = await fetchOperasiList(token, { page: 1, limit: 50, ...paramRentang });
       setOperasiItems(result.data);
     } catch (err) {
       setOperasiError(err instanceof ApiError ? err.message : 'Gagal memuat jadwal operasi');
     } finally {
       if (!opts?.silent) setOperasiLoading(false);
     }
-  }, [token]);
+  }, [token, paramRentang.dari, paramRentang.sampai]);
 
   const loadKonsultasi = useCallback(async (opts?: { silent?: boolean }) => {
     if (!token) return;
     if (!opts?.silent) setKonsultasiLoading(true);
     setKonsultasiError(null);
     try {
-      const result = await fetchKonsultasiList(token, { page: 1, limit: 50 });
+      const result = await fetchKonsultasiList(token, { page: 1, limit: 50, ...paramRentang });
       setKonsultasiItems(result.data);
     } catch (err) {
       setKonsultasiError(err instanceof ApiError ? err.message : 'Gagal memuat daftar konsultasi');
     } finally {
       if (!opts?.silent) setKonsultasiLoading(false);
     }
-  }, [token]);
+  }, [token, paramRentang.dari, paramRentang.sampai]);
 
-  useEffect(() => {
-    loadOperasi();
-  }, [loadOperasi]);
-
-  useEffect(() => {
-    if (tab === 'KONSUL' && !konsultasiLoaded.current) {
-      konsultasiLoaded.current = true;
-      loadKonsultasi();
+  // Poliklinik = kunjungan HARI INI saja (dari == sampai). Tab lain sengaja
+  // tidak dibatasi tanggal: operasi & surat konsul dilihat sebagai daftar
+  // berjalan, sedangkan pertanyaan yang dijawab tab ini spesifik "hari ini
+  // saya ada pasien apa".
+  const loadPoli = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!token) return;
+    if (!opts?.silent) setPoliLoading(true);
+    setPoliError(null);
+    try {
+      const result = await fetchKunjunganList(token, {
+        dari: paramRentang.dari ?? hariIni,
+        sampai: paramRentang.sampai ?? hariIni,
+        page: 1,
+        limit: 50,
+      });
+      setPoliItems(result.data);
+    } catch (err) {
+      setPoliError(err instanceof ApiError ? err.message : 'Gagal memuat jadwal poliklinik');
+    } finally {
+      if (!opts?.silent) setPoliLoading(false);
     }
-  }, [tab, loadKonsultasi]);
+  }, [token, hariIni, paramRentang.dari, paramRentang.sampai]);
+
+  const loaders: Record<TabValue, (opts?: { silent?: boolean }) => Promise<void>> = {
+    POLI: loadPoli,
+    OPERASI: loadOperasi,
+    KONSUL: loadKonsultasi,
+  };
+  const loadersRef = useRef(loaders);
+  loadersRef.current = loaders;
+
+  // Satu efek untuk tiga tab: yang aktif dimuat sekali, sisanya baru waktu
+  // dibuka. Sebelumnya operasi dimuat eager dan konsultasi lazy lewat dua efek
+  // terpisah — dengan tab ketiga, pola itu jadi tiga cabang yang beda-beda.
+  //
+  // Kunci muatnya ikut menyertakan tanggal untuk tab POLI. Jadi waktu harinya
+  // berganti, kuncinya berubah dan jadwal hari ini dimuat ulang dengan
+  // sendirinya — tanpa perlu efek kedua khusus pergantian hari.
+  useEffect(() => {
+    const kunci = `${tab}:${hariIni}:${paramRentang.dari ?? ''}~${paramRentang.sampai ?? ''}`;
+    if (loadedKeys.current.has(kunci)) return;
+    loadedKeys.current.add(kunci);
+    loadersRef.current[tab]();
+  }, [tab, hariIni, paramRentang.dari, paramRentang.sampai]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    if (tab === 'KONSUL') {
-      konsultasiLoaded.current = true;
-      await loadKonsultasi({ silent: true });
-    } else {
-      await loadOperasi({ silent: true });
-    }
+    await loadersRef.current[tab]({ silent: true });
     setRefreshing(false);
-  }, [tab, loadKonsultasi, loadOperasi]);
+  }, [tab]);
 
   function handleOperasiPress(item: OperasiListItem) {
     if (item.status === 'CANCELLED') return;
@@ -256,8 +373,34 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
 
   const searchTerm = search.trim().toLowerCase();
 
+  // ATURAN CAKUPAN dua tab ini (keputusan Arthuro, 20 Ags 2026):
+  // apa pun yang BELUM SELESAI selalu ikut tampil, tanggal berapa pun.
+  //
+  // Surat yang belum dijawab dan operasi yang belum berjalan justru itu yang
+  // perlu ditindaklanjuti — menyembunyikannya hanya karena tanggalnya bukan
+  // hari ini adalah cara paling cepat membuat pekerjaan terlewat. Operasi
+  // minggu depan juga tetap tampil: dokter bedah perlu bersiap dari sekarang.
+  //
+  // Yang dibatasi ke hari ini cuma yang SUDAH kelar (selesai/batal/dijawab) —
+  // itu riwayat, dan tanpa batas tanggal daftar ini pelan-pelan berubah jadi
+  // arsip yang harus di-scroll melewati pekerjaan hari ini.
+  const operasiRelevan = operasiItems.filter(
+    (item) =>
+      rentangAktif ||
+      item.status === 'SCHEDULED' ||
+      item.status === 'IN_PROGRESS' ||
+      padaHariIni(item.tanggalOperasi, hariIni),
+  );
+
+  const konsultasiRelevan = konsultasiItems.filter(
+    (item) =>
+      rentangAktif ||
+      item.status === 'MENUNGGU_JAWABAN' ||
+      padaHariIni(item.tanggalPermintaan, hariIni),
+  );
+
   const filteredOperasiItems = sortByStatusThenNearestDate(
-    (statusFilter === 'ALL' ? operasiItems : operasiItems.filter((item) => item.status === statusFilter)).filter(
+    (statusFilter === 'ALL' ? operasiRelevan : operasiRelevan.filter((item) => item.status === statusFilter)).filter(
       (item) =>
         !searchTerm ||
         item.kunjungan.pasien.nama.toLowerCase().includes(searchTerm) ||
@@ -271,8 +414,8 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   // mengurutkan menunggu-jawaban dulu, lalu permintaan terbaru.
   const filteredKonsultasiItems = (
     statusFilter === 'ALL'
-      ? konsultasiItems
-      : konsultasiItems.filter((item) => item.status === statusFilter)
+      ? konsultasiRelevan
+      : konsultasiRelevan.filter((item) => item.status === statusFilter)
   ).filter(
     (item) =>
       !searchTerm ||
@@ -280,7 +423,26 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
       item.pasien.norm.toLowerCase().includes(searchTerm),
   );
 
-  const statusFilters = tab === 'KONSUL' ? KONSUL_STATUS_FILTERS : OPERASI_STATUS_FILTERS;
+  const filteredPoliItems = sortByStatusThenNearestDate(
+    (statusFilter === 'ALL'
+      ? poliItems
+      : poliItems.filter((item) => item.statusKunjungan === statusFilter)
+    ).filter(
+      (item) =>
+        !searchTerm ||
+        item.pasien.nama.toLowerCase().includes(searchTerm) ||
+        item.pasien.norm.toLowerCase().includes(searchTerm),
+    ),
+    (item) => item.statusKunjungan,
+    (item) => item.tanggalMasuk,
+  );
+
+  const statusFilters =
+    tab === 'KONSUL'
+      ? KONSUL_STATUS_FILTERS
+      : tab === 'POLI'
+        ? POLI_STATUS_FILTERS
+        : OPERASI_STATUS_FILTERS;
 
   return (
     <View style={styles.container}>
@@ -299,10 +461,6 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
         ]}
       >
         <View style={styles.toggleGroup}>
-          <View style={styles.dateFilter}>
-            <MaterialIcons name="calendar-month" size={14} color={colors.onSurfaceVariant} />
-            <Text style={styles.dateFilterText}>Hari Ini, {formatHariIni()}</Text>
-          </View>
           <View style={styles.toggle} onLayout={onToggleLayout}>
             {toggleItemWidth > 0 && (
               <Animated.View
@@ -312,26 +470,23 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
                 ]}
               />
             )}
-            <Pressable onPress={() => setTab('KONSUL')} style={styles.toggleButton}>
-              <Text style={[styles.toggleText, tab === 'KONSUL' && styles.toggleTextActive]}>
-                Konsultasi
-              </Text>
-            </Pressable>
-            <Pressable onPress={() => setTab('OPERASI')} style={styles.toggleButton}>
-              <Text style={[styles.toggleText, tab === 'OPERASI' && styles.toggleTextActive]}>
-                Operasi
-              </Text>
-            </Pressable>
+            {TABS.map((t) => (
+              <Pressable key={t.value} onPress={() => setTab(t.value)} style={styles.toggleButton}>
+                <Text style={[styles.toggleText, tab === t.value && styles.toggleTextActive]}>
+                  {t.label}
+                </Text>
+              </Pressable>
+            ))}
           </View>
         </View>
         <Animated.View style={searchRow.style} onLayout={searchRow.onLayout}>
-          <Animated.View style={[styles.rowSlot, searchRow.innerStyle]}>
+          <Animated.View style={[styles.rowSlot, styles.cariRow, searchRow.innerStyle]}>
             <View style={styles.searchWrapper}>
               <MaterialIcons name="search" size={20} color={colors.primary} />
               <TextInput
                 value={search}
                 onChangeText={setSearch}
-                placeholder="Cari Nama atau No. RM..."
+                placeholder="Cari nama / No. RM"
                 placeholderTextColor={colors.outline}
                 style={styles.searchInput}
               />
@@ -341,6 +496,16 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
                 </Pressable>
               )}
             </View>
+            <FilterTanggal
+              judul="Filter Rentang Tanggal"
+              labelKosong={labelCakupan(tab)}
+              dari={dariFilter}
+              sampai={sampaiFilter}
+              onChange={(dari, sampai) => {
+                setDariFilter(dari);
+                setSampaiFilter(sampai);
+              }}
+            />
           </Animated.View>
         </Animated.View>
         {/* Pembungkus yang menanggung marginHorizontal negatif (bleed chip ke tepi
@@ -378,7 +543,85 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
       </Animated.View>
 
       <View style={styles.sheet}>
-      {tab === 'KONSUL' ? (
+      {tab === 'POLI' ? (
+        poliLoading ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={colors.primary} />
+          </View>
+        ) : poliError ? (
+          <View style={styles.center}>
+            <Text style={styles.errorText}>{poliError}</Text>
+          </View>
+        ) : filteredPoliItems.length === 0 ? (
+          <View style={styles.center}>
+            <MaterialIcons name="event-available" size={40} color={colors.outlineVariant} />
+            <Text style={styles.comingSoonTitle}>
+              {poliItems.length === 0
+                ? 'Tidak ada jadwal pasien hari ini'
+                : 'Tidak ada jadwal dengan status ini'}
+            </Text>
+          </View>
+        ) : (
+          <ScrollView
+            ref={poliScrollRef}
+            contentContainerStyle={[styles.listContent, { paddingBottom: tabBarClearance }]}
+            showsVerticalScrollIndicator={false}
+            onScroll={handleScroll}
+            scrollEventThrottle={scrollEventThrottle}
+            refreshControl={
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
+            }
+          >
+            {/* Kartu sengaja tidak bisa ditap: belum ada layar detail kunjungan
+                (OperasiStackParamList cuma punya DetailJadwalOperasi &
+                DetailKonsul). Bikin satu lagi di luar cakupan permintaan ini. */}
+            {filteredPoliItems.map((item) => {
+              const meta = KUNJUNGAN_STATUS_META[item.statusKunjungan];
+              const jenisLabel = labelJenisKunjungan(item.jenisKunjungan);
+              return (
+                <View key={item.id} style={styles.card}>
+                  <View style={styles.cardTop}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.cardTime}>{formatJam(item.tanggalMasuk)}</Text>
+                      <Text style={styles.cardPatient}>{item.pasien.nama}</Text>
+                      <Text style={styles.cardTindakan}>
+                        {item.diagnosa ?? 'Belum ada diagnosa'}
+                      </Text>
+                    </View>
+                    <View style={styles.cardPills}>
+                      <View style={[styles.statusPill, { backgroundColor: meta.bg }]}>
+                        <MaterialIcons name={meta.icon as never} size={14} color={meta.fg} />
+                        <Text style={[styles.statusPillText, { color: meta.fg }]}>{meta.label}</Text>
+                      </View>
+                      {item.isPasienBaru && (
+                        <View style={styles.citoPill}>
+                          <MaterialIcons name="fiber-new" size={14} color={colors.onErrorContainer} />
+                          <Text style={styles.citoPillText}>BARU</Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+                  <View style={styles.cardDivider} />
+                  <View style={styles.cardBottom}>
+                    <View style={styles.cardBottomItem}>
+                      <MaterialIcons name="meeting-room" size={18} color={colors.primary} />
+                      <Text style={styles.cardBottomText} numberOfLines={1} ellipsizeMode="tail">
+                        {jenisLabel ? `${item.ruangan.nama} — ${jenisLabel}` : item.ruangan.nama}
+                      </Text>
+                    </View>
+                    <View style={styles.cardBottomItem}>
+                      <MaterialIcons name="person" size={18} color={colors.primary} />
+                      <Text style={styles.cardBottomText} numberOfLines={1} ellipsizeMode="tail">
+                        {item.dokter.nama}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+        )
+      ) : tab === 'KONSUL' ? (
         konsultasiLoading ? (
           <View style={styles.center}>
             <ActivityIndicator color={colors.primary} />
@@ -391,9 +634,9 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
           <View style={styles.center}>
             <MaterialIcons name="chat-bubble" size={40} color={colors.outlineVariant} />
             <Text style={styles.comingSoonTitle}>
-              {konsultasiItems.length === 0
-                ? 'Belum ada konsultasi yang ditujukan kepada Anda'
-                : 'Tidak ada konsultasi dengan status ini'}
+              {konsultasiRelevan.length === 0
+                ? 'Tidak ada surat konsul yang menunggu jawaban Anda'
+                : 'Tidak ada surat konsul dengan status ini'}
             </Text>
           </View>
         ) : (
@@ -474,7 +717,9 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
       ) : filteredOperasiItems.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.comingSoonTitle}>
-            {operasiItems.length === 0 ? 'Belum ada jadwal operasi' : 'Tidak ada jadwal dengan status ini'}
+            {operasiRelevan.length === 0
+              ? 'Tidak ada operasi yang belum selesai'
+              : 'Tidak ada jadwal dengan status ini'}
           </Text>
         </View>
       ) : (
@@ -574,13 +819,7 @@ const styles = StyleSheet.create({
   },
   toggleText: { fontSize: ms(12), fontWeight: '800', color: colors.onSurfaceVariant },
   toggleTextActive: { color: colors.onPrimary },
-  dateFilter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: ms(6),
-    paddingHorizontal: ms(4),
-  },
-  dateFilterText: { fontSize: ms(12), fontWeight: '600', color: colors.onSurfaceVariant },
+  cariRow: { flexDirection: 'row', alignItems: 'center', gap: ms(8) },
 
   searchWrapper: {
     flexDirection: 'row',
@@ -590,7 +829,7 @@ const styles = StyleSheet.create({
     borderRadius: radius.full,
     paddingHorizontal: ms(16),
     paddingVertical: ms(7),
-    width: '100%',
+    flex: 1,
   },
   searchInput: { flex: 1, fontSize: ms(14), color: colors.onSurface, paddingVertical: 0 },
 
