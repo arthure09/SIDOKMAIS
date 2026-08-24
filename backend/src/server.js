@@ -10,11 +10,37 @@ const kunjunganRoutes = require("./routes/kunjungan.routes");
 const konsultasiRoutes = require("./routes/konsultasi.routes");
 const notifikasiRoutes = require("./routes/notifikasi.routes");
 const labRoutes = require("./routes/lab.routes");
+const radiologiRoutes = require("./routes/radiologi.routes");
 const dashboardRoutes = require("./routes/dashboard.routes");
 const kalenderRoutes = require("./routes/kalender.routes");
 const pendapatanRoutes = require("./routes/pendapatan.routes");
 const authenticate = require("./middleware/auth.middleware");
 const authorize = require("./middleware/rbac.middleware");
+
+// Pemilihan sumber data per modul. SUMBER_DATA=simrs mengalihkan Pasien,
+// Operasi, Konsultasi, Kunjungan, Dashboard, JasaMedis, Lab, dan Radiologi ke replika
+// MySQL SIMRS; modul lain tetap ke PostgreSQL lokal karena SIMRS memang tidak
+// menyimpannya (Notifikasi, AuditLog, Pengguna, Kalender).
+//
+// Default sengaja `dummy`: menyalakan mode SIMRS berarti aplikasi ini mulai
+// memproses data pasien asli, dan itu keputusan sadar — bukan sesuatu yang
+// boleh terjadi karena env kebetulan kosong.
+const SUMBER_SIMRS = process.env.SUMBER_DATA === "simrs";
+
+const pasien = SUMBER_SIMRS ? require("./routes/simrs/pasien.routes") : pasienRoutes;
+const operasi = SUMBER_SIMRS ? require("./routes/simrs/operasi.routes") : operasiRoutes;
+const konsultasi = SUMBER_SIMRS ? require("./routes/simrs/konsultasi.routes") : konsultasiRoutes;
+const kunjungan = SUMBER_SIMRS ? require("./routes/simrs/kunjungan.routes") : kunjunganRoutes;
+const dashboard = SUMBER_SIMRS ? require("./routes/simrs/dashboard.routes") : dashboardRoutes;
+const pendapatan = SUMBER_SIMRS ? require("./routes/simrs/pendapatan.routes") : pendapatanRoutes;
+const lab = SUMBER_SIMRS ? require("./routes/simrs/lab.routes") : labRoutes;
+const radiologi = SUMBER_SIMRS ? require("./routes/simrs/radiologi.routes") : radiologiRoutes;
+
+if (SUMBER_SIMRS) {
+  console.warn(
+    "[SIDOKMAIS] SUMBER_DATA=simrs — Pasien/Kunjungan/Operasi/Konsultasi/Dashboard/JasaMedis/Lab/Radiologi membaca DATA PASIEN ASLI dari replika SIMRS (read-only)."
+  );
+}
 
 const app = express();
 
@@ -27,15 +53,16 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
-app.use("/api/pasien", authenticate, authorize("DOKTER", "ADMIN"), pasienRoutes);
-app.use("/api/operasi", authenticate, authorize("DOKTER", "ADMIN"), operasiRoutes);
-app.use("/api/kunjungan", authenticate, authorize("DOKTER", "ADMIN"), kunjunganRoutes);
-app.use("/api/konsultasi", authenticate, authorize("DOKTER", "ADMIN"), konsultasiRoutes);
+app.use("/api/pasien", authenticate, authorize("DOKTER", "ADMIN"), pasien);
+app.use("/api/operasi", authenticate, authorize("DOKTER", "ADMIN"), operasi);
+app.use("/api/kunjungan", authenticate, authorize("DOKTER", "ADMIN"), kunjungan);
+app.use("/api/konsultasi", authenticate, authorize("DOKTER", "ADMIN"), konsultasi);
 app.use("/api/notifikasi", authenticate, authorize("DOKTER", "ADMIN"), notifikasiRoutes);
-app.use("/api/lab", authenticate, authorize("DOKTER", "ADMIN"), labRoutes);
-app.use("/api/dashboard", authenticate, authorize("DOKTER", "ADMIN"), dashboardRoutes);
+app.use("/api/lab", authenticate, authorize("DOKTER", "ADMIN"), lab);
+app.use("/api/radiologi", authenticate, authorize("DOKTER", "ADMIN"), radiologi);
+app.use("/api/dashboard", authenticate, authorize("DOKTER", "ADMIN"), dashboard);
 app.use("/api/kalender", authenticate, authorize("DOKTER", "ADMIN"), kalenderRoutes);
-app.use("/api/pendapatan", authenticate, authorize("DOKTER", "ADMIN"), pendapatanRoutes);
+app.use("/api/pendapatan", authenticate, authorize("DOKTER", "ADMIN"), pendapatan);
 
 // Endpoint uji coba RBAC (bukan endpoint produksi) — echo req.user apa
 // adanya untuk verifikasi visual bahwa authenticate + authorize sudah benar.

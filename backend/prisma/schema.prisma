@@ -120,6 +120,9 @@ model Dokter {
 
   konsultasiDiajukan  Konsultasi[] @relation("KonsultasiPengirim")
   konsultasiDitujukan Konsultasi[] @relation("KonsultasiTujuan")
+
+  radiologiDiminta PemeriksaanRadiologi[] @relation("RadiologiPeminta")
+  radiologiDibaca  PemeriksaanRadiologi[] @relation("RadiologiPembaca")
 }
 
 model Pasien {
@@ -140,6 +143,7 @@ model Pasien {
   assignments    DokterPasienAssignment[]
   kunjungan      Kunjungan[]
   pemeriksaanLab PemeriksaanLab[]
+  radiologi      PemeriksaanRadiologi[]
   konsultasi     Konsultasi[]
   pendapatan     Pendapatan[]
 }
@@ -187,6 +191,7 @@ model Kunjungan {
 
   operasi        Operasi[]
   pemeriksaanLab PemeriksaanLab[]
+  radiologi      PemeriksaanRadiologi[]
   konsultasi     Konsultasi[]
 }
 
@@ -211,6 +216,13 @@ model Notifikasi {
   relatedId   String?
   relatedType String?
   createdAt   DateTime       @default(now())
+  /// Diisi saat dokter menekan "Bersihkan". Barisnya TIDAK dihapus dengan
+  /// sengaja: pembuat pengingat jadwal (utils/pengingatJadwal.js) memakai
+  /// keberadaan baris ber-`relatedId` sebagai tanda "sudah pernah dibuat".
+  /// Kalau dihapus keras, pengingat yang baru saja dibersihkan akan lahir lagi
+  /// pada pembacaan daftar berikutnya (60 detik kemudian) — bersih-bersihnya
+  /// jadi terasa tidak berfungsi.
+  dibersihkanPada DateTime?
 
   dokter Dokter @relation(fields: [dokterId], references: [id], onDelete: Cascade)
 }
@@ -466,4 +478,49 @@ model AuditLog {
   beforeData Json?
   afterData  Json?
   createdAt  DateTime @default(now())
+}
+
+// Hasil radiologi. Berbeda bentuk dari PemeriksaanLab dengan sengaja: hasil lab
+// terstruktur per parameter (angka + rentang rujukan), hasil radiologi berupa
+// NARASI yang ditulis dokter radiolog. Karena itu tidak ada tabel item di sini
+// — satu pemeriksaan = satu laporan.
+//
+// Bentuknya mengikuti apa yang benar-benar ada di SIMRS (layanan.hasil_rad,
+// diverifikasi 24 Ags 2026), termasuk yang TIDAK ada:
+//   - Tidak ada kolom status. Di SIMRS, "sudah jadi" dibuktikan oleh adanya
+//     baris hasil, bukan oleh kode status (STATUS_KONFIRMASI cuma terisi 6%).
+//   - `kesan` nullable dan memang sering kosong (15% terisi di SIMRS) — dokter
+//     radiolog biasanya menulis kesimpulan di dalam `hasil`.
+//   - `dokterPembaca` nullable (7% terisi di SIMRS).
+// Kolom USUL dari SIMRS tidak diikutkan: nol dari 13.687 baris terisi.
+model PemeriksaanRadiologi {
+  id                String    @id @default(uuid())
+  pasienId          String
+  kunjunganId       String?
+  dokterPemintaId   String?
+  dokterPembacaId   String?
+  /** Jenis alat: "Rontgen", "CT Scan", "USG", "MRI", "PET Scan". */
+  modalitas         String
+  namaPemeriksaan   String
+  /** Unit radiologi yang mengerjakan. Nullable — di SIMRS hanya ada lewat order. */
+  unit              String?
+  cito              Boolean   @default(false)
+  tanggalPermintaan DateTime
+  tanggalHasil      DateTime?
+  /** Keterangan klinis dari dokter pengirim. */
+  klinis            String?
+  /** Narasi temuan dari dokter radiolog. Selalu ada — ini isi laporannya. */
+  hasil             String
+  kesan             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  pasien        Pasien     @relation(fields: [pasienId], references: [id], onDelete: Restrict)
+  kunjungan     Kunjungan? @relation(fields: [kunjunganId], references: [id], onDelete: SetNull)
+  dokterPeminta Dokter?    @relation("RadiologiPeminta", fields: [dokterPemintaId], references: [id], onDelete: SetNull)
+  dokterPembaca Dokter?    @relation("RadiologiPembaca", fields: [dokterPembacaId], references: [id], onDelete: SetNull)
+
+  @@index([pasienId])
+  @@index([kunjunganId])
+  @@index([pasienId, tanggalPermintaan])
 }

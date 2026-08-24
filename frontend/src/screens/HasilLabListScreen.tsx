@@ -1,15 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
-import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '../api/client';
 import { toDateParam } from '../utils/tanggal';
+import { kelompokkanPerTanggal } from '../utils/kelompokHasilLab';
 import { fetchHasilLabList } from '../api/lab';
 import { useAuthStore } from '../store/authStore';
 import { colors, radius, shadows, spacing } from '../theme/colors';
-import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
 import { FilterTanggal } from '../components/FilterTanggal';
 import type { HasilLabRingkasan } from '../api/types';
@@ -19,10 +18,29 @@ import type { PasienStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<PasienStackParamList, 'HasilLabList'>;
 
-function formatTanggal(value: string | null) {
-  if (!value) return '-';
-  return new Date(value).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+// Kop tanggal dibaca dua kali: sekilas lewat blok tanggal di kiri (angka + bulan
+// pendek), lalu lengkap di judul kartu. Hari disertakan karena dokter mengingat
+// pengambilan sampel sebagai "Senin lalu", bukan sebagai angka tanggal.
+function formatHariTanggal(value: string) {
+  return new Date(value).toLocaleDateString('id-ID', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 }
+
+function formatBlokTanggal(value: string) {
+  const d = new Date(value);
+  return {
+    hari: String(d.getDate()).padStart(2, '0'),
+    bulan: d.toLocaleDateString('id-ID', { month: 'short' }).replace('.', ''),
+  };
+}
+
+// Maksimal 3 chip pemeriksaan; sisanya diringkas. Tiga nama sudah cukup untuk
+// mengenali jenis pemeriksaannya, lebih dari itu kartunya jadi dinding teks.
+const CHIP_TAMPIL = 3;
 
 
 export function HasilLabListScreen({ route, navigation }: Props) {
@@ -78,12 +96,17 @@ export function HasilLabListScreen({ route, navigation }: Props) {
       <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
         <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
       </Pressable>
-      <Text style={styles.headerTitle} numberOfLines={1}>
-        {nama}
-      </Text>
+      <View style={styles.headerTitleBlock}>
+        <Text style={styles.headerEyebrow}>Hasil laboratorium</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {nama}
+        </Text>
+      </View>
       <View style={styles.backButton} />
     </View>
   );
+
+  const grup = useMemo(() => kelompokkanPerTanggal(items), [items]);
 
   const filterAktif = dariTanggal !== null || sampaiTanggal !== null;
 
@@ -129,49 +152,94 @@ export function HasilLabListScreen({ route, navigation }: Props) {
     <View style={styles.container}>
       {header}
       {filterBar}
-      {items.length === 0 ? (
+      {grup.length === 0 ? (
         <View style={styles.center}>
+          <View style={styles.emptyIcon}>
+            <MaterialIcons name="science" size={28} color={colors.primary} />
+          </View>
+          <Text style={styles.emptyTitle}>
+            {filterAktif ? 'Tidak ada hasil di rentang ini' : 'Belum ada hasil lab'}
+          </Text>
           <Text style={styles.emptyText}>
             {filterAktif
-              ? 'Tidak ada hasil lab pada rentang tanggal ini.'
-              : 'Belum ada hasil lab untuk pasien ini.'}
+              ? 'Lebarkan rentang tanggalnya untuk melihat pengambilan sebelumnya.'
+              : `Hasil pemeriksaan ${nama} akan muncul di sini begitu laboratorium mengeluarkannya.`}
           </Text>
         </View>
       ) : (
         <FlatList
-          data={items}
-          keyExtractor={(item) => item.id}
+          data={grup}
+          keyExtractor={(item) => item.key}
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + spacing.gutter }]}
           showsVerticalScrollIndicator={false}
           onScroll={onScroll}
           scrollEventThrottle={scrollEventThrottle}
+          ListHeaderComponent={
+            <Text style={styles.listIntro}>
+              {grup.length} tanggal pengambilan · {grup.reduce((n, g) => n + g.jumlahParameter, 0)} nilai
+            </Text>
+          }
           renderItem={({ item }) => {
-            // Backend GET /api/lab cuma balikin status COMPLETED (lihat lab.routes.js)
-            // — jadi setiap item yang sampai ke sini pasti punya laporan buat dilihat,
-            // tidak perlu lagi status/badge atau kondisi tappable di sini.
-            const tanggal = formatTanggal(item.tanggalHasil ?? item.tanggalPermintaan);
+            const blok = formatBlokTanggal(item.tanggal);
+            const sisaChip = item.pemeriksaan.length - CHIP_TAMPIL;
             return (
+              // SIMRS tidak menyimpan PDF hasil lab — yang ada cuma parameter
+              // terstruktur, dan itu yang ditampilkan HasilLabDetail. Layar
+              // "Lihat PDF" berisi berkas contoh statis sudah dihapus (24 Ags
+              // 2026) begitu aplikasi membaca data pasien asli.
               <Pressable
                 onPress={() =>
-                  navigation.navigate('LihatPdfLab', { namaLaporan: item.namaPemeriksaan, tanggal })
+                  navigation.navigate('HasilLabDetail', {
+                    pemeriksaanLabIds: item.ids,
+                    tanggal: item.tanggal,
+                  })
                 }
-                style={({ pressed }) => [styles.row, pressed && styles.rowPressed]}
+                style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
               >
-                <View style={styles.rowIcon}>
-                  <MaterialIcons name="picture-as-pdf" size={20} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.namaLaporan} numberOfLines={1}>
-                    {item.namaPemeriksaan}
-                  </Text>
-                  <Text style={styles.kategori}>{item.kategori}</Text>
-                </View>
-                <View style={styles.rowRight}>
-                  <Text style={styles.tanggal}>{tanggal}</Text>
-                  <View style={styles.lihatPdfPill}>
-                    <MaterialIcons name="visibility" size={12} color={colors.primary} />
-                    <Text style={styles.lihatPdfText}>Lihat PDF</Text>
+                <View style={styles.cardTop}>
+                  <View style={styles.blokTanggal}>
+                    <Text style={styles.blokHari}>{blok.hari}</Text>
+                    <Text style={styles.blokBulan}>{blok.bulan}</Text>
                   </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.labEyebrow} numberOfLines={1}>
+                      {item.labs.length > 0 ? item.labs.join(' · ') : 'Laboratorium tidak tercatat'}
+                    </Text>
+                    <Text style={styles.judulTanggal} numberOfLines={1}>
+                      {formatHariTanggal(item.tanggal)}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.chipBaris}>
+                  {item.pemeriksaan.slice(0, CHIP_TAMPIL).map((nama) => (
+                    <View key={nama} style={styles.chip}>
+                      <Text style={styles.chipText} numberOfLines={1}>
+                        {nama}
+                      </Text>
+                    </View>
+                  ))}
+                  {sisaChip > 0 && (
+                    <View style={[styles.chip, styles.chipSisa]}>
+                      <Text style={styles.chipText}>+{sisaChip} lagi</Text>
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.cardFooter}>
+                  <Text style={styles.footerHitung}>
+                    {item.ids.length} pemeriksaan · {item.jumlahParameter} nilai
+                  </Text>
+                  {item.jumlahAbnormal > 0 ? (
+                    <View style={styles.abnormalPill}>
+                      <MaterialIcons name="priority-high" size={12} color={colors.onErrorContainer} />
+                      <Text style={styles.abnormalPillText}>
+                        {item.jumlahAbnormal} di luar rujukan
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text style={styles.footerNormal}>Semua dalam rujukan</Text>
+                  )}
                 </View>
               </Pressable>
             );
@@ -184,9 +252,19 @@ export function HasilLabListScreen({ route, navigation }: Props) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 8 },
   errorText: { color: colors.error, textAlign: 'center' },
-  emptyText: { color: colors.onSurfaceVariant, textAlign: 'center' },
+  emptyIcon: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.surfaceSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: colors.onSurface },
+  emptyText: { color: colors.onSurfaceVariant, textAlign: 'center', lineHeight: 20, maxWidth: 280 },
 
   header: {
     flexDirection: 'row',
@@ -198,45 +276,97 @@ const styles = StyleSheet.create({
     borderBottomColor: `${colors.outlineVariant}1A`,
   },
   backButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '600', color: colors.onBackground, textAlign: 'center' },
+  headerTitleBlock: { flex: 1, alignItems: 'center' },
+  headerEyebrow: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: colors.primary,
+  },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: colors.onBackground, textAlign: 'center' },
 
   filterBarWrapper: { paddingHorizontal: spacing.marginMobile, paddingTop: spacing.base },
 
-  listContent: { padding: spacing.marginMobile, gap: spacing.base },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
+  listContent: { padding: spacing.marginMobile, gap: 12 },
+  listIntro: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: colors.onSurfaceVariant,
+    paddingBottom: 4,
+  },
+
+  card: {
     backgroundColor: colors.backgroundWhite,
     borderRadius: radius.sm,
     padding: 16,
+    gap: 12,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.08,
     shadowRadius: 15,
     elevation: 2,
   },
-  rowPressed: { opacity: 0.95, transform: [{ scale: 0.98 }] },
-  rowIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  cardPressed: { opacity: 0.95, transform: [{ scale: 0.98 }] },
+  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  // Blok tanggal: satu-satunya elemen bercetak tebal di kartu, karena tanggal
+  // itulah yang dipakai dokter untuk memilih.
+  blokTanggal: {
+    width: 48,
+    paddingVertical: 8,
+    borderRadius: 12,
     backgroundColor: colors.surfaceSoft,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  namaLaporan: { fontSize: 15, fontWeight: '700', color: colors.onSurface },
-  kategori: { fontSize: 12, color: colors.outline, marginTop: 2 },
-  rowRight: { alignItems: 'flex-end', gap: 4 },
-  tanggal: { fontSize: 12, color: colors.onSurfaceVariant },
-  lihatPdfPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: `${colors.primary}1A`,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+  blokHari: { fontSize: 20, fontWeight: '800', color: colors.primary, lineHeight: 24 },
+  blokBulan: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: colors.onSurfaceVariant,
+  },
+  labEyebrow: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    color: colors.outline,
+    marginBottom: 2,
+  },
+  judulTanggal: { fontSize: 15, fontWeight: '700', color: colors.onSurface },
+
+  chipBaris: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  chip: {
+    maxWidth: '100%',
+    backgroundColor: colors.surfaceContainer,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: radius.full,
   },
-  lihatPdfText: { fontSize: 11, fontWeight: '700', color: colors.primary },
+  chipSisa: { backgroundColor: 'transparent', borderWidth: 1, borderColor: colors.outlineVariant },
+  chipText: { fontSize: 11, fontWeight: '600', color: colors.onSurfaceVariant },
+
+  cardFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: `${colors.outlineVariant}4D`,
+  },
+  footerHitung: { flex: 1, fontSize: 12, fontWeight: '600', color: colors.onSurfaceVariant },
+  footerNormal: { fontSize: 11, fontWeight: '700', color: colors.primary },
+  abnormalPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: colors.errorContainer,
+    paddingLeft: 6,
+    paddingRight: 10,
+    paddingVertical: 4,
+    borderRadius: radius.full,
+  },
+  abnormalPillText: { fontSize: 11, fontWeight: '700', color: colors.onErrorContainer },
 });

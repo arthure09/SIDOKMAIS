@@ -10,11 +10,12 @@ ke sini dengan **pemicu** yang jelas — apa yang harus terjadi supaya item ini
 bisa dilanjutkan. Item yang sudah selesai dipindahkan ke
 `docs/jurnal-pengerjaan.md`, jangan dihapus diam-diam dari sini.
 
-Terakhir diperbarui: **5 Agustus 2026 (Day 23)** — item 9 baru (gap audit log
-trigger notifikasi, ketemu saat verifikasi Hari 23). Item 5 & 6 selesai
-4 Agustus 2026 (Day 21), detail dipindah ke `docs/jurnal-pengerjaan.md`,
-baris di bawah ditinggalkan sesuai aturan file ini sendiri (lihat paragraf
-di atas).
+Terakhir diperbarui: **24 Agustus 2026** — item 10 baru (jadwal poliklinik
+mendatang, ketemu saat uji coba tab Poliklinik dengan data SIMRS asli).
+Sebelumnya 5 Agustus 2026 (Day 23): item 9 (gap audit log trigger notifikasi).
+Item 5 & 6 selesai 4 Agustus 2026 (Day 21), detail dipindah ke
+`docs/jurnal-pengerjaan.md`, baris di bawah ditinggalkan sesuai aturan file ini
+sendiri (lihat paragraf di atas).
 
 ---
 
@@ -31,6 +32,7 @@ di atas).
 | Migrasi backend ke TypeScript | Prioritas fitur; risiko merusak yang sudah jalan | — | Tidak dikerjakan |
 | Indikator mode Admin di UI | Akun demo adalah admin sehingga melihat data semua dokter; berpotensi disalahpahami saat demo | — | Minggu 4 |
 | Audit log trigger notifikasi `PERUBAHAN_JADWAL` | Notifikasi hasil trigger otomatis tidak tercatat ke `AuditLog` — dampak rendah, tapi harfiah melanggar CLAUDE.md #4 | Keputusan Arthuro | — |
+| Jadwal poliklinik mendatang (besok dst) | Butuh sumber data KEDUA dengan makna berbeda (janji temu vs kedatangan) | Konfirmasi tim SIMRS soal tabel janji temu yang berlaku | Tidak dikerjakan (keputusan Arthuro, 24 Ags 2026) |
 
 ---
 
@@ -216,6 +218,50 @@ Detail verifikasi: `docs/jurnal-pengerjaan.md` entri Hari 23,
 
 ---
 
+### 10. Jadwal poliklinik mendatang (besok dan seterusnya)
+**Target: tidak dikerjakan (keputusan Arthuro, 24 Ags 2026) · Menunggu:
+konfirmasi tim SIMRS soal tabel janji temu yang berlaku**
+
+Tab Poliklinik hanya bisa menampilkan hari ini dan ke belakang. Memilih tanggal
+besok lewat chip filter selalu mengembalikan daftar kosong.
+
+**Bukan bug, dan bukan sekadar batasan yang dipasang di aplikasi.** Tab itu
+memang default ke hari ini (`dari = sampai = hari ini`), tapi filternya tidak
+dikunci — dokter bebas memilih tanggal mana pun. Penghalang sebenarnya ada di
+sumber datanya:
+
+    SELECT COUNT(*) FROM pendaftaran.kunjungan WHERE MASUK > NOW()  ->  0
+
+Nol, se-rumah-sakit (diperiksa 24 Ags 2026). `pendaftaran.kunjungan` adalah
+catatan KEDATANGAN — barisnya baru lahir saat pasien check-in di loket. Jadi
+jadwal besok secara prinsip tidak akan pernah ada di sana, berapa lama pun
+ditunggu.
+
+Janji temu mendatang ada di tabel lain, `remun_medis.perjanjian`: 25.832 janji
+ke depan, terjauh Agustus 2027, dan 232 janji untuk besok (25 Ags 2026)
+se-rumah-sakit.
+
+**Kenapa tidak dikerjakan sekarang.** Menampilkannya berarti tab Poliklinik
+punya DUA sumber dengan makna yang berbeda — hari ini & ke belakang dari
+`kunjungan` (sudah terjadi), besok & ke depan dari `perjanjian` (baru rencana).
+Menggabungkannya jadi satu daftar seragam akan membuat dokter membaca rencana
+sebagai kenyataan. Kalau dikerjakan, keduanya harus dibedakan secara visual dan
+itu keputusan desain tersendiri, bukan sekadar tambahan query.
+
+**Yang harus dipastikan lebih dulu:** apakah `remun_medis.perjanjian` memang
+tabel janji temu yang dipakai aplikasi pendaftaran. Namanya berada di skema
+remunerasi (bukan `pendaftaran`), dan ada `remun_medis.perjanjian_lama`
+(2,5 juta baris) di sebelahnya — belum tentu yang dipilih ini yang berlaku.
+Pertanyaan ini masuk daftar untuk tim SIMRS.
+
+Catatan teknis yang jangan hilang: kolom `TANGGAL` di tabel itu bertipe
+datetime, jadi `WHERE TANGGAL = CURDATE() + INTERVAL 1 DAY` hanya menangkap
+baris tepat tengah malam — harus `DATE(TANGGAL) = ...`. Dua hal itu (plus
+catatan `q.js` di bawah) sempat membuat hasil pemeriksaan terlihat saling
+bertentangan.
+
+---
+
 ## Catatan tambahan (bukan keputusan tertunda, tapi jangan hilang)
 
 - **`Math.random()` di `backend/prisma/seed-kunjungan-operasi.js`** (baris 67 dan
@@ -229,5 +275,12 @@ Detail verifikasi: `docs/jurnal-pengerjaan.md` entri Hari 23,
   Berkas-berkas itu read-only dari sisi repo, jadi tidak bisa dikoreksi lewat
   pekerjaan ini — perlu diperbarui manual dari sisi Claude.ai. Selama belum,
   fakta keliru itu akan terus masuk ke konteks prompt berikutnya.
+- **`simrs-exploration/q.js` tanpa `dateStrings`** — kolom DATE/DATETIME
+  dikonversi mysql2 jadi objek Date UTC, sehingga tanggal tercetak mundur satu
+  hari (`2026-08-24` tampil sebagai `2026-08-23`). Hanya memengaruhi skrip
+  eksplorasi, bukan aplikasi (`lib/simrs.js` sudah menyetel `dateStrings: true`
+  justru karena jebakan ini). Selama belum diperbaiki, pakai
+  `DATE_FORMAT(kolom,'%Y-%m-%d')` di setiap query eksplorasi yang menampilkan
+  tanggal.
 - **ERD final di `docs/`** belum ada, dan jumlah entitas sudah berubah (10 → 13).
   Terdaftar sebagai TODO di `README.md`.

@@ -3,6 +3,9 @@ export type StatusKunjungan = 'SCHEDULED' | 'ONGOING' | 'COMPLETED' | 'CANCELLED
 // Diturunkan server-side dari Ruangan.jenis, bukan kolom sendiri. Null kalau
 // pasien belum punya kunjungan (atau ruangannya di luar 3 kategori ini).
 export type JenisKunjungan = 'RAWAT_JALAN' | 'IGD' | 'RAWAT_INAP';
+// Urutan daftar pasien berdasarkan tanggal kunjungan terakhir. Tanpa nilai =
+// urut nama A-Z (bawaan server).
+export type UrutanPasien = 'terbaru' | 'terlama';
 
 export type PasienListItem = {
   id: string;
@@ -15,11 +18,21 @@ export type PasienListItem = {
   tanggalKunjunganBerikutnya: string | null;
 };
 
+// Cakupan layar Jadwal (mode SIMRS). "saya" = kunjungan/operasi yang dokter itu
+// terlibat langsung di dalamnya; "pasien" = semua milik pasien yang pernah dia
+// tangani, termasuk yang ditangani dokter lain.
+export type LingkupJadwal = 'saya' | 'pasien';
+
 export type Pagination = {
   page: number;
   limit: number;
-  total: number;
-  totalPages: number;
+  // Null di mode SIMRS kecuali diminta lewat `?hitungTotal=1`. Menghitung total
+  // di sana berarti COUNT lewat akses DPJP — 1,7 detik, lebih mahal daripada
+  // mengambil datanya sendiri, dan sampai sekarang tidak ada layar yang
+  // membacanya. Kalau nanti butuh nomor halaman, kirim param itu dan tangani
+  // null-nya; jangan asumsikan selalu angka.
+  total: number | null;
+  totalPages: number | null;
 };
 
 export type PasienListResponse = {
@@ -148,6 +161,12 @@ export type KunjunganListItem = {
 export type KunjunganListResponse = {
   data: KunjunganListItem[];
   pagination: Pagination;
+  /**
+   * Terisi ('YYYY-MM-DD') hanya kalau server mundur ke tanggal lain karena
+   * tanggal yang diminta kosong — lihat `bolehMundur`. WAJIB ditampilkan ke
+   * dokter; tanpa itu data lama terbaca sebagai jadwal hari ini.
+   */
+  tanggalData?: string | null;
 };
 
 export type KunjunganDetail = {
@@ -261,7 +280,8 @@ export type HasilLabRingkasan = {
   tanggalPermintaan: string;
   tanggalHasil: string | null;
   jumlahParameter: number;
-  adaFlagAbnormal: boolean;
+  /** Berapa parameter yang flag-nya bukan NORMAL. Di mode SIMRS hanya yang ditandai LIS. */
+  jumlahAbnormal: number;
 };
 
 export type HasilLabListResponse = {
@@ -298,6 +318,45 @@ export type HasilLabDetail = {
   hasilLabItem: HasilLabItemApi[] | null;
 };
 
+export type RadiologiRingkasan = {
+  id: string;
+  /** "CT Scan", "USG", "MRI", ... Nullable: di SIMRS 2% tindakan belum dipetakan. */
+  modalitas: string | null;
+  namaPemeriksaan: string;
+  unit: string | null;
+  cito: boolean;
+  tanggalPermintaan: string;
+  tanggalHasil: string | null;
+  /** Penanda saja — narasi tidak ikut di daftar, lihat radiologi.routes.js. */
+  adaKesan: boolean;
+};
+
+export type RadiologiListResponse = {
+  data: RadiologiRingkasan[];
+  pagination: Pagination;
+};
+
+export type RadiologiDetail = {
+  id: string;
+  pasienId: string;
+  kunjunganId: string | null;
+  modalitas: string | null;
+  namaPemeriksaan: string;
+  unit: string | null;
+  cito: boolean;
+  tanggalPermintaan: string;
+  tanggalHasil: string | null;
+  klinis: string | null;
+  /** Narasi temuan. Boleh null — frontend WAJIB menanganinya. */
+  hasil: string | null;
+  /** Sering null: di SIMRS cuma 15% terisi, kesimpulan ditulis di dalam `hasil`. */
+  kesan: string | null;
+  pasien: { id: string; nama: string; norm: string } | null;
+  dokterPeminta: { id: string; nama: string; spesialisasi: string | null } | null;
+  /** Di SIMRS cuma 7% terisi — null itu normal, bukan tanda data rusak. */
+  dokterPembaca: { id: string; nama: string; spesialisasi: string | null } | null;
+};
+
 export type AktivitasHarianMingguan = {
   label: string;
   jumlah: number;
@@ -314,7 +373,8 @@ export type PasienPrioritasItem = {
 };
 
 export type StatistikDashboard = {
-  pasienAktif: number;
+  /** Pasien UNIK yang dokter ini tangani hari ini (kunjungan ∪ operasi). */
+  pasienHariIni: number;
   operasiHariIni: number;
   kunjunganHariIni: number;
   // Gabungan jumlah Kunjungan + Operasi per hari, Senin-Minggu minggu

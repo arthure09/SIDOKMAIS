@@ -38,7 +38,10 @@ function toRingkasan(pemeriksaan) {
     tanggalPermintaan: pemeriksaan.tanggalPermintaan,
     tanggalHasil: pemeriksaan.tanggalHasil,
     jumlahParameter: pemeriksaan.hasilLabItem.length,
-    adaFlagAbnormal: pemeriksaan.hasilLabItem.some((item) => item.flag !== "NORMAL"),
+    // Jumlah, bukan boolean: daftar hasil lab dikelompokkan per tanggal di
+    // frontend, dan "2 dari 11 di luar rujukan" jauh lebih berguna buat dokter
+    // yang memindai daftar daripada sekadar penanda "ada yang abnormal".
+    jumlahAbnormal: pemeriksaan.hasilLabItem.filter((item) => item.flag !== "NORMAL").length,
   };
 }
 

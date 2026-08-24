@@ -8,7 +8,9 @@
     "dev": "nodemon src/server.js",
     "test": "jest",
     "prisma:seed": "node prisma/seed.js",
-    "prisma:seed:kunjungan-operasi": "node prisma/seed-kunjungan-operasi.js"
+    "prisma:seed:kunjungan-operasi": "node prisma/seed-kunjungan-operasi.js",
+    "prisma:seed:radiologi": "node prisma/seed-radiologi.js",
+    "notifikasi:uji": "node prisma/kirim-notifikasi-uji.js"
   },
   "keywords": [],
   "author": "",
@@ -18,7 +20,13 @@
     "seed": "node prisma/seed.js"
   },
   "jest": {
-    "testPathIgnorePatterns": ["/node_modules/", "\\.manual\\.js$"]
+    "testPathIgnorePatterns": [
+      "/node_modules/",
+      "\\.manual\\.js$"
+    ],
+    "setupFiles": [
+      "<rootDir>/jest.setup.js"
+    ]
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
@@ -27,7 +35,8 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "jsonwebtoken": "^9.0.3",
-    "morgan": "^1.11.0"
+    "morgan": "^1.11.0",
+    "mysql2": "^3.23.4"
   },
   "devDependencies": {
     "@faker-js/faker": "^9.9.0",

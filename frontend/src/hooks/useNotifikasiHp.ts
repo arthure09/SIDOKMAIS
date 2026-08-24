@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { fetchNotifikasiList } from '../api/notifikasi';
 import { useAuthStore } from '../store/authStore';
 import { TIPE_META } from '../screens/NotifikasiScreen';
-import { serapNotifikasi, siapkanNotifikasiHp, tampilkanNotifikasiHp } from '../utils/notifikasiHp';
+import { serapNotifikasi } from '../utils/serapNotifikasi';
+import { siapkanNotifikasiHp, tampilkanNotifikasiHp } from '../utils/notifikasiHp';
 
 // 10 detik saat dev biar tesnya tidak nunggu lama; 60 detik di build rilis
 // supaya tidak boros baterai & request.
@@ -14,7 +15,7 @@ const INTERVAL_MS = __DEV__ ? 10_000 : 60_000;
  *
  * ponytail: polling foreground, bukan push. App yang ditutup/di-background
  * lama tidak dapat notifikasi — untuk itu perlu FCM/APNs (server kirim push,
- * notifee cuma yang menampilkan). Cukup selama fase dummy data.
+ * expo-notifications cuma yang menampilkan). Cukup selama fase dummy data.
  */
 export function useNotifikasiHp() {
   const token = useAuthStore((s) => s.token);

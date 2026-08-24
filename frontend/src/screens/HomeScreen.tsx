@@ -117,7 +117,7 @@ type Props = NativeStackScreenProps<HomeStackParamList, 'Home'>;
 // "Ringkasan Aktivitas Hari Ini", jadi pengulangannya cuma bikin teks patah
 // jadi 2-3 baris di kolom selebar ~73pt (paling parah "Kunjungan Hari Ini").
 const RINGKASAN_ROWS = [
-  { key: 'pasienAktif' as const, label: 'Pasien Aktif', icon: 'groups', tint: colors.primary },
+  { key: 'pasienHariIni' as const, label: 'Pasien', icon: 'groups', tint: colors.primary },
   {
     key: 'operasiHariIni' as const,
     label: 'Operasi',
@@ -151,6 +151,33 @@ const NAVIGASI_TINTS: Record<string, string> = {
   kalender: menuAccent.sky,
 };
 
+// Hasil dashboard terakhir, disimpan di level modul supaya bertahan waktu Home
+// di-unmount oleh navigator (setiap pindah tab).
+//
+// Ini menjawab dua hal sekaligus:
+//   1. Angka berubah jadi "–" tiap kali balik ke Home. Penyebabnya
+//      useFocusEffect memanggil ulang /api/dashboard/statistik di SETIAP fokus,
+//      dan `ringkasanLoading` mengosongkan angkanya selama menunggu.
+//   2. Menunggunya bukan sekejap: di mode SIMRS endpoint itu 15 detik (30 detik
+//      sebelum query-nya dibenahi), karena tiap statistik menyusun ulang
+//      himpunan pasien-dokter dari tiga tabel DPJP.
+//
+// Jadi angka lama ditahan di layar dan pemanggilan ulang dibatasi. Kalender
+// TIDAK ikut dibatasi — endpoint-nya murah dan pengingat yang baru dibuat harus
+// langsung kelihatan waktu dokter kembali dari CatatanKalenderScreen.
+//
+// ponytail: satu objek modul + satu batas waktu, tanpa TTL per-field dan tanpa
+// persistensi. Hilang saat app ditutup, dan itu memang yang diinginkan — angka
+// hari ini tidak perlu bertahan sampai besok.
+const SEGAR_MS = 2 * 60 * 1000;
+
+const cacheDashboard: {
+  data: { pasienHariIni: number; operasiHariIni: number; kunjunganHariIni: number } | null;
+  aktivitas: AktivitasHarianMingguan[];
+  prioritas: PasienPrioritasItem[];
+  waktu: number;
+} = { data: null, aktivitas: [], prioritas: [], waktu: 0 };
+
 export function HomeScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
@@ -159,12 +186,18 @@ export function HomeScreen({ navigation }: Props) {
   const token = useAuthStore((s) => s.token);
   const { nama: dokterNamaUtama, gelar: dokterGelar } = splitGelar(dokterNama ?? 'dr. Reza Auditore');
 
-  const [ringkasan, setRingkasan] = useState({ pasienAktif: 0, operasiHariIni: 0, kunjunganHariIni: 0 });
-  const [ringkasanLoading, setRingkasanLoading] = useState(true);
+  const [ringkasan, setRingkasan] = useState(
+    () => cacheDashboard.data ?? { pasienHariIni: 0, operasiHariIni: 0, kunjunganHariIni: 0 },
+  );
+  const [ringkasanLoading, setRingkasanLoading] = useState(() => cacheDashboard.data === null);
   const [refreshing, setRefreshing] = useState(false);
   const [menuViewMode, setMenuViewMode] = useState<'grid' | 'list'>('grid');
-  const [aktivitasMingguan, setAktivitasMingguan] = useState<AktivitasHarianMingguan[]>([]);
-  const [pasienPrioritas, setPasienPrioritas] = useState<PasienPrioritasItem[]>([]);
+  const [aktivitasMingguan, setAktivitasMingguan] = useState<AktivitasHarianMingguan[]>(
+    () => cacheDashboard.aktivitas,
+  );
+  const [pasienPrioritas, setPasienPrioritas] = useState<PasienPrioritasItem[]>(
+    () => cacheDashboard.prioritas,
+  );
   const [pengingat, setPengingat] = useState<CatatanKalenderItem[]>([]);
 
   const { width: windowWidth } = useWindowDimensions();
@@ -208,32 +241,46 @@ export function HomeScreen({ navigation }: Props) {
   // Operasi per hari, lihat dashboard.routes.js.
   const maxAktivitasMingguan = Math.max(1, ...aktivitasMingguan.map((a) => a.jumlah));
 
-  const loadRingkasan = useCallback(async () => {
+  const muatStatistik = useCallback(async () => {
     if (!token) return;
-    setRingkasanLoading(true);
     try {
       const statistik = await fetchStatistikDashboard(token);
-      setRingkasan({
-        pasienAktif: statistik.pasienAktif,
+      const angka = {
+        pasienHariIni: statistik.pasienHariIni,
         operasiHariIni: statistik.operasiHariIni,
         kunjunganHariIni: statistik.kunjunganHariIni,
-      });
+      };
+      setRingkasan(angka);
       // Fallback ke [] kalau backend yang dihit belum punya field ini (mis.
       // backend belum di-redeploy setelah frontend di-update) — biar
       // HomeScreen gak crash (`.length`/`.map` of undefined), cuma tampil
       // kosong sampai backend-nya disamakan.
-      setAktivitasMingguan(statistik.aktivitasMingguan ?? []);
-      setPasienPrioritas(statistik.pasienPrioritas ?? []);
+      const aktivitas = statistik.aktivitasMingguan ?? [];
+      const prioritas = statistik.pasienPrioritas ?? [];
+      setAktivitasMingguan(aktivitas);
+      setPasienPrioritas(prioritas);
+
+      cacheDashboard.data = angka;
+      cacheDashboard.aktivitas = aktivitas;
+      cacheDashboard.prioritas = prioritas;
+      cacheDashboard.waktu = Date.now();
     } catch {
-      // Ringkasan bukan bagian kritikal halaman ini — biarkan nilai lama kalau gagal.
+      // Ringkasan bukan bagian kritikal halaman ini — biarkan nilai lama kalau
+      // gagal. Cache sengaja TIDAK disentuh: kegagalan jaringan tidak boleh
+      // menghapus angka yang sudah benar.
     } finally {
       setRingkasanLoading(false);
     }
+  }, [token]);
 
-    // Dipisah dari try di atas: pengingat dan ringkasan dua endpoint berbeda,
-    // kalau /api/kalender gagal ringkasan yang sudah masuk jangan ikut dibuang.
-    // ADMIN dibalikin list kosong sama backend (kalender itu milik dokter),
-    // jadi seksi ini otomatis kosong buat akun itu — tidak perlu cek role.
+  // Dipisah dari statistik: pengingat dan ringkasan dua endpoint berbeda, kalau
+  // /api/kalender gagal ringkasan yang sudah masuk jangan ikut dibuang. Ini
+  // tidak ikut dibatasi waktu — endpoint-nya murah, dan pengingat yang baru
+  // dibuat harus langsung kelihatan.
+  // ADMIN dibalikin list kosong sama backend (kalender itu milik dokter), jadi
+  // seksi ini otomatis kosong buat akun itu — tidak perlu cek role.
+  const muatPengingat = useCallback(async () => {
+    if (!token) return;
     try {
       // Tanpa `sampai` — semua catatan dari hari ini ke depan, sudah urut
       // tanggal+waktu dari backend, tinggal diambil beberapa yang terdekat.
@@ -243,6 +290,30 @@ export function HomeScreen({ navigation }: Props) {
       // Sama seperti ringkasan — biarkan nilai lama kalau gagal.
     }
   }, [token]);
+
+  const loadRingkasan = useCallback(
+    async (opts?: { paksa?: boolean }) => {
+      if (!token) return;
+
+      const masihSegar =
+        cacheDashboard.data !== null && Date.now() - cacheDashboard.waktu < SEGAR_MS;
+
+      // Angka masih segar -> jaringan tidak disentuh sama sekali. Pull-to-refresh
+      // tetap memaksa lewat `paksa`.
+      if (!opts?.paksa && masihSegar) {
+        setRingkasanLoading(false);
+      } else {
+        // Spinner HANYA kalau memang belum ada angka untuk ditampilkan. Kalau
+        // sudah ada, angka lama ditahan sampai yang baru datang — inilah yang
+        // menghilangkan "–" waktu balik dari tab lain.
+        if (cacheDashboard.data === null) setRingkasanLoading(true);
+        await muatStatistik();
+      }
+
+      await muatPengingat();
+    },
+    [token, muatStatistik, muatPengingat],
+  );
 
   // useFocusEffect, bukan useEffect sekali saat mount: pengingat yang baru
   // dibuat/dihapus di CatatanKalenderScreen harus kelihatan begitu user balik
@@ -254,9 +325,11 @@ export function HomeScreen({ navigation }: Props) {
     }, [loadRingkasan]),
   );
 
+  // Pull-to-refresh memaksa: kalau dokter sengaja menarik layar, dia memang
+  // minta angka terbaru — batas 2 menit tidak berlaku.
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await loadRingkasan();
+    await loadRingkasan({ paksa: true });
     setRefreshing(false);
   }, [loadRingkasan]);
 
@@ -271,8 +344,10 @@ export function HomeScreen({ navigation }: Props) {
         navigation.navigate('DataPendapatan');
         break;
       case 'hasillab':
+        navigation.navigate('PilihPasienHasilLab', { tujuan: 'lab' });
+        break;
       case 'radiologi':
-        navigation.navigate('PilihPasienHasilLab');
+        navigation.navigate('PilihPasienHasilLab', { tujuan: 'radiologi' });
         break;
       case 'kalender':
         navigation.navigate('CatatanKalender');

@@ -53,12 +53,12 @@ const JUMLAH_PASIEN_PRIORITAS = 3;
 // makin prioritas". Ambil top-N dari MASING-MASING tabel dulu (bukan top-N
 // gabungan langsung di query), baru digabung+diurut+dipotong di JS — supaya
 // tetap benar walau top-N gabungan ternyata semuanya dari 1 tabel saja.
-async function getPasienPrioritas(aksesPasienDokter) {
+async function getPasienPrioritas(terlibat) {
   const now = new Date();
 
   const [kunjunganMendatang, operasiMendatang] = await Promise.all([
     prisma.kunjungan.findMany({
-      where: { tanggalMasuk: { gte: now }, statusKunjungan: "SCHEDULED", ...aksesPasienDokter },
+      where: { tanggalMasuk: { gte: now }, statusKunjungan: "SCHEDULED", ...terlibat },
       orderBy: { tanggalMasuk: "asc" },
       take: JUMLAH_PASIEN_PRIORITAS,
       select: {
@@ -69,7 +69,7 @@ async function getPasienPrioritas(aksesPasienDokter) {
       },
     }),
     prisma.operasi.findMany({
-      where: { tanggalOperasi: { gte: now }, status: "SCHEDULED", kunjungan: aksesPasienDokter },
+      where: { tanggalOperasi: { gte: now }, status: "SCHEDULED", kunjungan: terlibat },
       orderBy: { tanggalOperasi: "asc" },
       take: JUMLAH_PASIEN_PRIORITAS,
       select: {
@@ -109,7 +109,14 @@ async function getPasienPrioritas(aksesPasienDokter) {
 // GET /api/dashboard/statistik — ringkasan "Aktivitas Hari Ini" +
 // "Statistik Pasien Mingguan" di HomeScreen.
 //
-// `pasienAktif`/`operasiHariIni`/`kunjunganHariIni` menggantikan mekanisme lama
+// LINGKUPNYA "SAYA TERLIBAT", BUKAN "PASIEN SAYA" (diperbaiki 24 Ags 2026) —
+// lihat catatan panjang di simrs/dashboard.routes.js. Dashboard menjawab "apa
+// kegiatan SAYA hari ini", jadi penyaringnya `dokterId` langsung di
+// Kunjungan/Operasi, bukan `DokterPasienAssignment` yang mencakup seluruh
+// riwayat pasien. `pasienHariIni` juga bukan lagi jumlah assignment aktif —
+// itu angka se-riwayat yang tidak ada kaitannya dengan hari ini.
+//
+// `pasienHariIni`/`operasiHariIni`/`kunjunganHariIni` menggantikan mekanisme lama
 // di frontend (fetch list dengan RINGKASAN_FETCH_LIMIT=100 lalu filter+hitung
 // di client, yang undercounted kalau dokter punya >100 operasi/kunjungan)
 // dengan COUNT langsung di DB.
@@ -146,7 +153,7 @@ router.get("/statistik", async (req, res) => {
       return now >= mulai.getTime() && now <= akhir.getTime();
     });
     return res.json({
-      pasienAktif: 0,
+      pasienHariIni: 0,
       operasiHariIni: 0,
       kunjunganHariIni: 0,
       aktivitasMingguan: mingguRange.map(({ label }, i) => ({
@@ -162,44 +169,69 @@ router.get("/statistik", async (req, res) => {
 
   const { mulai, akhir } = getRentangHariIniWIB();
 
-  // Sama seperti operasi.routes.js/kunjungan.routes.js (pola pasca-hardening
-  // Day 22): dokter berhak lihat data pasien yang di-assign kepadanya
-  // (DokterPasienAssignment), bukan cuma yang kebetulan tercatat dokterId dia
-  // langsung di Kunjungan — lihat utils/aksesPasien.js.
-  const aksesPasienDokter = {
-    OR: [{ dokterId }, { pasien: { assignments: { some: { dokterId } } } }],
-  };
+  // Keterlibatan langsung, bukan akses per-pasien. Ini SENGAJA berbeda dari
+  // operasi.routes.js/kunjungan.routes.js yang memakai DokterPasienAssignment:
+  // di sana pertanyaannya "boleh lihat apa", di sini "saya ngapain hari ini".
+  const terlibat = { dokterId };
 
   const mingguMulai = mingguRange[0].mulai;
   const mingguAkhir = mingguRange[mingguRange.length - 1].akhir;
 
-  const [pasienAktif, operasiHariIni, kunjunganHariIni, kunjunganMinggu, operasiMinggu, pasienPrioritas] =
+  // Operasi batal bukan kegiatan — dikeluarkan dari semua hitungan hari ini
+  // maupun grafik mingguan.
+  const operasiBerjalan = { not: "CANCELLED" };
+
+  const [pasienKunjunganHariIni, pasienOperasiHariIni, operasiHariIni, kunjunganHariIni, kunjunganMinggu, operasiMinggu, pasienPrioritas] =
     await Promise.all([
-      prisma.dokterPasienAssignment.count({ where: { dokterId, status: "ACTIVE" } }),
+      // Pasien yang saya tangani HARI INI, dari dua sumber. Digabung jadi satu
+      // himpunan di bawah supaya pasien yang hari ini punya kunjungan sekaligus
+      // operasi tidak terhitung dua kali.
+      prisma.kunjungan.findMany({
+        where: { tanggalMasuk: { gte: mulai, lte: akhir }, ...terlibat },
+        select: { pasienId: true },
+      }),
+      prisma.operasi.findMany({
+        where: {
+          tanggalOperasi: { gte: mulai, lte: akhir },
+          status: operasiBerjalan,
+          kunjungan: terlibat,
+        },
+        select: { kunjungan: { select: { pasienId: true } } },
+      }),
       prisma.operasi.count({
         where: {
           tanggalOperasi: { gte: mulai, lte: akhir },
-          kunjungan: aksesPasienDokter,
+          status: operasiBerjalan,
+          kunjungan: terlibat,
         },
       }),
       prisma.kunjungan.count({
         where: {
           tanggalMasuk: { gte: mulai, lte: akhir },
-          ...aksesPasienDokter,
+          ...terlibat,
         },
       }),
       // 2 query lintas-minggu (bukan 14 query per-hari) — hasilnya cuma
       // dipakai buat dikelompokkan per hari di JS lewat hitungDalamRentang.
       prisma.kunjungan.findMany({
-        where: { tanggalMasuk: { gte: mingguMulai, lte: mingguAkhir }, ...aksesPasienDokter },
+        where: { tanggalMasuk: { gte: mingguMulai, lte: mingguAkhir }, ...terlibat },
         select: { tanggalMasuk: true },
       }),
       prisma.operasi.findMany({
-        where: { tanggalOperasi: { gte: mingguMulai, lte: mingguAkhir }, kunjungan: aksesPasienDokter },
+        where: {
+          tanggalOperasi: { gte: mingguMulai, lte: mingguAkhir },
+          status: operasiBerjalan,
+          kunjungan: terlibat,
+        },
         select: { tanggalOperasi: true },
       }),
-      getPasienPrioritas(aksesPasienDokter),
+      getPasienPrioritas(terlibat),
     ]);
+
+  const pasienHariIni = new Set([
+    ...pasienKunjunganHariIni.map((k) => k.pasienId),
+    ...pasienOperasiHariIni.map((o) => o.kunjungan.pasienId),
+  ]).size;
 
   const waktuKunjungan = kunjunganMinggu.map((k) => k.tanggalMasuk);
   const waktuOperasi = operasiMinggu.map((o) => o.tanggalOperasi);
@@ -212,7 +244,7 @@ router.get("/statistik", async (req, res) => {
     highlight: mulaiHari.getTime() === mulai.getTime(),
   }));
 
-  res.json({ pasienAktif, operasiHariIni, kunjunganHariIni, aktivitasMingguan, pasienPrioritas });
+  res.json({ pasienHariIni, operasiHariIni, kunjunganHariIni, aktivitasMingguan, pasienPrioritas });
 });
 
 module.exports = router;

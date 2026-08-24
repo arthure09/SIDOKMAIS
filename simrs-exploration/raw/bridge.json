@@ -1,0 +1,93 @@
+[
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "dpjp_bersama",
+  "COLUMN_NAME": "NOPEN",
+  "COLUMN_TYPE": "char(10)",
+  "COLUMN_KEY": "MUL"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "dpjp_diagnosa",
+  "COLUMN_NAME": "NOPEN",
+  "COLUMN_TYPE": "char(10)",
+  "COLUMN_KEY": "MUL"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "dpjp_pendamping",
+  "COLUMN_NAME": "NOPEN",
+  "COLUMN_TYPE": "char(10)",
+  "COLUMN_KEY": "MUL"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "kunjungan",
+  "COLUMN_NAME": "NOPEN",
+  "COLUMN_TYPE": "char(10)",
+  "COLUMN_KEY": "MUL"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "order_drivethru",
+  "COLUMN_NAME": "NOPEN",
+  "COLUMN_TYPE": "char(15)",
+  "COLUMN_KEY": "PRI"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "penanggung_jawab_pasien",
+  "COLUMN_NAME": "NOPEN",
+  "COLUMN_TYPE": "char(10)",
+  "COLUMN_KEY": "MUL"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "pendaftaran",
+  "COLUMN_NAME": "NORM",
+  "COLUMN_TYPE": "int(11)",
+  "COLUMN_KEY": "MUL"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "penjamin",
+  "COLUMN_NAME": "NOPEN",
+  "COLUMN_TYPE": "char(10)",
+  "COLUMN_KEY": "PRI"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "penjamin_cob",
+  "COLUMN_NAME": "NOPEN",
+  "COLUMN_TYPE": "char(10)",
+  "COLUMN_KEY": "PRI"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "perawat_pasien_ranap",
+  "COLUMN_NAME": "NOPEN",
+  "COLUMN_TYPE": "char(15)",
+  "COLUMN_KEY": ""
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "surat_rujukan_pasien",
+  "COLUMN_NAME": "NOPEN",
+  "COLUMN_TYPE": "char(15)",
+  "COLUMN_KEY": "PRI"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "surat_rujukan_pasien",
+  "COLUMN_NAME": "NORM",
+  "COLUMN_TYPE": "int(11)",
+  "COLUMN_KEY": "PRI"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "tujuan_pasien",
+  "COLUMN_NAME": "NOPEN",
+  "COLUMN_TYPE": "char(10)",
+  "COLUMN_KEY": "PRI"
+ }
+]

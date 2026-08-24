@@ -173,18 +173,32 @@ export function useCollapseOnScroll() {
     [goTo, top.height, bottom.height],
   );
 
+  // Kembalikan semua baris ke posisi tampil, termasuk `lastY`: kalau posisi
+  // terakhir tidak ikut dinolkan, scroll pertama di list yang baru dihitung
+  // sebagai lompatan sejauh selisih dua list dan langsung memicu animasi.
+  const reset = useCallback(() => {
+    lastY.current = 0;
+    step.current = 0;
+    busyUntil.current = 0;
+    top.reset();
+    bottom.reset();
+  }, [top.reset, bottom.reset]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Screen yang ditinggalkan lalu dibuka lagi mulai dari posisi scroll 0, jadi
   // barisnya harus ikut kembali tampil — kalau tidak, user mendarat di list
   // yang search bar & filternya hilang tanpa sebab.
-  useFocusEffect(
-    useCallback(() => {
-      lastY.current = 0;
-      step.current = 0;
-      busyUntil.current = 0;
-      top.reset();
-      bottom.reset();
-    }, [top.reset, bottom.reset]), // eslint-disable-line react-hooks/exhaustive-deps
-  );
+  useFocusEffect(reset);
 
-  return { onScroll, top, bottom };
+  /**
+   * `reset` WAJIB dipanggil juga setiap kali list yang ditampilkan berganti
+   * (mis. pindah tab), bukan cuma waktu screen-nya difokus ulang. State di sini
+   * satu untuk seluruh screen, sedangkan tiap tab punya ScrollView sendiri yang
+   * mount ulang dari posisi 0. Tanpa reset, keadaan "tersembunyi" dari tab lama
+   * terbawa ke list baru yang berada di puncak — dan karena `goTo(0)` cuma
+   * dipicu oleh event scroll, satu-satunya jalan memunculkannya lagi adalah
+   * men-scroll. Di tab yang isinya kosong (mis. dokter tanpa jadwal operasi)
+   * tidak ada yang bisa di-scroll sama sekali, jadi search bar dan filter
+   * hilang permanen sampai screen-nya ditinggalkan.
+   */
+  return { onScroll, top, bottom, reset };
 }

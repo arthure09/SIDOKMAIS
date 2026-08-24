@@ -1,7 +1,10 @@
 import { apiFetch } from './client';
-import type { OperasiDetail, OperasiListResponse, OperasiStatus } from './types';
+import type { LingkupJadwal, OperasiDetail, OperasiListResponse, OperasiStatus } from './types';
 
 type ListParams = {
+  // Cakupan layar Jadwal. Hanya berpengaruh di mode SIMRS; route dummy
+  // mengabaikannya. Lihat parseLingkupJadwal di backend/src/utils/queryParams.js.
+  lingkup?: LingkupJadwal;
   status?: OperasiStatus;
   /** 'YYYY-MM-DD' tanggal kalender WIB, inklusif — pakai toDateParam(). */
   dari?: string;

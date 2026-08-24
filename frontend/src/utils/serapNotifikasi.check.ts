@@ -1,9 +1,9 @@
 // Self-check serapNotifikasi — pola sama dengan ringkasanAktivitas.check.ts.
 // Jalankan manual:
-//   node src/utils/notifikasiHp.check.ts
+//   node src/utils/serapNotifikasi.check.ts
 // File ini tidak pernah di-import app, jadi tidak ikut masuk bundle.
 import assert from 'node:assert';
-import { serapNotifikasi } from './notifikasiHp.ts';
+import { serapNotifikasi } from './serapNotifikasi.ts';
 
 const n = (id: string) => ({ id });
 

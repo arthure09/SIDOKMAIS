@@ -1,0 +1,56 @@
+[
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "level_slide_imuno",
+  "COLUMN_NAME": "KATEGORI_IMUNO",
+  "CONSTRAINT_NAME": "KATEGORI_IMUNO",
+  "REFERENCED_TABLE_SCHEMA": "master",
+  "REFERENCED_TABLE_NAME": "kategori_imuno",
+  "REFERENCED_COLUMN_NAME": "ID"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "level_slide_sitologi",
+  "COLUMN_NAME": "KATEGORI_SITOLOGI",
+  "CONSTRAINT_NAME": "KATEGORI_SITOLOGI",
+  "REFERENCED_TABLE_SCHEMA": "master",
+  "REFERENCED_TABLE_NAME": "kategori_sitologi",
+  "REFERENCED_COLUMN_NAME": "ID"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "level_slide_sitologi",
+  "COLUMN_NAME": "LEVEL_KATEGORI",
+  "CONSTRAINT_NAME": "LEVEL_KATEGORI",
+  "REFERENCED_TABLE_SCHEMA": "master",
+  "REFERENCED_TABLE_NAME": "level_kategori_sitologi",
+  "REFERENCED_COLUMN_NAME": "ID"
+ },
+ {
+  "TABLE_SCHEMA": "medis",
+  "TABLE_NAME": "tb_asisten_pendaftaran_operasi",
+  "COLUMN_NAME": "asisten_bedah",
+  "CONSTRAINT_NAME": "tb_asisten_pendaftaran_operasi_dokter_FK",
+  "REFERENCED_TABLE_SCHEMA": "master",
+  "REFERENCED_TABLE_NAME": "dokter",
+  "REFERENCED_COLUMN_NAME": "ID"
+ },
+ {
+  "TABLE_SCHEMA": "medis",
+  "TABLE_NAME": "tb_pendaftaran_operasi",
+  "COLUMN_NAME": "nokun",
+  "CONSTRAINT_NAME": "tb_pendaftaran_operasi_kunjungan_FK",
+  "REFERENCED_TABLE_SCHEMA": "pendaftaran",
+  "REFERENCED_TABLE_NAME": "kunjungan",
+  "REFERENCED_COLUMN_NAME": "NOMOR"
+ },
+ {
+  "TABLE_SCHEMA": "perjanjian",
+  "TABLE_NAME": "perjanjian_anyelir",
+  "COLUMN_NAME": "jadwalId",
+  "CONSTRAINT_NAME": "FK_81c0d417fe1e95f2dc73f9d41d5",
+  "REFERENCED_TABLE_SCHEMA": "perjanjian",
+  "REFERENCED_TABLE_NAME": "jadwal_anyelir",
+  "REFERENCED_COLUMN_NAME": "id"
+ }
+]

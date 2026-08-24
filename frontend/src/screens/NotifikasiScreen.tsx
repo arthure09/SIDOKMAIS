@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Animated, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,9 +7,15 @@ import { colors, radius, spacing } from '../theme/colors';
 import { ms } from '../theme/responsive';
 import { Text } from '../components/Text';
 import { ApiError } from '../api/client';
-import { fetchNotifikasiList, markNotifikasiRead } from '../api/notifikasi';
+import {
+  bersihkanNotifikasi,
+  fetchNotifikasiList,
+  markNotifikasiRead,
+  markSemuaNotifikasiRead,
+} from '../api/notifikasi';
 import { useAuthStore } from '../store/authStore';
 import type { NotifikasiItemApi, NotifikasiTipe } from '../api/types';
+import { useFocusEffect } from '@react-navigation/native';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
 import { useAnimatedHeaderFade } from '../hooks/useAnimatedHeaderFade';
@@ -92,6 +98,7 @@ export function NotifikasiScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aksiSibuk, setAksiSibuk] = useState(false);
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!token) return;
@@ -111,6 +118,16 @@ export function NotifikasiScreen({ navigation }: Props) {
     load();
   }, [load]);
 
+  // Muat ulang tiap layar ini difokuskan lagi. Tanpa ini, status baca yang
+  // berubah di layar detail (atau pengingat baru yang dibuat server saat daftar
+  // dibaca) baru terlihat setelah tarik-segarkan manual — yang membuat penanda
+  // "sudah dibaca" terasa tidak berfungsi padahal servernya sudah benar.
+  useFocusEffect(
+    useCallback(() => {
+      load({ silent: true });
+    }, [load]),
+  );
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await load({ silent: true });
@@ -120,6 +137,55 @@ export function NotifikasiScreen({ navigation }: Props) {
   const items = apiItems
     .map(toDisplayItem)
     .filter((n) => filter === 'Semua' || n.kategori === filter);
+
+  const adaBelumDibaca = apiItems.some((n) => !n.isRead);
+  const bisaAksi = role === 'DOKTER' && !!token && apiItems.length > 0 && !aksiSibuk;
+
+  async function tandaiSemuaDibaca() {
+    if (!token || aksiSibuk) return;
+    setAksiSibuk(true);
+    // Optimistis, lalu diselaraskan lagi dari server. Kalau gagal, `load()` di
+    // blok finally mengembalikan keadaan sebenarnya — tidak perlu menyimpan
+    // salinan untuk dibalikkan sendiri.
+    setApiItems((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    try {
+      await markSemuaNotifikasiRead(token);
+    } catch {
+      Alert.alert('Gagal', 'Tidak bisa menandai semua notifikasi. Coba lagi.');
+    } finally {
+      await load({ silent: true });
+      setAksiSibuk(false);
+    }
+  }
+
+  function konfirmasiBersihkan() {
+    if (!token || aksiSibuk) return;
+    Alert.alert(
+      'Bersihkan notifikasi?',
+      `${apiItems.length} notifikasi akan dihapus dari daftar Anda. Jadwal dan data pasiennya tidak ikut terhapus.`,
+      [
+        { text: 'Batal', style: 'cancel' },
+        {
+          text: 'Bersihkan',
+          style: 'destructive',
+          onPress: async () => {
+            setAksiSibuk(true);
+            const sebelum = apiItems;
+            setApiItems([]);
+            try {
+              await bersihkanNotifikasi(token);
+            } catch {
+              setApiItems(sebelum);
+              Alert.alert('Gagal', 'Tidak bisa membersihkan notifikasi. Coba lagi.');
+            } finally {
+              await load({ silent: true });
+              setAksiSibuk(false);
+            }
+          },
+        },
+      ],
+    );
+  }
 
   function handlePress(item: DisplayItem) {
     // ADMIN cuma boleh lihat notifikasi dokter lain — mark-as-read tetap
@@ -159,9 +225,50 @@ export function NotifikasiScreen({ navigation }: Props) {
           },
         ]}
       >
-        <View>
-          <Text style={styles.title}>Notifikasi</Text>
-          <Text style={styles.subtitle}>Pembaruan klinis dan jadwal Anda.</Text>
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>Notifikasi</Text>
+            <Text style={styles.subtitle}>Pembaruan klinis dan jadwal Anda.</Text>
+          </View>
+
+          {/* Dua aksi daftar, keduanya milik dokter yang login. ADMIN melihat
+              notifikasi lintas dokter, jadi tidak boleh mengubah apa pun dari
+              sini — tombolnya memang tidak dirender untuk ADMIN. */}
+          {role === 'DOKTER' && (
+            <View style={styles.headerActions}>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Tandai semua sudah dibaca"
+                accessibilityState={{ disabled: !bisaAksi || !adaBelumDibaca }}
+                onPress={tandaiSemuaDibaca}
+                disabled={!bisaAksi || !adaBelumDibaca}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.headerButton,
+                  (!bisaAksi || !adaBelumDibaca) && styles.headerButtonMati,
+                  pressed && styles.headerButtonDitekan,
+                ]}
+              >
+                <MaterialIcons name="done-all" size={20} color={colors.primary} />
+              </Pressable>
+
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Bersihkan notifikasi"
+                accessibilityState={{ disabled: !bisaAksi }}
+                onPress={konfirmasiBersihkan}
+                disabled={!bisaAksi}
+                hitSlop={8}
+                style={({ pressed }) => [
+                  styles.headerButton,
+                  !bisaAksi && styles.headerButtonMati,
+                  pressed && styles.headerButtonDitekan,
+                ]}
+              >
+                <MaterialIcons name="delete-sweep" size={20} color={colors.primary} />
+              </Pressable>
+            </View>
+          )}
         </View>
 
         <ScrollView
@@ -198,7 +305,11 @@ export function NotifikasiScreen({ navigation }: Props) {
         </View>
       ) : items.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.emptyText}>Tidak ada notifikasi.</Text>
+          <Text style={styles.emptyText}>
+            {filter === 'Semua'
+              ? 'Tidak ada notifikasi. Pengingat jadwal muncul di sini menjelang hari operasi.'
+              : `Tidak ada notifikasi kategori ${filter}.`}
+          </Text>
         </View>
       ) : (
         <ScrollView
@@ -287,6 +398,20 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   content: { padding: spacing.marginMobile, gap: spacing.gutter, paddingBottom: ms(32) },
+  headerRow: { flexDirection: 'row', alignItems: 'flex-start', gap: ms(8) },
+  headerActions: { flexDirection: 'row', gap: ms(6) },
+  headerButton: {
+    width: ms(36),
+    height: ms(36),
+    borderRadius: ms(18),
+    backgroundColor: colors.surfaceSoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // Tombol mati tetap terlihat, tidak dihilangkan: kalau muncul-hilang mengikuti
+  // isi daftar, posisinya bergeser dan dokter kehilangan letak yang sudah hafal.
+  headerButtonMati: { opacity: 0.35 },
+  headerButtonDitekan: { opacity: 0.6, transform: [{ scale: 0.94 }] },
   title: { fontSize: ms(20), fontWeight: '800', color: colors.onBackground },
   subtitle: { fontSize: ms(12), color: colors.outline, marginTop: ms(2) },
 

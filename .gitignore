@@ -4,6 +4,10 @@
 # Environment
 **/.env
 **/.env.local
+# Cadangan .env (mis. .env.bak-windows) ikut memuat JWT_SECRET & kredensial DB —
+# pola `**/.env` di atas TIDAK menangkapnya karena cuma cocok persis ".env".
+**/.env.bak*
+**/.env.*.bak
 !**/.env.example
 
 # Build output
@@ -29,3 +33,6 @@ npm-debug.log*
 docs/prompts/
 docs/latihan/
 docs/analisa/
+
+simrs-exploration/.env
+simrs-exploration/node_modules/

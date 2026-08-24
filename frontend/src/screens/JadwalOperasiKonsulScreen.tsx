@@ -27,6 +27,7 @@ import { fetchKonsultasiList } from '../api/konsultasi';
 import { fetchKunjunganList } from '../api/kunjungan';
 import { useAuthStore } from '../store/authStore';
 import type {
+  LingkupJadwal,
   KonsultasiListItem,
   KunjunganListItem,
   OperasiListItem,
@@ -166,6 +167,14 @@ const TABS = [
 
 type TabValue = (typeof TABS)[number]['value'];
 
+// "Pasien saya" sengaja tidak dinamai "Semua" — yang ditambahkan bukan seluruh
+// rumah sakit, melainkan kunjungan/operasi pasien dokter ini yang ditangani
+// dokter lain. Label "Semua" akan bikin dokter mengira dia melihat jadwal RS.
+const LINGKUP_FILTERS: { value: LingkupJadwal; label: string }[] = [
+  { value: 'saya', label: 'Jadwal saya' },
+  { value: 'pasien', label: 'Pasien saya' },
+];
+
 // Cakupan bawaan tiap tab, ditulis sependek mungkin karena tempatnya di dalam
 // chip filter tanggal — bukan lagi baris keterangan tersendiri. Sebelumnya ini
 // kalimat panjang di barisnya sendiri, tepat di sebelah chip yang mengatur hal
@@ -188,7 +197,12 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   // Satu baris per langkah: filter sembunyi duluan, search bar menyusul kalau
   // scroll ke bawah masih lanjut. Toggle Konsultasi/Operasi sengaja tidak ikut —
   // itu penanda posisi, bukan kontrol yang bisa hilang tanpa bikin bingung.
-  const { onScroll: onHeaderScroll, top: searchRow, bottom: filterRow } = useCollapseOnScroll();
+  const {
+    onScroll: onHeaderScroll,
+    top: searchRow,
+    bottom: filterRow,
+    reset: resetHeaderRows,
+  } = useCollapseOnScroll();
   const poliScrollRef = useRef<ScrollView>(null);
   const konsulScrollRef = useRef<ScrollView>(null);
   const operasiScrollRef = useRef<ScrollView>(null);
@@ -224,14 +238,31 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
     }, []),
   );
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+
+  // Cakupan Jadwal, default "saya". Sebelum ini layar Jadwal selalu memakai
+  // cakupan luas ("semua kunjungan/operasi pasien saya") dan hasilnya di data
+  // asli: 709 kunjungan tampil untuk satu dokter padahal cuma 105 yang
+  // melibatkan dia, dan 100% isi tab Operasi milik dokter lain karena dokter
+  // itu bukan dokter bedah.
+  //
+  // Tidak berlaku di tab Konsultasi: konsul sudah discoping server ke dokter
+  // tujuan, jadi tidak ada cakupan lain yang masuk akal di sana.
+  const [lingkup, setLingkup] = useState<LingkupJadwal>('saya');
   const [search, setSearch] = useState('');
 
   useEffect(() => {
     resetScrollTop();
+    // Search bar + chip filter dikembalikan ke posisi tampil. Tiap tab punya
+    // ScrollView sendiri yang mount ulang di posisi 0, sementara state
+    // sembunyi/tampilnya satu untuk seluruh screen — tanpa baris ini, header
+    // yang tersembunyi di tab sebelumnya ikut terbawa ke tab yang listnya
+    // sedang di puncak, dan di tab kosong (dokter tanpa jadwal operasi) tidak
+    // ada scroll apa pun yang bisa memunculkannya lagi.
+    resetHeaderRows();
     // Filter ikut direset: nilainya milik kosakata status tab sebelumnya, jadi
     // "Batal" yang terbawa ke tab Konsultasi akan menyaring habis semua kartu.
     setStatusFilter('ALL');
-  }, [tab, resetScrollTop]);
+  }, [tab, resetScrollTop, resetHeaderRows]);
 
   const handleScroll = useCallback(
     (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -277,6 +308,10 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   const [poliItems, setPoliItems] = useState<KunjunganListItem[]>([]);
   const [poliLoading, setPoliLoading] = useState(true);
   const [poliError, setPoliError] = useState<string | null>(null);
+  // Terisi kalau server mundur ke tanggal lain karena hari ini kosong —
+  // replika SIMRS berhenti tersinkronisasi 18 Ags 2026. Ditampilkan sebagai
+  // catatan di atas daftar; tanpa itu data lama terbaca sebagai jadwal hari ini.
+  const [poliTanggalData, setPoliTanggalData] = useState<string | null>(null);
 
   const loadedKeys = useRef<Set<string>>(new Set());
   const [refreshing, setRefreshing] = useState(false);
@@ -286,14 +321,14 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
     if (!opts?.silent) setOperasiLoading(true);
     setOperasiError(null);
     try {
-      const result = await fetchOperasiList(token, { page: 1, limit: 50, ...paramRentang });
+      const result = await fetchOperasiList(token, { page: 1, limit: 50, lingkup, ...paramRentang });
       setOperasiItems(result.data);
     } catch (err) {
       setOperasiError(err instanceof ApiError ? err.message : 'Gagal memuat jadwal operasi');
     } finally {
       if (!opts?.silent) setOperasiLoading(false);
     }
-  }, [token, paramRentang.dari, paramRentang.sampai]);
+  }, [token, lingkup, paramRentang.dari, paramRentang.sampai]);
 
   const loadKonsultasi = useCallback(async (opts?: { silent?: boolean }) => {
     if (!token) return;
@@ -318,19 +353,24 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
     if (!opts?.silent) setPoliLoading(true);
     setPoliError(null);
     try {
+      const pakaiTanggalBawaan = !paramRentang.dari && !paramRentang.sampai;
       const result = await fetchKunjunganList(token, {
         dari: paramRentang.dari ?? hariIni,
         sampai: paramRentang.sampai ?? hariIni,
         page: 1,
         limit: 50,
+        lingkup,
+        // Cuma boleh mundur kalau dokter TIDAK memilih tanggal sendiri.
+        bolehMundur: pakaiTanggalBawaan,
       });
       setPoliItems(result.data);
+      setPoliTanggalData(result.tanggalData ?? null);
     } catch (err) {
       setPoliError(err instanceof ApiError ? err.message : 'Gagal memuat jadwal poliklinik');
     } finally {
       if (!opts?.silent) setPoliLoading(false);
     }
-  }, [token, hariIni, paramRentang.dari, paramRentang.sampai]);
+  }, [token, hariIni, lingkup, paramRentang.dari, paramRentang.sampai]);
 
   const loaders: Record<TabValue, (opts?: { silent?: boolean }) => Promise<void>> = {
     POLI: loadPoli,
@@ -347,12 +387,15 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   // Kunci muatnya ikut menyertakan tanggal untuk tab POLI. Jadi waktu harinya
   // berganti, kuncinya berubah dan jadwal hari ini dimuat ulang dengan
   // sendirinya — tanpa perlu efek kedua khusus pergantian hari.
+  // `lingkup` WAJIB ikut jadi bagian kunci: tanpa itu, mengganti cakupan tidak
+  // mengubah kunci, efek ini menganggap kombinasinya sudah pernah dimuat, dan
+  // chip-nya berpindah tanpa satu pun baris berubah.
   useEffect(() => {
-    const kunci = `${tab}:${hariIni}:${paramRentang.dari ?? ''}~${paramRentang.sampai ?? ''}`;
+    const kunci = `${tab}:${lingkup}:${hariIni}:${paramRentang.dari ?? ''}~${paramRentang.sampai ?? ''}`;
     if (loadedKeys.current.has(kunci)) return;
     loadedKeys.current.add(kunci);
     loadersRef.current[tab]();
-  }, [tab, hariIni, paramRentang.dari, paramRentang.sampai]);
+  }, [tab, lingkup, hariIni, paramRentang.dari, paramRentang.sampai]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -384,9 +427,14 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   // Yang dibatasi ke hari ini cuma yang SUDAH kelar (selesai/batal/dijawab) —
   // itu riwayat, dan tanpa batas tanggal daftar ini pelan-pelan berubah jadi
   // arsip yang harus di-scroll melewati pekerjaan hari ini.
+  // `statusFilter !== 'ALL'` ikut melonggarkan saringan ini: kalau dokter
+  // menekan chip "Selesai", dia memang sedang meminta riwayat, dan menyaringnya
+  // lebih dulu di sini membuat chip itu mustahil berisi — persis bug yang
+  // dilaporkan (chip Selesai selalu kosong padahal ada 4.512 operasi selesai).
   const operasiRelevan = operasiItems.filter(
     (item) =>
       rentangAktif ||
+      statusFilter !== 'ALL' ||
       item.status === 'SCHEDULED' ||
       item.status === 'IN_PROGRESS' ||
       padaHariIni(item.tanggalOperasi, hariIni),
@@ -395,6 +443,7 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   const konsultasiRelevan = konsultasiItems.filter(
     (item) =>
       rentangAktif ||
+      statusFilter !== 'ALL' ||
       item.status === 'MENUNGGU_JAWABAN' ||
       padaHariIni(item.tanggalPermintaan, hariIni),
   );
@@ -522,6 +571,26 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.statusFilterRow}
             >
+              {/* Cakupan duluan, lalu pemisah, baru status. Dua hal yang beda:
+                  cakupan menentukan jadwal SIAPA, status menyaring isinya.
+                  Konsultasi tidak punya cakupan — sudah discoping ke dokter
+                  tujuan di server. */}
+              {tab !== 'KONSUL' &&
+                LINGKUP_FILTERS.map((f) => {
+                  const active = lingkup === f.value;
+                  return (
+                    <Pressable
+                      key={f.value}
+                      onPress={() => setLingkup(f.value)}
+                      style={[styles.statusFilterChip, active && styles.statusFilterChipActive]}
+                    >
+                      <Text style={[styles.statusFilterText, active && styles.statusFilterTextActive]}>
+                        {f.label}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              {tab !== 'KONSUL' && <View style={styles.filterPemisah} />}
               {statusFilters.map((f) => {
                 const active = statusFilter === f.value;
                 return (
@@ -557,9 +626,29 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
             <MaterialIcons name="event-available" size={40} color={colors.outlineVariant} />
             <Text style={styles.comingSoonTitle}>
               {poliItems.length === 0
-                ? 'Tidak ada jadwal pasien hari ini'
+                ? lingkup === 'saya'
+                  ? 'Tidak ada jadwal atas nama Anda'
+                  : 'Tidak ada jadwal pasien hari ini'
                 : 'Tidak ada jadwal dengan status ini'}
             </Text>
+            {/* Sama seperti tab Operasi: kosong di cakupan "saya" adalah keadaan
+                normal (dokter sedang tidak praktik hari itu), bukan kegagalan
+                memuat. Petunjuknya menyebut chip yang memang ada di layar. */}
+            {poliItems.length === 0 && lingkup === 'saya' && (
+              <Text style={styles.emptyHint}>
+                Coba <Text style={styles.emptyHintTekan}>Pasien saya</Text> untuk melihat kunjungan
+                pasien Anda oleh dokter lain.
+              </Text>
+            )}
+            {/* Dugaan replikasi tertinggal hanya masuk akal di cakupan luas:
+                kalau se-rumah-sakit pun tidak ada kunjungan, barulah datanya
+                yang patut dicurigai. Di cakupan "saya", kosong jauh lebih
+                mungkin berarti dokternya memang tidak praktik. */}
+            {poliItems.length === 0 && lingkup === 'pasien' && (
+              <Text style={styles.comingSoonSub}>
+                Data kunjungan terbaru di SIMRS mungkin belum sampai hari ini.
+              </Text>
+            )}
           </View>
         ) : (
           <ScrollView
@@ -572,14 +661,26 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
               <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} colors={[colors.primary]} />
             }
           >
-            {/* Kartu sengaja tidak bisa ditap: belum ada layar detail kunjungan
-                (OperasiStackParamList cuma punya DetailJadwalOperasi &
-                DetailKonsul). Bikin satu lagi di luar cakupan permintaan ini. */}
+            {poliTanggalData ? (
+              <View style={styles.catatanTanggal}>
+                <MaterialIcons name="info-outline" size={16} color={colors.primary} />
+                <Text style={styles.catatanTanggalText}>
+                  Tidak ada kunjungan hari ini. Menampilkan {formatTanggalSingkat(poliTanggalData)},
+                  data terakhir yang tersedia di SIMRS.
+                </Text>
+              </View>
+            ) : null}
             {filteredPoliItems.map((item) => {
               const meta = KUNJUNGAN_STATUS_META[item.statusKunjungan];
               const jenisLabel = labelJenisKunjungan(item.jenisKunjungan);
               return (
-                <View key={item.id} style={styles.card}>
+                <Pressable
+                  key={item.id}
+                  style={styles.card}
+                  onPress={() => navigation.navigate('DetailKunjungan', { kunjunganId: item.id })}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Detail kunjungan ${item.pasien.nama}`}
+                >
                   <View style={styles.cardTop}>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.cardTime}>{formatJam(item.tanggalMasuk)}</Text>
@@ -616,7 +717,7 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
                       </Text>
                     </View>
                   </View>
-                </View>
+                </Pressable>
               );
             })}
           </ScrollView>
@@ -718,9 +819,21 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
         <View style={styles.center}>
           <Text style={styles.comingSoonTitle}>
             {operasiRelevan.length === 0
-              ? 'Tidak ada operasi yang belum selesai'
+              ? lingkup === 'saya'
+                ? 'Tidak ada operasi atas nama Anda'
+                : 'Tidak ada operasi yang belum selesai'
               : 'Tidak ada jadwal dengan status ini'}
           </Text>
+          {/* Kosong di cakupan "saya" adalah keadaan normal, bukan kegagalan:
+              dokter penyakit dalam & onkologi radiasi memang tidak punya
+              operasi atas namanya. Tanpa petunjuk ini layar kosong terbaca
+              sebagai aplikasi rusak. */}
+          {operasiRelevan.length === 0 && lingkup === 'saya' && (
+            <Text style={styles.emptyHint}>
+              Coba <Text style={styles.emptyHintTekan}>Pasien saya</Text> untuk melihat operasi pasien
+              Anda oleh dokter lain.
+            </Text>
+          )}
         </View>
       ) : (
         <ScrollView
@@ -850,14 +963,55 @@ const styles = StyleSheet.create({
     borderColor: `${colors.outlineVariant}80`,
   },
   statusFilterChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  // Pemisah tipis antara chip cakupan dan chip status — tanpa ini keduanya
+  // terbaca sebagai satu daftar pilihan yang saling meniadakan.
+  filterPemisah: {
+    width: StyleSheet.hairlineWidth,
+    alignSelf: 'stretch',
+    marginVertical: 4,
+    backgroundColor: colors.outlineVariant,
+  },
   statusFilterText: { fontSize: ms(12), fontWeight: '600', color: colors.primary },
   statusFilterTextActive: { color: colors.onPrimary },
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: ms(8), padding: ms(32) },
   comingSoonTitle: { fontSize: ms(16), fontWeight: '700', color: colors.onSurfaceVariant },
+  emptyHint: {
+    marginTop: ms(8),
+    fontSize: ms(13),
+    lineHeight: ms(19),
+    color: colors.onSurfaceVariant,
+    textAlign: 'center',
+  },
+  // Menyebut nama chip-nya persis seperti tertulis di layar, ditebalkan supaya
+  // dokter tahu ini merujuk tombol yang ada di atas — bukan istilah baru.
+  emptyHintTekan: { fontWeight: '700', color: colors.primary },
   errorText: { color: colors.error, textAlign: 'center' },
 
   listContent: { padding: spacing.marginMobile, paddingTop: ms(8), gap: spacing.gutter },
+  comingSoonSub: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 17,
+    textAlign: 'center',
+    color: colors.onSurfaceVariant ?? colors.outline,
+  },
+  catatanTanggal: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: colors.primaryContainer,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginBottom: 12,
+  },
+  catatanTanggalText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.onPrimaryContainer ?? colors.primary,
+  },
   card: {
     backgroundColor: colors.backgroundWhite,
     borderRadius: ms(radius.md),

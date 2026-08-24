@@ -34,6 +34,19 @@ services:
       JWT_SECRET: "${JWT_SECRET:?wajib di-set, generate dengan openssl rand -base64 48}"
       JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-1d}
       PORT: 3000
+      # Sumber data modul Pasien/Operasi/Konsultasi. Default "dummy" lewat
+      # `:-`, jadi stack yang tidak mengisi apa-apa tetap jalan dengan data
+      # seed seperti sebelumnya — menyalakan mode SIMRS harus disengaja.
+      SUMBER_DATA: ${SUMBER_DATA:-dummy}
+      # Kredensial replika SIMRS (read-only). Kosong kalau SUMBER_DATA=dummy;
+      # server baru menuntutnya saat mode simrs benar-benar dipakai. Nilainya
+      # dari backend/.env, tidak pernah ditulis di file ini — sama seperti
+      # JWT_SECRET.
+      SIMRS_HOST: ${SIMRS_HOST:-}
+      SIMRS_PORT: ${SIMRS_PORT:-3306}
+      SIMRS_USER: ${SIMRS_USER:-}
+      SIMRS_PASSWORD: ${SIMRS_PASSWORD:-}
+      SIMRS_POOL_LIMIT: ${SIMRS_POOL_LIMIT:-5}
     ports:
       - "3000:3000"
     volumes:

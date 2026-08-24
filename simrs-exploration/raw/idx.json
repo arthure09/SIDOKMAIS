@@ -1,0 +1,442 @@
+[
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "dokter",
+  "INDEX_NAME": "HAFIS",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "HAFIS"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "dokter",
+  "INDEX_NAME": "NIP",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "NIP"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "dokter",
+  "INDEX_NAME": "PRIMARY",
+  "NON_UNIQUE": 0,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "ID"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "dokter",
+  "INDEX_NAME": "STATUS",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "ID"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "pasien",
+  "INDEX_NAME": "GELAR_BELAKANG",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "GELAR_BELAKANG"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "pasien",
+  "INDEX_NAME": "GELAR_DEPAN",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "GELAR_DEPAN"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "pasien",
+  "INDEX_NAME": "GOLONGAN_DARAH",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "GOLONGAN_DARAH"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "pasien",
+  "INDEX_NAME": "JENIS_PASIEN",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "JENIS_PASIEN"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "pasien",
+  "INDEX_NAME": "KEWARGANEGARAAN",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "KEWARGANEGARAAN"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "pasien",
+  "INDEX_NAME": "NAMA",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "NAMA"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "pasien",
+  "INDEX_NAME": "PRIMARY",
+  "NON_UNIQUE": 0,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "NORM"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "pasien",
+  "INDEX_NAME": "STATUS",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "STATUS"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "pasien",
+  "INDEX_NAME": "SUKUBANGSA",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "SUKUBANGSA"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "pasien",
+  "INDEX_NAME": "WILAYAH",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "WILAYAH"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "pegawai",
+  "INDEX_NAME": "NAMA",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "NAMA"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "pegawai",
+  "INDEX_NAME": "PRIMARY",
+  "NON_UNIQUE": 0,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "NIP"
+ },
+ {
+  "TABLE_SCHEMA": "master",
+  "TABLE_NAME": "pegawai",
+  "INDEX_NAME": "STATUS",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "STATUS"
+ },
+ {
+  "TABLE_SCHEMA": "medicalrecord",
+  "TABLE_NAME": "operasi",
+  "INDEX_NAME": "KUNJUNGAN",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "KUNJUNGAN"
+ },
+ {
+  "TABLE_SCHEMA": "medicalrecord",
+  "TABLE_NAME": "operasi",
+  "INDEX_NAME": "PRIMARY",
+  "NON_UNIQUE": 0,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "ID"
+ },
+ {
+  "TABLE_SCHEMA": "medicalrecord",
+  "TABLE_NAME": "operasi",
+  "INDEX_NAME": "STATUS",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "STATUS"
+ },
+ {
+  "TABLE_SCHEMA": "medicalrecord",
+  "TABLE_NAME": "operasi",
+  "INDEX_NAME": "TANGGAL",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "TANGGAL"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "kunjungan",
+  "INDEX_NAME": "BARU",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "BARU"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "kunjungan",
+  "INDEX_NAME": "KELUAR",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "KELUAR"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "kunjungan",
+  "INDEX_NAME": "MASUK",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "MASUK"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "kunjungan",
+  "INDEX_NAME": "NOPEN",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "NOPEN"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "kunjungan",
+  "INDEX_NAME": "NOPEN_RUANGAN_MASUK",
+  "NON_UNIQUE": 0,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "NOPEN"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "kunjungan",
+  "INDEX_NAME": "NOPEN_RUANGAN_MASUK",
+  "NON_UNIQUE": 0,
+  "SEQ_IN_INDEX": 2,
+  "COLUMN_NAME": "RUANGAN"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "kunjungan",
+  "INDEX_NAME": "NOPEN_RUANGAN_MASUK",
+  "NON_UNIQUE": 0,
+  "SEQ_IN_INDEX": 3,
+  "COLUMN_NAME": "MASUK"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "kunjungan",
+  "INDEX_NAME": "PRIMARY",
+  "NON_UNIQUE": 0,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "NOMOR"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "kunjungan",
+  "INDEX_NAME": "REF",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "REF"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "kunjungan",
+  "INDEX_NAME": "RUANGAN",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "RUANGAN"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "kunjungan",
+  "INDEX_NAME": "RUANG_KAMAR_TIDUR",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "RUANG_KAMAR_TIDUR"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "kunjungan",
+  "INDEX_NAME": "STATUS",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "STATUS"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "penjamin",
+  "INDEX_NAME": "INSTALASI",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "INSTALASI"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "penjamin",
+  "INDEX_NAME": "JENIS",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "JENIS"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "penjamin",
+  "INDEX_NAME": "KELAS",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "KELAS"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "penjamin",
+  "INDEX_NAME": "NOMOR",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "NOMOR"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "penjamin",
+  "INDEX_NAME": "NOPEN",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "NOPEN"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "penjamin",
+  "INDEX_NAME": "PRIMARY",
+  "NON_UNIQUE": 0,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "JENIS"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "penjamin",
+  "INDEX_NAME": "PRIMARY",
+  "NON_UNIQUE": 0,
+  "SEQ_IN_INDEX": 2,
+  "COLUMN_NAME": "NOPEN"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "reservasi",
+  "INDEX_NAME": "PRIMARY",
+  "NON_UNIQUE": 0,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "NOMOR"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "reservasi",
+  "INDEX_NAME": "RUANG_KAMAR_TIDUR",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "RUANG_KAMAR_TIDUR"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "reservasi",
+  "INDEX_NAME": "STATUS",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "STATUS"
+ },
+ {
+  "TABLE_SCHEMA": "pendaftaran",
+  "TABLE_NAME": "reservasi",
+  "INDEX_NAME": "TANGGAL",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "TANGGAL"
+ },
+ {
+  "TABLE_SCHEMA": "perjanjian",
+  "TABLE_NAME": "penjadwalan_operasi",
+  "INDEX_NAME": "cancel_by",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "cancel_by"
+ },
+ {
+  "TABLE_SCHEMA": "perjanjian",
+  "TABLE_NAME": "penjadwalan_operasi",
+  "INDEX_NAME": "created_by",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "created_by"
+ },
+ {
+  "TABLE_SCHEMA": "perjanjian",
+  "TABLE_NAME": "penjadwalan_operasi",
+  "INDEX_NAME": "dr_anestesi",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "dr_anestesi"
+ },
+ {
+  "TABLE_SCHEMA": "perjanjian",
+  "TABLE_NAME": "penjadwalan_operasi",
+  "INDEX_NAME": "id_perjanjian",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "id_perjanjian"
+ },
+ {
+  "TABLE_SCHEMA": "perjanjian",
+  "TABLE_NAME": "penjadwalan_operasi",
+  "INDEX_NAME": "id_reservasi",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "id_reservasi"
+ },
+ {
+  "TABLE_SCHEMA": "perjanjian",
+  "TABLE_NAME": "penjadwalan_operasi",
+  "INDEX_NAME": "id_waiting_list_operasi",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "id_waiting_list_operasi"
+ },
+ {
+  "TABLE_SCHEMA": "perjanjian",
+  "TABLE_NAME": "penjadwalan_operasi",
+  "INDEX_NAME": "jenis_anestesi",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "jenis_anestesi"
+ },
+ {
+  "TABLE_SCHEMA": "perjanjian",
+  "TABLE_NAME": "penjadwalan_operasi",
+  "INDEX_NAME": "kamar_operasi",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "kamar_operasi"
+ },
+ {
+  "TABLE_SCHEMA": "perjanjian",
+  "TABLE_NAME": "penjadwalan_operasi",
+  "INDEX_NAME": "PRIMARY",
+  "NON_UNIQUE": 0,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "id"
+ },
+ {
+  "TABLE_SCHEMA": "perjanjian",
+  "TABLE_NAME": "penjadwalan_operasi",
+  "INDEX_NAME": "tujuan_rs",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "tujuan_rs"
+ },
+ {
+  "TABLE_SCHEMA": "perjanjian",
+  "TABLE_NAME": "penjadwalan_operasi",
+  "INDEX_NAME": "updated_by",
+  "NON_UNIQUE": 1,
+  "SEQ_IN_INDEX": 1,
+  "COLUMN_NAME": "updated_by"
+ }
+]

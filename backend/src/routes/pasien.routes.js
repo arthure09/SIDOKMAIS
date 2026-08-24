@@ -7,6 +7,20 @@ const { KUNJUNGAN, statusEfektif } = require("../utils/statusJadwal");
 const router = express.Router();
 
 const ASSIGNMENT_STATUSES = ["ACTIVE", "COMPLETED"];
+const URUTAN = ["terbaru", "terlama"];
+
+// Bandingkan dua baris hasil berdasarkan tanggal kunjungan terakhir. Pasien
+// tanpa kunjungan sama sekali selalu di bawah, di kedua arah — mengurutkan
+// "terlama" lalu mendapat deretan tanggal "-" di puncak tidak menjawab
+// pertanyaan yang bikin dokter memilih urutan itu.
+function bandingKunjunganTerakhir(arah) {
+  return (a, b) => {
+    const ta = a.tanggalKunjunganTerakhir ? new Date(a.tanggalKunjunganTerakhir).getTime() : null;
+    const tb = b.tanggalKunjunganTerakhir ? new Date(b.tanggalKunjunganTerakhir).getTime() : null;
+    if (ta === null || tb === null) return ta === tb ? 0 : ta === null ? 1 : -1;
+    return arah === "terbaru" ? tb - ta : ta - tb;
+  };
+}
 
 // Parsing & validasi query params list pasien. Return { errors, values } —
 // errors non-kosong berarti request tidak valid (caller balikin 400).
@@ -24,6 +38,15 @@ function parseListQuery(query, role) {
     }
   }
 
+  let urutkan;
+  if (query.urutkan !== undefined) {
+    if (!URUTAN.includes(query.urutkan)) {
+      errors.push(`urutkan harus salah satu dari: ${URUTAN.join(", ")}`);
+    } else {
+      urutkan = query.urutkan;
+    }
+  }
+
   const pagination = parsePagination(query);
   errors.push(...pagination.errors);
 
@@ -37,6 +60,7 @@ function parseListQuery(query, role) {
     values: {
       search,
       status,
+      urutkan,
       ruanganJenis: jenis.ruanganJenis,
       page: pagination.page,
       limit: pagination.limit,
@@ -100,7 +124,7 @@ router.get("/", async (req, res) => {
     return res.status(400).json({ message: "Query params tidak valid", errors });
   }
 
-  const { search, status, ruanganJenis, page, limit, dokterId } = values;
+  const { search, status, urutkan, ruanganJenis, page, limit, dokterId } = values;
   // DOKTER selalu dipaksa ke assignment miliknya sendiri. ADMIN melihat semua
   // pasien lintas dokter, kecuali secara eksplisit filter lewat ?dokterId=.
   const assignmentDokterId = role === "DOKTER" ? ownDokterId : dokterId;
@@ -131,15 +155,18 @@ router.get("/", async (req, res) => {
       where,
       include: { pasien: true },
       orderBy: { pasien: { nama: "asc" } },
-      skip: (page - 1) * limit,
-      take: limit,
+      // ponytail: waktu diurutkan kunjungan terakhir, seluruh baris hasil filter
+      // ditarik dulu lalu dipotong di JS — tanggalnya datang dari relasi to-many
+      // `kunjungan`, dan Prisma tidak bisa mengurutkan pada max() relasi. Cukup
+      // untuk data dummy; ganti raw SQL kalau jumlah assignment per dokter besar.
+      ...(urutkan ? {} : { skip: (page - 1) * limit, take: limit }),
     }),
   ]);
 
   const pasienIds = assignments.map((a) => a.pasienId);
   const { terakhirMap, berikutnyaMap } = await getKunjunganTerdekat(pasienIds);
 
-  const data = assignments.map((a) => {
+  let data = assignments.map((a) => {
     const kunjunganTerakhir = terakhirMap.get(a.pasienId);
     const kunjunganBerikutnya = berikutnyaMap.get(a.pasienId);
 
@@ -154,6 +181,11 @@ router.get("/", async (req, res) => {
       tanggalKunjunganBerikutnya: kunjunganBerikutnya?.tanggalMasuk ?? null,
     };
   });
+
+  if (urutkan) {
+    data.sort(bandingKunjunganTerakhir(urutkan));
+    data = data.slice((page - 1) * limit, page * limit);
+  }
 
   res.json({
     data,

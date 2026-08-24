@@ -24,7 +24,12 @@ function initials(nama: string) {
     .join('');
 }
 
-export function PilihPasienHasilLabScreen({ navigation }: Props) {
+// Satu layar pilih-pasien untuk dua tujuan (Hasil Lab & Radiologi). Bedanya
+// cuma judul dan layar berikutnya, jadi menduplikasi seluruh layar cuma untuk
+// mengganti satu string tidak sepadan.
+export function PilihPasienHasilLabScreen({ route, navigation }: Props) {
+  const tujuan = route.params?.tujuan ?? 'lab';
+  const keRadiologi = tujuan === 'radiologi';
   const insets = useSafeAreaInsets();
   useHideTabBar();
   const { onScroll, scrollEventThrottle, scrolled } = useHeaderScrollShadow();
@@ -65,7 +70,7 @@ export function PilihPasienHasilLabScreen({ navigation }: Props) {
           <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
         </Pressable>
         <Text style={styles.headerTitle} numberOfLines={1}>
-          Cari Hasil Lab
+          {keRadiologi ? 'Cek Hasil Radiologi' : 'Cari Hasil Lab'}
         </Text>
         <View style={styles.backButton} />
       </View>
@@ -108,7 +113,12 @@ export function PilihPasienHasilLabScreen({ navigation }: Props) {
           scrollEventThrottle={scrollEventThrottle}
           renderItem={({ item }) => (
             <Pressable
-              onPress={() => navigation.navigate('HasilLabList', { pasienId: item.id, nama: item.nama })}
+              onPress={() =>
+                navigation.navigate(keRadiologi ? 'RadiologiList' : 'HasilLabList', {
+                  pasienId: item.id,
+                  nama: item.nama,
+                })
+              }
               style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
             >
               <View style={styles.avatar}>

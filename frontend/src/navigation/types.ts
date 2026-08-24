@@ -21,8 +21,21 @@ export type MainTabParamList = {
  */
 type LabRoutes = {
   HasilLabList: { pasienId: string; nama: string };
-  HasilLabDetail: { pemeriksaanLabId: string };
-  LihatPdfLab: { namaLaporan: string; tanggal: string };
+  // Satu layar = satu TANGGAL, bukan satu pemeriksaan. SIMRS memecah order lab
+  // per tindakan (Hematologi, Kimia Darah, Urinalisa jadi 3 baris terpisah
+  // walau diambil dari sampel yang sama di hari yang sama); dokter membacanya
+  // sebagai satu lembar hasil. Pengelompokan dilakukan di HasilLabListScreen.
+  HasilLabDetail: { pemeriksaanLabIds: string[]; tanggal: string };
+};
+
+/**
+ * Radiologi ikut pola dua-pintu yang sama dengan Lab. Bedanya satu layar detail
+ * = satu laporan, bukan satu tanggal: hasil radiologi berupa narasi utuh yang
+ * dibaca sendiri-sendiri, tidak digabung seperti parameter lab dari satu sampel.
+ */
+type RadiologiRoutes = {
+  RadiologiList: { pasienId: string; nama: string };
+  RadiologiDetail: { radiologiId: string };
 };
 
 /**
@@ -37,13 +50,17 @@ export type HomeStackParamList = {
   // `buatBaru` dikirim tombol "Tambah Pengingat" di Home — form catatan langsung
   // terbuka begitu screen-nya muncul, bukan mendarat di kalender kosong.
   CatatanKalender: { buatBaru?: boolean } | undefined;
-  PilihPasienHasilLab: undefined;
-} & LabRoutes;
+  // Dipakai dua tile Home (Hasil Lab & Radiologi) — `tujuan` yang menentukan
+  // layar berikutnya. Tanpa ini tile Radiologi mendarat di Hasil Lab.
+  PilihPasienHasilLab: { tujuan?: 'lab' | 'radiologi' } | undefined;
+} & LabRoutes &
+  RadiologiRoutes;
 
 export type PasienStackParamList = {
   PasienList: undefined;
   PasienDetail: { pasienId: string; nama: string };
-} & LabRoutes;
+} & LabRoutes &
+  RadiologiRoutes;
 
 export type OperasiStackParamList = {
   JadwalOperasiKonsul: undefined;
@@ -52,6 +69,7 @@ export type OperasiStackParamList = {
   // membaca Kunjungan, yang ternyata bukan bentuk aslinya (lihat
   // docs/rencana-revisi-modul-dokter.md).
   DetailKonsul: { konsultasiId: string };
+  DetailKunjungan: { kunjunganId: string };
 };
 
 export type NotifikasiStackParamList = {

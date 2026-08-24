@@ -31,6 +31,43 @@ function parseRentangTanggal(query, awal = "dari", akhir = "sampai") {
   return { errors, dari, sampai };
 }
 
+// Cakupan layar Jadwal: "saya" atau "pasien". Hanya dipakai route SIMRS.
+//
+// Dua pertanyaan yang berbeda, dan sebelumnya dijawab dengan satu query yang
+// sama:
+//   saya   -> kunjungan/operasi yang dokter ini TERLIBAT di dalamnya
+//   pasien -> semua kunjungan/operasi milik pasien yang pernah dia tangani,
+//             termasuk yang ditangani dokter lain sepenuhnya
+//
+// Aturan lama selalu memakai bentuk "pasien". Itu benar untuk AKSES (dokter
+// memang boleh membuka riwayat pasiennya) tapi salah sebagai isi JADWAL, dan
+// dengan data asli selisihnya bukan detail: untuk satu dokter penyakit dalam,
+// 692 kunjungan tampil di layar jadwal padahal cuma 103 yang melibatkan dia.
+// Di tab Operasi bahkan 46 dari 46 milik dokter lain, karena dia bukan dokter
+// bedah.
+//
+// Default "saya" — yang ditanyakan layar Jadwal adalah "apa pekerjaan saya".
+// Yang lebih luas tetap tersedia lewat ?lingkup=pasien.
+function parseLingkupJadwal(query) {
+  return query.lingkup === "pasien" ? "pasien" : "saya";
+}
+
+// Apakah klien benar-benar butuh jumlah total baris.
+//
+// Default MATI, dan itu keputusan yang diukur bukan selera. Pada dokter dengan
+// 8.726 pasien, COUNT lewat derived table akses DPJP makan 1,7 detik — hampir
+// dua kali biaya mengambil datanya sendiri (0,9 detik). Sementara per 24 Ags
+// 2026 tidak ada SATU PUN layar di frontend yang membaca `pagination.total`
+// atau `totalPages`; keduanya dihitung mahal lalu dibuang.
+//
+// Tetap bisa diminta lewat `?hitungTotal=1` supaya alat bantu (Postman, skrip
+// audit) dan layar bernomor halaman di kemudian hari tidak kehilangan jalannya.
+// Kalau nanti ada layar yang butuh, kirim param itu — jangan balikkan
+// defaultnya, karena yang mahal tetap mahal.
+function parseHitungTotal(query) {
+  return query.hitungTotal === "1" || query.hitungTotal === "true";
+}
+
 // Parsing & validasi page/limit, dipakai semua endpoint list yang paginated
 // (pasien/kunjungan/lab/notifikasi/operasi routes) — pola sebelumnya
 // diketik ulang identik di tiap file.
@@ -72,4 +109,6 @@ module.exports = {
   parsePagination,
   parseDokterIdFilter,
   parseRentangTanggal,
+  parseHitungTotal,
+  parseLingkupJadwal,
 };

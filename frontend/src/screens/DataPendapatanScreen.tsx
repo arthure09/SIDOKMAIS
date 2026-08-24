@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -125,39 +125,19 @@ export function DataPendapatanScreen({ navigation }: Props) {
   const { onScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
   const { headerBackgroundColor, headerShadowOpacity, headerElevation } = useAnimatedHeaderFade(scrolled);
 
-  // Header menempel di atas konten (absolute) dan menggeser dirinya sendiri
-  // keluar layar waktu discroll ke bawah. Absolute, bukan menyusutkan tinggi
-  // seperti useCollapseOnScroll: kotak yang tingginya berubah bikin list
-  // re-layout tiap frame dan ScrollView menjepit offset-nya balik (lihat
-  // catatan panjang di hook itu). Di sini yang bergerak cuma transform.
+  // Header menempel di atas konten (absolute) dan TIDAK ikut bergeser waktu
+  // discroll — judul "Jasa Medis" + tombol kembali selalu terlihat.
+  //
+  // Versi sebelumnya menggeser header keluar layar pakai Animated.diffClamp.
+  // Teknis animasinya benar, tapi hasilnya salah untuk layar ini: begitu
+  // discroll sedikit, seluruh penanda konteks hilang dan yang tersisa cuma
+  // deretan angka rupiah tanpa judul maupun jalan kembali. Menyembunyikan satu
+  // baris setinggi 56px tidak sepadan dengan kehilangan itu.
+  //
+  // ponytail: header dipatok mati, bukan dibikin bisa dikonfigurasi. Kalau
+  // suatu saat layar ini punya header tinggi yang memang layak disembunyikan,
+  // pola diffClamp-nya masih ada di git history.
   const [headerHeight, setHeaderHeight] = useState(insets.top + HEADER_ROW);
-  const scrollY = useRef(new Animated.Value(0)).current;
-
-  // diffClamp = header mengikuti jari 1:1 sejauh setinggi dirinya, lalu berhenti;
-  // arah baliknya langsung memunculkannya lagi tanpa harus balik ke puncak list.
-  // Semuanya jalan di native driver, jadi tidak ada satu pun re-render per frame.
-  const headerSlide = useMemo(() => {
-    const h = Math.max(headerHeight, 1);
-    return Animated.diffClamp(
-      // extrapolateLeft: overscroll/pull-to-refresh bikin y negatif, dan
-      // diffClamp membacanya sebagai "scroll naik" — tanpa dijepit ke 0, menarik
-      // list ke bawah di puncak halaman menahan header di posisi yang salah.
-      scrollY.interpolate({ inputRange: [0, 1], outputRange: [0, 1], extrapolateLeft: 'clamp' }),
-      0,
-      h,
-    ).interpolate({ inputRange: [0, h], outputRange: [0, -h] });
-  }, [scrollY, headerHeight]);
-
-  // Animated.event buat scrollY (native), listener buat handler JS yang sudah
-  // ada (dock tab bar + flag `scrolled`) — dua-duanya dari satu event scroll.
-  const handleScroll = useMemo(
-    () =>
-      Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
-        useNativeDriver: true,
-        listener: onScroll,
-      }),
-    [scrollY, onScroll],
-  );
 
   const token = useAuthStore((s) => s.token);
 
@@ -229,6 +209,12 @@ export function DataPendapatanScreen({ navigation }: Props) {
     muat().finally(() => setRefreshing(false));
   }, [muat]);
 
+  // Ganti periode/filter memuat ulang sambil angka lama masih terpampang.
+  // Tanpa penanda apa pun, layar terlihat tidak merespons sama sekali —
+  // apalagi di mode SIMRS yang query-nya bisa beberapa detik. `refreshing`
+  // dikecualikan karena RefreshControl sudah punya indikatornya sendiri.
+  const memuatUlang = loading && resp !== null && !refreshing;
+
   const bulanKeys = resp?.bulanTersedia ?? [];
   const periodeAktif = periode ?? resp?.periode ?? null;
   const bulanIni = useMemo(() => resp?.data ?? [], [resp]);
@@ -290,13 +276,14 @@ export function DataPendapatanScreen({ navigation }: Props) {
 
   return (
     <View style={styles.container}>
-      <Animated.View
+      <View
         onLayout={(e) => setHeaderHeight(e.nativeEvent.layout.height)}
-        style={[styles.header, { paddingTop: insets.top, transform: [{ translateY: headerSlide }] }]}
+        style={[styles.header, { paddingTop: insets.top }]}
       >
-        {/* Lapisan warna + shadow dipisah jadi anak sendiri: geseran header jalan
-            di native driver, sedangkan warna & shadow harus di thread JS, dan
-            satu View tidak boleh dianimasikan dua driver sekaligus. */}
+        {/* Lapisan warna + shadow tetap jadi anak sendiri: latar header baru
+            muncul setelah konten mulai discroll (useAnimatedHeaderFade), dan
+            memisahkannya menjaga tombol kembali & judul di atas lapisan itu
+            tanpa ikut dianimasikan. */}
         <Animated.View
           pointerEvents="none"
           style={[
@@ -314,16 +301,16 @@ export function DataPendapatanScreen({ navigation }: Props) {
         </Pressable>
         <Text style={styles.headerTitle}>Jasa Medis</Text>
         <View style={styles.backButton} />
-      </Animated.View>
+      </View>
 
-      <Animated.ScrollView
+      <ScrollView
         contentContainerStyle={[
           styles.content,
           // Header sudah keluar dari alur normal, jadi ruangnya dikembalikan di sini.
           { paddingTop: headerHeight + spacing.marginMobile, paddingBottom: insets.bottom + spacing.gutter },
         ]}
         showsVerticalScrollIndicator={false}
-        onScroll={handleScroll}
+        onScroll={onScroll}
         scrollEventThrottle={scrollEventThrottle}
         refreshControl={
           <RefreshControl
@@ -345,7 +332,13 @@ export function DataPendapatanScreen({ navigation }: Props) {
         >
           <MaterialIcons name="calendar-month" size={18} color={colors.primary} />
           <Text style={styles.bulanTriggerText}>{teksPeriode ?? 'Memuat…'}</Text>
-          <MaterialIcons name="expand-more" size={20} color={colors.onSurfaceVariant} />
+          {/* Indikatornya menempel di kontrol yang barusan dipakai, bukan di
+              sudut layar — itu yang menjawab "permintaan saya diterima?". */}
+          {memuatUlang ? (
+            <ActivityIndicator size="small" color={colors.primary} />
+          ) : (
+            <MaterialIcons name="expand-more" size={20} color={colors.onSurfaceVariant} />
+          )}
         </Pressable>
 
         {loading && !resp && <ActivityIndicator color={colors.primary} style={styles.pemuat} />}
@@ -353,7 +346,7 @@ export function DataPendapatanScreen({ navigation }: Props) {
 
         {/* Satu-satunya permukaan gelap di seluruh app: penanda bahwa ini angka
             uang, bukan sekadar kartu ringkasan lain. */}
-        <View style={styles.panel}>
+        <View style={[styles.panel, memuatUlang && styles.buram]}>
           <Text style={styles.panelLabel}>Total jasa medis</Text>
           <View style={styles.panelAngkaRow}>
             <Text style={styles.panelAngka}>{formatRupiah(total)}</Text>
@@ -402,7 +395,7 @@ export function DataPendapatanScreen({ navigation }: Props) {
           </View>
         </View>
 
-        <View style={styles.rincianHeader}>
+        <View style={[styles.rincianHeader, memuatUlang && styles.buram]}>
           <Text style={styles.rincianTitle}>
             {rincian.length} pelayanan{adaFilter ? ' tersaring' : ''}
           </Text>
@@ -414,10 +407,12 @@ export function DataPendapatanScreen({ navigation }: Props) {
         </View>
 
         {grup.length === 0 ? (
-          <Text style={styles.emptyText}>Tidak ada pelayanan untuk filter ini.</Text>
+          <Text style={[styles.emptyText, memuatUlang && styles.buram]}>
+            Tidak ada pelayanan untuk filter ini.
+          </Text>
         ) : (
           grup.map(([tanggal, isi]) => (
-            <View key={tanggal} style={styles.grup}>
+            <View key={tanggal} style={[styles.grup, memuatUlang && styles.buram]}>
               <View style={styles.grupHeader}>
                 <Text style={styles.grupTanggal}>{labelTanggal(tanggal)}</Text>
                 <Text style={styles.grupTotal}>{formatRupiah(jumlah(isi))}</Text>
@@ -490,7 +485,7 @@ export function DataPendapatanScreen({ navigation }: Props) {
             </Text>
           </Pressable>
         )}
-      </Animated.ScrollView>
+      </ScrollView>
 
       <Modal
         visible={periodeTerbuka}
@@ -737,6 +732,10 @@ const styles = StyleSheet.create({
   hapusFilter: { fontSize: 12, fontWeight: '700', color: colors.primary },
   emptyText: { fontSize: 14, color: colors.onSurfaceVariant },
   pemuat: { paddingVertical: 24 },
+  // Angka lama tetap terbaca tapi jelas "belum final" selagi data baru dimuat.
+  // Sengaja bukan disembunyikan: layar yang kosong sesaat lalu terisi lagi
+  // terasa lebih rusak daripada angka yang meredup.
+  buram: { opacity: 0.4 },
   errorText: { fontSize: 14, color: colors.error },
 
   grup: { gap: spacing.base },

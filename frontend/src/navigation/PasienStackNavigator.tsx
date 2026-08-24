@@ -3,7 +3,8 @@ import { PasienListScreen } from '../screens/PasienListScreen';
 import { PasienDetailScreen } from '../screens/PasienDetailScreen';
 import { HasilLabListScreen } from '../screens/HasilLabListScreen';
 import { HasilLabDetailScreen } from '../screens/HasilLabDetailScreen';
-import { LihatPdfLabScreen } from '../screens/LihatPdfLabScreen';
+import { RadiologiListScreen } from '../screens/RadiologiListScreen';
+import { RadiologiDetailScreen } from '../screens/RadiologiDetailScreen';
 import type { PasienStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<PasienStackParamList>();
@@ -23,7 +24,16 @@ export function PasienStackNavigator() {
         component={HasilLabDetailScreen}
         options={{ headerShown: false }}
       />
-      <Stack.Screen name="LihatPdfLab" component={LihatPdfLabScreen} options={{ headerShown: false }} />
+      <Stack.Screen
+        name="RadiologiList"
+        component={RadiologiListScreen}
+        options={{ headerShown: false }}
+      />
+      <Stack.Screen
+        name="RadiologiDetail"
+        component={RadiologiDetailScreen}
+        options={{ headerShown: false }}
+      />
     </Stack.Navigator>
   );
 }

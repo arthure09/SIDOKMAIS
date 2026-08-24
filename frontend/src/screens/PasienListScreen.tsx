@@ -11,7 +11,7 @@ import { colors, radius, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
 import { TextInput } from '../components/TextInput';
 import { ScrollToTopButton } from '../components/ScrollToTopButton';
-import type { AssignmentStatus, JenisKunjungan, PasienListItem } from '../api/types';
+import type { AssignmentStatus, JenisKunjungan, PasienListItem, UrutanPasien } from '../api/types';
 import { JENIS_KUNJUNGAN_LABEL, labelJenisKunjungan } from '../utils/jenisKunjungan';
 import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useTabBarDockOnScroll } from '../hooks/useTabBarDockOnScroll';
@@ -31,6 +31,14 @@ const STATUS_OPTIONS: Opsi<AssignmentStatus | undefined>[] = [
   { label: 'Semua', value: undefined },
   { label: 'Aktif', value: 'ACTIVE' },
   { label: 'Selesai', value: 'COMPLETED' },
+];
+
+// Tanpa pilihan = urut nama A-Z, bawaan server. "Terbaru"/"terlama" mengacu ke
+// tanggal kunjungan terakhir — kolom yang sama yang tampil di kaki tiap kartu.
+const URUTAN_OPTIONS: Opsi<UrutanPasien | undefined>[] = [
+  { label: 'Nama A-Z', value: undefined },
+  { label: 'Kunjungan terbaru', value: 'terbaru' },
+  { label: 'Kunjungan terlama', value: 'terlama' },
 ];
 
 const JENIS_OPTIONS: Opsi<JenisKunjungan | undefined>[] = [
@@ -132,6 +140,30 @@ function initials(nama: string) {
     .join('');
 }
 
+// Hasil terakhir per kombinasi filter, disimpan di level modul — bukan di
+// state, karena navigator meng-unmount layar ini tiap kali dokter membuka detail
+// pasien lalu kembali.
+//
+// Tujuannya BUKAN menghemat request: request tetap jalan tiap kali. Yang
+// dihilangkan adalah layar kosong selama menunggunya. Di mode SIMRS satu
+// permintaan daftar pasien makan 1,5-2 detik, dan menatap spinner selama itu
+// setiap kali kembali dari detail adalah keluhan yang paling terasa.
+//
+// ponytail: cache sederhana tanpa TTL dan tanpa batas ukuran, hidup selama
+// proses app. Aman di sini karena kuncinya cuma kombinasi filter (belasan
+// kemungkinan, masing-masing 50 baris). Kalau nanti jadi infinite scroll atau
+// filternya bercabang banyak, ganti ke LRU atau langsung pakai React Query.
+const cacheDaftar = new Map<string, PasienListItem[]>();
+
+function kunciCache(f: {
+  search: string;
+  status?: AssignmentStatus;
+  jenis?: JenisKunjungan;
+  urutkan?: UrutanPasien;
+}) {
+  return `${f.search}|${f.status ?? ''}|${f.jenis ?? ''}|${f.urutkan ?? ''}`;
+}
+
 export function PasienListScreen({ navigation }: Props) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
@@ -147,6 +179,7 @@ export function PasienListScreen({ navigation }: Props) {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<AssignmentStatus | undefined>(undefined);
   const [jenis, setJenis] = useState<JenisKunjungan | undefined>(undefined);
+  const [urutkan, setUrutkan] = useState<UrutanPasien | undefined>(undefined);
   const [items, setItems] = useState<PasienListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -168,23 +201,43 @@ export function PasienListScreen({ navigation }: Props) {
 
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     if (!token) return;
-    if (!opts?.silent) setLoading(true);
+
+    const kunci = kunciCache({ search, status, jenis, urutkan });
+    const tersimpan = cacheDaftar.get(kunci);
+
+    // Sudah pernah dimuat dengan filter yang sama -> tampilkan detik itu juga,
+    // data barunya menyusul diam-diam. Spinner cuma muncul kalau memang belum
+    // ada apa-apa untuk ditampilkan.
+    if (tersimpan) {
+      setItems(tersimpan);
+      setLoading(false);
+    } else if (!opts?.silent) {
+      setLoading(true);
+    }
+
     setError(null);
     try {
       const result = await fetchPasienList(token, {
         search,
         status,
         jenisKunjungan: jenis,
+        urutkan,
         page: 1,
         limit: 50,
       });
+      cacheDaftar.set(kunci, result.data);
       setItems(result.data);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Gagal memuat data pasien');
+      // Layar yang sudah berisi data lama tidak diganti jadi layar error —
+      // data agak basi jauh lebih berguna daripada layar kosong, dan pull-to-
+      // refresh tetap tersedia kalau dokter mau memaksa.
+      if (!tersimpan) {
+        setError(err instanceof ApiError ? err.message : 'Gagal memuat data pasien');
+      }
     } finally {
       if (!opts?.silent) setLoading(false);
     }
-  }, [token, search, status, jenis]);
+  }, [token, search, status, jenis, urutkan]);
 
   useEffect(() => {
     load();
@@ -233,7 +286,16 @@ export function PasienListScreen({ navigation }: Props) {
         </Animated.View>
 
         <Animated.View style={filterRow.style} onLayout={filterRow.onLayout}>
-          <Animated.View style={[styles.filterRow, filterRow.innerStyle]}>
+          {/* Digeser mendatar, bukan dibungkus ke baris kedua: tiga dropdown
+              tidak muat sekaligus begitu labelnya terisi pilihan ("Kunjungan
+              terbaru"), dan baris kedua menaikkan tinggi header yang
+              menyusut-mengembang waktu scroll. */}
+          <Animated.ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={filterRow.innerStyle}
+            contentContainerStyle={styles.filterRow}
+          >
             <FilterDropdown
               judul="Status pasien"
               labelKosong="Status"
@@ -248,7 +310,14 @@ export function PasienListScreen({ navigation }: Props) {
               nilai={jenis}
               onPilih={setJenis}
             />
-          </Animated.View>
+            <FilterDropdown
+              judul="Urutkan"
+              labelKosong="Urutkan"
+              opsi={URUTAN_OPTIONS}
+              nilai={urutkan}
+              onPilih={setUrutkan}
+            />
+          </Animated.ScrollView>
         </Animated.View>
       </Animated.View>
 

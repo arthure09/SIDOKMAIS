@@ -212,7 +212,7 @@ export function PasienDetailScreen({ route, navigation }: Props) {
           </View>
         </View>
 
-        {/* Akses cepat: Hasil Lab pasien ini */}
+        {/* Akses cepat: hasil penunjang pasien ini */}
         <Pressable
           onPress={() => navigation.navigate('HasilLabList', { pasienId: detail.id, nama: detail.nama })}
           style={({ pressed }) => [styles.labLinkCard, pressed && styles.labLinkCardPressed]}
@@ -223,6 +223,20 @@ export function PasienDetailScreen({ route, navigation }: Props) {
           <View style={{ flex: 1 }}>
             <Text style={styles.labLinkTitle}>Hasil Lab</Text>
             <Text style={styles.labLinkSubtitle}>Lihat riwayat pemeriksaan laboratorium</Text>
+          </View>
+          <MaterialIcons name="chevron-right" size={22} color={colors.outline} />
+        </Pressable>
+
+        <Pressable
+          onPress={() => navigation.navigate('RadiologiList', { pasienId: detail.id, nama: detail.nama })}
+          style={({ pressed }) => [styles.labLinkCard, pressed && styles.labLinkCardPressed]}
+        >
+          <View style={styles.labLinkIcon}>
+            <MaterialIcons name="image-search" size={22} color={colors.primary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.labLinkTitle}>Radiologi</Text>
+            <Text style={styles.labLinkSubtitle}>Baca laporan rontgen, CT, USG, dan MRI</Text>
           </View>
           <MaterialIcons name="chevron-right" size={22} color={colors.outline} />
         </Pressable>

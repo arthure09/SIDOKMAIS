@@ -1,80 +1,173 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiError } from '../api/client';
 import { fetchHasilLabDetail } from '../api/lab';
+import { hitungRelRujukan } from '../utils/rentangLab';
 import { useAuthStore } from '../store/authStore';
 import { colors, radius, shadows, spacing } from '../theme/colors';
 import { Text } from '../components/Text';
-import type { FlagHasilLab, HasilLabDetail, StatusPemeriksaanLab } from '../api/types';
+import type { FlagHasilLab, HasilLabDetail, HasilLabItemApi } from '../api/types';
 import { useHeaderScrollShadow } from '../hooks/useHeaderScrollShadow';
 import { useHideTabBar } from '../hooks/useHideTabBar';
 import type { PasienStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<PasienStackParamList, 'HasilLabDetail'>;
 
-const STATUS_META: Record<StatusPemeriksaanLab, { label: string; bg: string; fg: string }> = {
-  COMPLETED: { label: 'Selesai', bg: colors.deepTealDark, fg: colors.onPrimary },
-  PENDING: { label: 'Menunggu', bg: colors.primaryContainer, fg: colors.onPrimaryContainer },
-  CANCELLED: { label: 'Batal', bg: colors.errorContainer, fg: colors.onErrorContainer },
+// Satu huruf di baris tabel (ruangnya sempit), satu kata di daftar "Perlu
+// diperiksa" (di sana yang dibaca justru penyimpangannya, bukan angkanya).
+const FLAG_SINGKAT: Record<FlagHasilLab, string> = {
+  NORMAL: '',
+  RENDAH: 'R',
+  TINGGI: 'T',
+  ABNORMAL: 'A',
 };
 
-const FLAG_META: Record<FlagHasilLab, { bg: string; fg: string }> = {
-  NORMAL: { bg: colors.surfaceContainer, fg: colors.onSurfaceVariant },
-  RENDAH: { bg: colors.errorContainer, fg: colors.onErrorContainer },
-  TINGGI: { bg: colors.errorContainer, fg: colors.onErrorContainer },
-  ABNORMAL: { bg: colors.errorContainer, fg: colors.onErrorContainer },
+const FLAG_LABEL: Record<FlagHasilLab, string> = {
+  NORMAL: 'Normal',
+  RENDAH: 'Di bawah rujukan',
+  TINGGI: 'Di atas rujukan',
+  ABNORMAL: 'Abnormal',
 };
 
 function formatTanggal(value: string | null) {
   if (!value) return '-';
-  return new Date(value).toLocaleDateString('id-ID', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return new Date(value).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' });
 }
 
+function formatJam(value: string | null) {
+  if (!value) return '-';
+  return new Date(value).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+}
+
+function unik(nilai: (string | null | undefined)[]) {
+  return [...new Set(nilai.filter((v): v is string => !!v))];
+}
+
+// Rel rujukan: rentang rujukan sebagai segmen, hasil sebagai penanda di atasnya.
+// Ini yang membuat angka bisa dibaca sekilas — "13,2-17,3" perlu dibandingkan
+// dalam kepala, posisi penanda tidak.
+//
+// Warna penanda mengikuti `flag` DARI BACKEND, bukan geometri rel. Menyimpulkan
+// sendiri "nilai ini abnormal" dari angka vs rentang adalah penafsiran klinis;
+// backend sengaja tidak melakukannya (lihat simrs/lab.routes.js), jadi layar pun
+// tidak. Kalau penandanya kelihatan di luar segmen sementara laboratorium tidak
+// menandainya, itu tersaji apa adanya untuk dibaca dokter.
+function RelRujukanBar({ item }: { item: HasilLabItemApi }) {
+  const rel = hitungRelRujukan(item.nilai, item.nilaiRujukan);
+  if (!rel) return null;
+
+  const abnormal = item.flag !== 'NORMAL';
+  return (
+    <View style={styles.rel}>
+      <View style={styles.relTrack} />
+      <View
+        style={[
+          styles.relSegmen,
+          { left: `${rel.awal * 100}%`, width: `${Math.max(rel.akhir - rel.awal, 0.02) * 100}%` },
+        ]}
+      />
+      <View
+        style={[styles.relPenanda, { left: `${rel.posisi * 100}%` }, abnormal && styles.relPenandaAlarm]}
+      />
+    </View>
+  );
+}
+
+function BarisParameter({ item, berikutnya }: { item: HasilLabItemApi; berikutnya: boolean }) {
+  const abnormal = item.flag !== 'NORMAL';
+  return (
+    <View style={[styles.baris, abnormal ? styles.barisAbnormal : berikutnya && styles.barisGaris]}>
+      <View style={styles.barisAtas}>
+        <Text style={styles.paramNama} numberOfLines={2}>
+          {item.namaParameter}
+        </Text>
+        <View style={styles.nilaiWrap}>
+          <Text style={[styles.nilai, abnormal && styles.nilaiAbnormal]}>{item.nilai}</Text>
+          {item.satuan && <Text style={styles.satuan}>{item.satuan}</Text>}
+          {abnormal && (
+            <View style={styles.flagPill}>
+              <Text style={styles.flagPillText}>{FLAG_SINGKAT[item.flag]}</Text>
+            </View>
+          )}
+        </View>
+      </View>
+      <View style={styles.barisBawah}>
+        <RelRujukanBar item={item} />
+        <Text style={styles.rujukanText} numberOfLines={1}>
+          {item.nilaiRujukan ? `Rujukan ${item.nilaiRujukan}` : 'Tanpa rujukan'}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+// Satu layar = seluruh hasil lab pada SATU tanggal. Daftar id-nya dikelompokkan
+// di HasilLabListScreen; di sini tiap id diambil paralel lalu ditampilkan
+// sebagai satu tabel per pemeriksaan di bawah satu kop pasien/tanggal.
+// Endpoint tetap GET /api/lab/:id (dummy & SIMRS sama) — tidak ada endpoint
+// "per tanggal", dan jumlah id per tanggal cuma segelintir, jadi tidak sepadan
+// menambah satu lagi.
 export function HasilLabDetailScreen({ route, navigation }: Props) {
-  const { pemeriksaanLabId } = route.params;
+  const { pemeriksaanLabIds, tanggal } = route.params;
   const token = useAuthStore((s) => s.token);
   const insets = useSafeAreaInsets();
   useHideTabBar();
   const { onScroll, scrollEventThrottle, scrolled } = useHeaderScrollShadow();
-  const [detail, setDetail] = useState<HasilLabDetail | null>(null);
+  const [detailList, setDetailList] = useState<HasilLabDetail[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // `pemeriksaanLabIds` adalah array dari route params: identitasnya berubah
+  // tiap render, jadi yang dijadikan dependency adalah isinya (string gabungan),
+  // bukan arraynya — kalau tidak, efeknya fetch ulang tanpa henti.
+  const idsKey = pemeriksaanLabIds.join(',');
 
   const load = useCallback(async () => {
     if (!token) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await fetchHasilLabDetail(token, pemeriksaanLabId);
-      setDetail(result);
+      const hasil = await Promise.all(
+        idsKey.split(',').map((id) => fetchHasilLabDetail(token, id)),
+      );
+      setDetailList(hasil);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Gagal memuat detail hasil lab');
     } finally {
       setLoading(false);
     }
-  }, [token, pemeriksaanLabId]);
+  }, [token, idsKey]);
 
   useEffect(() => {
     load();
   }, [load]);
+
+  // Nilai bertanda dikumpulkan lintas pemeriksaan: pertanyaan pertama dokter
+  // adalah "ada yang menyimpang?", bukan "apa isi Hematologi?".
+  const perluDiperiksa = useMemo(
+    () =>
+      detailList.flatMap((d) =>
+        (d.hasilLabItem ?? [])
+          .filter((i) => i.flag !== 'NORMAL')
+          .map((i) => ({ item: i, pemeriksaan: d.namaPemeriksaan })),
+      ),
+    [detailList],
+  );
 
   const header = (
     <View style={[styles.header, { paddingTop: insets.top }, scrolled && shadows.header]}>
       <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
         <MaterialIcons name="arrow-back" size={24} color={colors.onBackground} />
       </Pressable>
-      <Text style={styles.headerTitle} numberOfLines={1}>
-        {detail?.namaPemeriksaan ?? 'Detail Hasil Lab'}
-      </Text>
+      <View style={styles.headerTitleBlock}>
+        <Text style={styles.headerEyebrow}>Lembar hasil</Text>
+        <Text style={styles.headerTitle} numberOfLines={1}>
+          {formatTanggal(tanggal)}
+        </Text>
+      </View>
       <View style={styles.backButton} />
     </View>
   );
@@ -90,7 +183,7 @@ export function HasilLabDetailScreen({ route, navigation }: Props) {
     );
   }
 
-  if (error || !detail) {
+  if (error || detailList.length === 0) {
     return (
       <View style={styles.container}>
         {header}
@@ -101,7 +194,11 @@ export function HasilLabDetailScreen({ route, navigation }: Props) {
     );
   }
 
-  const statusMeta = STATUS_META[detail.status];
+  const pasien = detailList[0].pasien;
+  const labs = unik(detailList.map((d) => d.laboratorium));
+  const dokter = unik(detailList.map((d) => d.dokterPeminta?.nama));
+  const tanggalHasil = unik(detailList.map((d) => d.tanggalHasil)).sort().pop() ?? null;
+  const totalNilai = detailList.reduce((n, d) => n + (d.hasilLabItem?.length ?? 0), 0);
 
   return (
     <View style={styles.container}>
@@ -112,98 +209,127 @@ export function HasilLabDetailScreen({ route, navigation }: Props) {
         onScroll={onScroll}
         scrollEventThrottle={scrollEventThrottle}
       >
+        {/* Kop: siapa, dari mana, kapan — lalu tiga angka yang merangkum lembar ini. */}
         <View style={styles.card}>
-          <View style={styles.topRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.pasienNama}>{detail.pasien.nama}</Text>
-              <Text style={styles.pasienMeta}>RM: {detail.pasien.norm}</Text>
+          <View>
+            <Text style={styles.pasienNama}>{pasien?.nama ?? '-'}</Text>
+            <Text style={styles.pasienMeta}>
+              RM {pasien?.norm ?? '-'} · {labs.length > 0 ? labs.join(' · ') : 'Laboratorium tidak tercatat'}
+            </Text>
+          </View>
+
+          <View style={styles.statRow}>
+            <View style={styles.stat}>
+              <Text style={styles.statAngka}>{detailList.length}</Text>
+              <Text style={styles.statLabel}>Pemeriksaan</Text>
             </View>
-            <View style={[styles.statusPill, { backgroundColor: statusMeta.bg }]}>
-              <Text style={[styles.statusPillText, { color: statusMeta.fg }]}>{statusMeta.label}</Text>
+            <View style={styles.statPemisah} />
+            <View style={styles.stat}>
+              <Text style={styles.statAngka}>{totalNilai}</Text>
+              <Text style={styles.statLabel}>Nilai</Text>
+            </View>
+            <View style={styles.statPemisah} />
+            <View style={styles.stat}>
+              <Text style={[styles.statAngka, perluDiperiksa.length > 0 && styles.statAngkaAlarm]}>
+                {perluDiperiksa.length}
+              </Text>
+              <Text style={styles.statLabel}>Ditandai lab</Text>
             </View>
           </View>
-          <View style={styles.divider} />
-          <View style={styles.metaGrid}>
+
+          <View style={styles.waktuRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.metaLabel}>Kategori</Text>
-              <Text style={styles.metaValue}>{detail.kategori}</Text>
+              <Text style={styles.metaLabel}>Diminta</Text>
+              <Text style={styles.metaValue}>{formatJam(tanggal)} WIB</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.metaLabel}>Laboratorium</Text>
-              <Text style={styles.metaValue}>{detail.laboratorium ?? '-'}</Text>
+              <Text style={styles.metaLabel}>Hasil keluar</Text>
+              <Text style={styles.metaValue}>
+                {tanggalHasil ? `${formatJam(tanggalHasil)} WIB` : '-'}
+              </Text>
+            </View>
+            <View style={{ flex: 1.4 }}>
+              <Text style={styles.metaLabel}>Diminta oleh</Text>
+              <Text style={styles.metaValue} numberOfLines={2}>
+                {dokter.length > 0 ? dokter.join(', ') : '-'}
+              </Text>
             </View>
           </View>
-          <View style={styles.metaGrid}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.metaLabel}>Tanggal Permintaan</Text>
-              <Text style={styles.metaValue}>{formatTanggal(detail.tanggalPermintaan)}</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.metaLabel}>Tanggal Hasil</Text>
-              <Text style={styles.metaValue}>{formatTanggal(detail.tanggalHasil)}</Text>
-            </View>
-          </View>
-          {detail.dokterPeminta && (
-            <View style={styles.metaGrid}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.metaLabel}>Dokter Peminta</Text>
-                <Text style={styles.metaValue}>{detail.dokterPeminta.nama}</Text>
-              </View>
-            </View>
-          )}
-          {detail.catatan && (
-            <View>
-              <Text style={styles.metaLabel}>Catatan</Text>
-              <Text style={styles.metaValue}>{detail.catatan}</Text>
-            </View>
-          )}
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Hasil Parameter</Text>
-
-          {detail.status === 'PENDING' ? (
-            <Text style={styles.emptyText}>Hasil belum tersedia, pemeriksaan masih menunggu.</Text>
-          ) : detail.status === 'CANCELLED' ? (
-            <Text style={styles.emptyText}>Pemeriksaan ini dibatalkan.</Text>
-          ) : detail.hasilLabItem === null ? (
-            <Text style={styles.emptyText}>Detail parameter belum tersedia untuk pemeriksaan ini.</Text>
-          ) : (
-            <View>
-              <View style={styles.tableHeaderRow}>
-                <Text style={[styles.tableHeaderText, { flex: 2 }]}>Parameter</Text>
-                <Text style={[styles.tableHeaderText, { flex: 1 }]}>Hasil</Text>
-                <Text style={[styles.tableHeaderText, { flex: 1.4 }]}>Rujukan</Text>
-              </View>
-              {detail.hasilLabItem.map((item, i) => {
-                const flagMeta = FLAG_META[item.flag];
-                return (
-                  <View
-                    key={item.id}
-                    style={[
-                      styles.tableRow,
-                      i < (detail.hasilLabItem?.length ?? 0) - 1 && styles.tableRowBorder,
-                    ]}
-                  >
-                    <Text style={[styles.tableCellNama, { flex: 2 }]}>{item.namaParameter}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.tableCellNilai}>
-                        {item.nilai}
-                        {item.satuan ? ` ${item.satuan}` : ''}
-                      </Text>
-                      {item.flag !== 'NORMAL' && (
-                        <View style={[styles.flagPill, { backgroundColor: flagMeta.bg }]}>
-                          <Text style={[styles.flagPillText, { color: flagMeta.fg }]}>{item.flag}</Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text style={[styles.tableCellRujukan, { flex: 1.4 }]}>{item.nilaiRujukan ?? '-'}</Text>
-                  </View>
-                );
-              })}
+        {/* Ringkasan penyimpangan. Isinya persis flag dari laboratorium — layar
+            tidak menambahkan penilaian sendiri. */}
+        {perluDiperiksa.length > 0 ? (
+          <View style={[styles.card, styles.kartuPerhatian]}>
+            <View style={styles.perhatianJudulRow}>
+              <MaterialIcons name="priority-high" size={16} color={colors.onErrorContainer} />
+              {/* Angkanya sudah ada di kop; di sini yang penting namanya. */}
+              <Text style={styles.perhatianJudul}>Ditandai laboratorium</Text>
             </View>
-          )}
-        </View>
+            {perluDiperiksa.map(({ item, pemeriksaan }) => (
+              <View key={item.id} style={styles.perhatianBaris}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.perhatianNama}>{item.namaParameter}</Text>
+                  <Text style={styles.perhatianAsal}>
+                    {pemeriksaan} · {FLAG_LABEL[item.flag]}
+                  </Text>
+                </View>
+                <Text style={styles.perhatianNilai}>
+                  {item.nilai}
+                  {item.satuan ? ` ${item.satuan}` : ''}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.kartuAman}>
+            <MaterialIcons name="check-circle-outline" size={18} color={colors.primary} />
+            <Text style={styles.amanText}>
+              Tidak ada nilai yang ditandai laboratorium pada lembar ini.
+            </Text>
+          </View>
+        )}
+
+        {detailList.map((detail) => {
+          const item = detail.hasilLabItem;
+          const abnormal = (item ?? []).filter((i) => i.flag !== 'NORMAL').length;
+          return (
+            <View key={detail.id} style={styles.card}>
+              <View style={styles.seksiJudulRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.seksiJudul}>{detail.namaPemeriksaan}</Text>
+                  <Text style={styles.seksiMeta}>
+                    {unik([detail.kategori, detail.laboratorium]).join(' · ') || 'Tanpa kategori'}
+                  </Text>
+                </View>
+                <View style={[styles.hitungPill, abnormal > 0 && styles.hitungPillAlarm]}>
+                  <Text style={[styles.hitungPillText, abnormal > 0 && styles.hitungPillTextAlarm]}>
+                    {abnormal > 0 ? `${abnormal}/${item?.length ?? 0} ditandai` : `${item?.length ?? 0} nilai`}
+                  </Text>
+                </View>
+              </View>
+
+              {item === null ? (
+                <Text style={styles.emptyText}>
+                  Laboratorium belum mengirim rincian parameter untuk pemeriksaan ini.
+                </Text>
+              ) : (
+                <View>
+                  {item.map((i, idx) => (
+                    <BarisParameter key={i.id} item={i} berikutnya={idx < item.length - 1} />
+                  ))}
+                </View>
+              )}
+
+              {detail.catatan && (
+                <View style={styles.catatan}>
+                  <Text style={styles.metaLabel}>Catatan</Text>
+                  <Text style={styles.metaValue}>{detail.catatan}</Text>
+                </View>
+              )}
+            </View>
+          );
+        })}
       </ScrollView>
     </View>
   );
@@ -213,7 +339,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   errorText: { color: colors.error, textAlign: 'center' },
-  emptyText: { color: colors.onSurfaceVariant, fontSize: 14 },
+  emptyText: { color: colors.onSurfaceVariant, fontSize: 13, lineHeight: 19 },
 
   header: {
     flexDirection: 'row',
@@ -225,14 +351,22 @@ const styles = StyleSheet.create({
     borderBottomColor: `${colors.outlineVariant}1A`,
   },
   backButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
-  headerTitle: { flex: 1, fontSize: 18, fontWeight: '600', color: colors.onBackground, textAlign: 'center' },
+  headerTitleBlock: { flex: 1, alignItems: 'center' },
+  headerEyebrow: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    color: colors.primary,
+  },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: colors.onBackground, textAlign: 'center' },
 
-  content: { padding: spacing.marginMobile, gap: spacing.gutter, paddingBottom: 32 },
+  content: { padding: spacing.marginMobile, gap: 12, paddingBottom: 32 },
 
   card: {
     backgroundColor: colors.surfaceContainerLowest,
     borderRadius: radius.sm,
-    padding: spacing.cardPadding,
+    padding: 18,
     gap: 16,
     shadowColor: colors.primary,
     shadowOffset: { width: 0, height: 4 },
@@ -240,31 +374,135 @@ const styles = StyleSheet.create({
     shadowRadius: 15,
     elevation: 2,
   },
-  topRow: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between' },
-  pasienNama: { fontSize: 18, fontWeight: '700', color: colors.onSurface },
-  pasienMeta: { fontSize: 13, color: colors.onSurfaceVariant, marginTop: 2 },
-  statusPill: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: radius.full },
-  statusPillText: { fontSize: 12, fontWeight: '700' },
-  divider: { height: 1, backgroundColor: `${colors.outlineVariant}4D` },
-  metaGrid: { flexDirection: 'row', gap: 16 },
-  metaLabel: { fontSize: 12, fontWeight: '600', color: colors.outline, marginBottom: 4 },
-  metaValue: { fontSize: 14, fontWeight: '600', color: colors.onSurface },
 
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.primary },
+  pasienNama: { fontSize: 19, fontWeight: '800', color: colors.onSurface },
+  pasienMeta: { fontSize: 12, color: colors.onSurfaceVariant, marginTop: 3 },
 
-  tableHeaderRow: { flexDirection: 'row', paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: `${colors.outlineVariant}4D` },
-  tableHeaderText: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, color: colors.outline, textTransform: 'uppercase' },
-  tableRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12 },
-  tableRowBorder: { borderBottomWidth: 1, borderBottomColor: `${colors.outlineVariant}33` },
-  tableCellNama: { fontSize: 14, fontWeight: '600', color: colors.onSurface },
-  tableCellNilai: { fontSize: 14, color: colors.onSurface },
-  tableCellRujukan: { fontSize: 12, color: colors.onSurfaceVariant },
-  flagPill: {
-    alignSelf: 'flex-start',
-    marginTop: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
+  statRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: colors.surfaceSoft,
+    borderRadius: 12,
+    paddingVertical: 12,
+  },
+  stat: { flex: 1, alignItems: 'center' },
+  statPemisah: { width: 1, height: 28, backgroundColor: `${colors.outlineVariant}80` },
+  statAngka: { fontSize: 20, fontWeight: '800', color: colors.primary, lineHeight: 24 },
+  statAngkaAlarm: { color: colors.error },
+  statLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    color: colors.onSurfaceVariant,
+    marginTop: 2,
+  },
+
+  waktuRow: { flexDirection: 'row', gap: 12 },
+  metaLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+    color: colors.outline,
+    marginBottom: 3,
+  },
+  metaValue: { fontSize: 13, fontWeight: '600', color: colors.onSurface },
+
+  kartuPerhatian: { backgroundColor: colors.errorContainer, gap: 10 },
+  perhatianJudulRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  perhatianJudul: { fontSize: 14, fontWeight: '800', color: colors.onErrorContainer },
+  perhatianBaris: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingTop: 10,
+    borderTopWidth: 1,
+    borderTopColor: `${colors.onErrorContainer}1A`,
+  },
+  perhatianNama: { fontSize: 14, fontWeight: '700', color: colors.onErrorContainer },
+  perhatianAsal: { fontSize: 11, color: colors.onErrorContainer, opacity: 0.8, marginTop: 1 },
+  perhatianNilai: { fontSize: 15, fontWeight: '800', color: colors.onErrorContainer },
+
+  kartuAman: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: colors.surfaceSoft,
+    borderRadius: radius.sm,
+    padding: 14,
+  },
+  amanText: { flex: 1, fontSize: 13, fontWeight: '600', color: colors.onSurfaceVariant },
+
+  seksiJudulRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  seksiJudul: { fontSize: 16, fontWeight: '800', color: colors.primary },
+  seksiMeta: { fontSize: 11, color: colors.onSurfaceVariant, marginTop: 2 },
+  hitungPill: {
+    backgroundColor: colors.surfaceContainer,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
     borderRadius: radius.full,
   },
-  flagPillText: { fontSize: 10, fontWeight: '700' },
+  hitungPillAlarm: { backgroundColor: colors.errorContainer },
+  hitungPillText: { fontSize: 11, fontWeight: '700', color: colors.onSurfaceVariant },
+  hitungPillTextAlarm: { color: colors.onErrorContainer },
+
+  // Baris normal: garis rambut saja. Baris bertanda: blok bernada + rel merah di
+  // kiri, jadi memindai lembar cukup dengan melihat mana yang berwarna.
+  baris: { paddingVertical: 10, gap: 6 },
+  barisGaris: { borderBottomWidth: 1, borderBottomColor: `${colors.outlineVariant}33` },
+  barisAbnormal: {
+    backgroundColor: `${colors.errorContainer}66`,
+    borderLeftWidth: 3,
+    borderLeftColor: colors.error,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    marginVertical: 2,
+  },
+  barisAtas: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  paramNama: { flex: 1, fontSize: 14, fontWeight: '600', color: colors.onSurface },
+  nilaiWrap: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
+  nilai: { fontSize: 16, fontWeight: '800', color: colors.onSurface },
+  nilaiAbnormal: { color: colors.error },
+  satuan: { fontSize: 11, color: colors.onSurfaceVariant },
+  flagPill: {
+    backgroundColor: colors.error,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  flagPillText: { fontSize: 9, fontWeight: '800', color: colors.onError, lineHeight: 11 },
+
+  barisBawah: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  rujukanText: { width: 118, textAlign: 'right', fontSize: 11, color: colors.onSurfaceVariant },
+
+  // Rel rujukan — idiom yang sama dengan bar chart di Home (track redup + isi
+  // primary), diputar horizontal.
+  rel: { flex: 1, height: 12, justifyContent: 'center' },
+  relTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: `${colors.outlineVariant}66`,
+  },
+  relSegmen: {
+    position: 'absolute',
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: `${colors.primary}59`,
+  },
+  relPenanda: {
+    position: 'absolute',
+    width: 10,
+    height: 10,
+    marginLeft: -5,
+    borderRadius: 5,
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.backgroundWhite,
+  },
+  relPenandaAlarm: { backgroundColor: colors.error },
+
+  catatan: { borderTopWidth: 1, borderTopColor: `${colors.outlineVariant}4D`, paddingTop: 12 },
 });

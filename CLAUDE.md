@@ -59,7 +59,12 @@ Fase saat ini: dummy data, backend independen — belum terintegrasi ke SIMRS pr
 Model Prisma & domain object pakai nama Indonesia sesuai ERD. Kode
 (variable/function) tetap camelCase Inggris.
 
-**13 model aktual di `backend/prisma/schema.prisma`** (diverifikasi 30 Jul 2026):
+**14 model aktual di `backend/prisma/schema.prisma`** (Radiologi ditambahkan
+24 Ags 2026, migration `20260824065505_add_radiologi_module`):
+`PemeriksaanRadiologi` — sengaja tanpa tabel item dan tanpa kolom status,
+mengikuti bentuk SIMRS (lihat §Integrasi SIMRS no.11).
+
+Daftar sebelumnya (diverifikasi 30 Jul 2026):
 `Dokter`, `Pasien`, `Ruangan`, `DokterPasienAssignment`, `Kunjungan`,
 `Pengguna`, `Notifikasi`, `Operasi`, `Penjamin`, `Pendapatan`,
 `PemeriksaanLab`, `HasilLabItem`, `AuditLog`.
@@ -87,14 +92,116 @@ Koreksi dari dokumentasi lama:
    tentative — jangan diimplementasikan sebagai write bebas tanpa catatan eksplisit.
 2. **dokterId selalu diambil dari JWT di server**, tidak pernah dari request
    body/query/params. Prinsip keamanan inti, akan direuse oleh chatbot nanti.
-3. **Modul Pendapatan** sensitif — field `isDummy` wajib `true` sampai ada
-   keputusan lain. Watermark UI "CONTOH DATA DUMMY" pada `DataPendapatanScreen`
+3. **Modul Pendapatan** sensitif. Sejak `SUMBER_DATA=simrs` (24 Ags 2026)
+   angka jasa medis dibaca dari SIMRS dan `isDummy` TIDAK ikut di respons —
+   field itu hanya milik tabel `Pendapatan` PostgreSQL (mode dummy), di mana
+   nilainya tetap wajib `true`. Watermark UI "CONTOH DATA DUMMY" pada `DataPendapatanScreen`
    dihapus (keputusan Arthuro, 2026-07-24) — dianggap redundan karena seluruh
    aplikasi masih fase dummy data. Field `isDummy` di DB tetap dipertahankan.
 4. **Audit log generik**: semua write action (manual/chatbot) dicatat ke
    AuditLog dengan entityType/entityId/beforeData/afterData JSON.
 5. **Chatbot (future)**: arsitektur propose→validate→confirm→audit. LLM tidak
    pernah menulis langsung ke DB. Closed function-set whitelist, bukan freeform NLU.
+
+## Integrasi SIMRS (21 Ags 2026)
+Backend bisa membaca modul **Pasien, Kunjungan, Operasi, Konsultasi, Dashboard,
+Pendapatan, Lab, dan Radiologi** langsung dari replika MySQL SIMRS RS Dharmais,
+dikendalikan env `SUMBER_DATA`:
+- `SUMBER_DATA=simrs` — **mode yang berlaku sejak 24 Ags 2026**, replika SIMRS,
+  **data pasien asli**. Izin pemakaian sebagai datasource sudah diberikan.
+- `SUMBER_DATA=dummy` — PostgreSQL lokal. Bukan lagi mode kerja sehari-hari,
+  tapi route-nya TETAP ADA dan tidak boleh dihapus: seluruh test suite berjalan
+  di atasnya (dipaksa lewat `backend/jest.setup.js`), dan itu satu-satunya cara
+  menguji perilaku endpoint tanpa menyentuh data pasien.
+
+Modul lain (Notifikasi, Kalender, AuditLog, Pengguna) selalu ke PostgreSQL:
+SIMRS tidak menyimpannya.
+
+Bentuknya jalur baca kedua, **bukan migrasi** — Postgres tetap rumah untuk
+Notifikasi/AuditLog/Pengguna/Konsultasi lokal. File terkait:
+`src/lib/simrs.js` (pool + guard read-only), `src/utils/simrsBentuk.js`
+(konversi WIB + kode referensi), `src/utils/simrsAkses.js` (scoping),
+`src/routes/simrs/*.js`. Route dummy tidak diubah sama sekali; `server.js`
+memilih salah satu saat boot.
+
+Hal yang wajib diingat:
+1. **Prisma tidak dipakai untuk SIMRS.** Connector MySQL Prisma cuma melihat
+   satu database per client, sementara query di sini menjangkau `master`,
+   `pendaftaran`, `medis`, `perjanjian` sekaligus. Pakai SQL mentah lewat
+   `mysql2`, nama tabel selalu lengkap dengan skemanya.
+2. **Scoping berubah semantik.** Mode dummy pakai `DokterPasienAssignment`
+   (penugasan, tidak terikat waktu). SIMRS tidak punya tabel itu — penggantinya
+   gabungan DPJP per-pendaftaran: `pendaftaran.tujuan_pasien.DOKTER` ∪
+   `dpjp_bersama` ∪ `dpjp_pendamping`. Akibatnya akses dokter mengikuti
+   keterlibatannya di pendaftaran, tidak permanen.
+3. **Jangan tulis `kolom IN (<union>)` langsung** di klausa akses — MySQL
+   mengubahnya jadi DEPENDENT SUBQUERY (union dijalankan ulang tiap baris).
+   Pakai `joinAksesNorm()` atau `klausaAksesNorm()` dari `utils/simrsAkses.js`;
+   keduanya membungkus union dalam derived table. Ada tes penjaganya.
+4. **Jembatan identitas lewat NIP**, bukan kolom baru. `Dokter.nip` sudah
+   `@unique` dan `master.dokter.NIP` ber-index, jadi tidak ada perubahan schema
+   maupun bentuk JWT. Aturan #2 tetap utuh — `req.user.dokterId` diterjemahkan
+   ke `master.dokter.ID`, tidak pernah diterima dari request.
+5. **Mode SIMRS read-only mutlak.** POST/PATCH/DELETE `/api/operasi` membalas
+   405. Akun DB-nya `GRANT SELECT` saja.
+6. **Jangan log baris hasil query SIMRS.** Blok catch di `lib/simrs.js` sengaja
+   hanya mencatat kode error, tidak pernah SQL atau isi baris.
+7. **Tes selalu mode dummy**, dipaksa lewat `backend/jest.setup.js`. Tanpa itu,
+   `.env` bernilai `simrs` membuat suite Supertest diam-diam menguji route SIMRS
+   dengan fixture PostgreSQL (10 tes merah, penyebabnya tidak kelihatan).
+8. **MySQL SIMRS versi 5.7** — tidak ada window function maupun CTE. Pola
+   "satu baris teratas per grup" harus MAX/MIN + GROUP BY lalu join balik.
+9. **Lab ada di skema `layanan`, bukan `lis`.** `lis*` itu jembatan mentah alat
+   analyzer, tanpa kaitan ke kunjungan/dokter. Rantainya
+   `layanan.order_lab` → `order_detil_lab` → `hasil_lab`. Satu pemeriksaan =
+   `(ORDER_ID, TINDAKAN)`, bukan `REF` — satu `REF` dipakai beberapa TINDAKAN,
+   jadi pemisahnya `parameter_tindakan_lab.TINDAKAN`. Detail lengkap +
+   4 pertanyaan terbuka: `simrs-schema-mapping.md` §5.
+10a. **Jasa medis dibaca dari `db_remunmedis.tb_tampilsiremdis`**, bukan
+   `tb_remun_new` (dikoreksi 24 Ags 2026). Yang lama berhenti 15 Feb 2026;
+   yang dipakai SIREMDIS berjalan sampai sekarang. Dua tabel ini punya kolom
+   `ID_SIREMDIS` dengan rentang angka bertumpuk tapi **auto-increment
+   sendiri-sendiri** — menjoin keduanya lewat kolom itu menghasilkan
+   pasangan baris yang sama sekali tidak berhubungan. Pindah sumber juga
+   menurunkan angka bulan-bulan lama ~12%, karena `tb_remun_new` memuat baris
+   yang memang tidak ditampilkan SIREMDIS.
+10. **`hasil_lab.HASIL` = nilai ukur, `hasil_lab.NILAI` = rentang rujukan.**
+   Nama kolomnya menyesatkan dan tertukarnya tidak memicu error apa pun.
+11. **Radiologi TIDAK boleh menyalin pola Lab.** Jalur ke pasien lewat
+   `layanan.tindakan_medis` (`ID` = REF, membawa `KUNJUNGAN`), bukan lewat
+   `order_detil_rad` — 39% hasil (5.393 dari 13.685 baris Agustus 2026) tidak
+   punya baris detil order sama sekali, jadi pola lab membuat riwayat radiologi
+   bolong sepertiga tanpa error apa pun. Lewat `tindakan_medis` cocoknya 100%.
+   Isi laporannya NARASI (`hasil_rad.HASIL`), bukan parameter: `KESAN` cuma 15%
+   terisi (kesimpulan ditulis di dalam narasi), `USUL` 0%, `DOKTER_SATU` 7%,
+   `STATUS_KONFIRMASI` 6% — tidak satu pun bisa dipakai menyaring.
+
+Pelajaran dari uji coba data asli (21 Ags 2026) — semuanya hal yang TIDAK
+terlihat dari skema, cuma ketahuan waktu query data sungguhan:
+- `medis.tb_konsul.nopen` kosong di 99,4% baris. Jalur ke pasien harus lewat
+  `tk.kunjungan`, bukan `tk.nopen` (dua-duanya char(10), sama-sama masuk akal).
+- `pendaftaran.dpjp_diagnosa` cuma mengisi 1,25% kunjungan. Sumber diagnosa
+  yang benar-benar terisi adalah `pendaftaran.pendaftaran.DIAGNOSA_MASUK`
+  (99,8%) lewat lookup `master.diagnosa_masuk` (ID → ICD + teks).
+- Teks di `master.diagnosa_masuk` sebagian sampah (".", "-"). Disaring
+  `diagnosaBersih()`.
+- Query COUNT jangan bawa LEFT JOIN identitas yang tidak dipakai penyaring —
+  itu saja menurunkan konsultasi dari 3,4s ke 0,13s.
+- Satu dokter senior bisa terkait 200 ribu pendaftaran / 14 ribu pasien unik.
+  Asumsi "dokter pegang belasan pasien" dari data dummy tidak berlaku.
+
+Verifikasi query tanpa membaca data pasien: `simrs-exploration/verify-queries.js`
+(EXPLAIN semua query, mengembalikan rencana eksekusi, nol baris). Pemetaan skema
+lengkap + daftar pertanyaan terbuka ke DBA: `simrs-exploration/docs/simrs-schema-mapping.md`.
+
+**Status izin:** izin memakai replika sebagai datasource aplikasi SUDAH
+DIBERIKAN (Arthuro, 24 Ags 2026). `backend/.env` dan `.env.example` memakai
+`SUMBER_DATA="simrs"`.
+
+Default di KODE (`server.js`) sengaja tetap `dummy` dan tidak diubah: itu bukan
+soal izin, tapi pengaman kalau env gagal termuat — env kosong yang otomatis
+membuka data pasien asli adalah kegagalan diam-diam. Menyalakan mode SIMRS
+harus selalu berupa tindakan sadar (satu baris di `.env`), bukan kebetulan.
 
 ## Testing
 Jest + Supertest untuk API. Manual checklist untuk chatbot nanti (command

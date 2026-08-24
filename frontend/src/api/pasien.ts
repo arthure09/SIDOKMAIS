@@ -1,10 +1,17 @@
 import { apiFetch } from './client';
-import type { AssignmentStatus, JenisKunjungan, PasienDetail, PasienListResponse } from './types';
+import type {
+  AssignmentStatus,
+  JenisKunjungan,
+  PasienDetail,
+  PasienListResponse,
+  UrutanPasien,
+} from './types';
 
 type ListParams = {
   search?: string;
   status?: AssignmentStatus;
   jenisKunjungan?: JenisKunjungan;
+  urutkan?: UrutanPasien;
   page?: number;
   limit?: number;
 };
@@ -14,6 +21,7 @@ export function fetchPasienList(token: string, params: ListParams) {
   if (params.search) query.set('search', params.search);
   if (params.status) query.set('status', params.status);
   if (params.jenisKunjungan) query.set('jenisKunjungan', params.jenisKunjungan);
+  if (params.urutkan) query.set('urutkan', params.urutkan);
   if (params.page) query.set('page', String(params.page));
   if (params.limit) query.set('limit', String(params.limit));
 

@@ -5,7 +5,8 @@ import { CatatanKalenderScreen } from '../screens/CatatanKalenderScreen';
 import { PilihPasienHasilLabScreen } from '../screens/PilihPasienHasilLabScreen';
 import { HasilLabListScreen } from '../screens/HasilLabListScreen';
 import { HasilLabDetailScreen } from '../screens/HasilLabDetailScreen';
-import { LihatPdfLabScreen } from '../screens/LihatPdfLabScreen';
+import { RadiologiListScreen } from '../screens/RadiologiListScreen';
+import { RadiologiDetailScreen } from '../screens/RadiologiDetailScreen';
 import type { HomeStackParamList } from './types';
 
 const Stack = createNativeStackNavigator<HomeStackParamList>();
@@ -31,7 +32,8 @@ export function HomeStackNavigator() {
       <Stack.Screen name="PilihPasienHasilLab" component={PilihPasienHasilLabScreen} />
       <Stack.Screen name="HasilLabList" component={HasilLabListScreen} />
       <Stack.Screen name="HasilLabDetail" component={HasilLabDetailScreen} />
-      <Stack.Screen name="LihatPdfLab" component={LihatPdfLabScreen} />
+      <Stack.Screen name="RadiologiList" component={RadiologiListScreen} />
+      <Stack.Screen name="RadiologiDetail" component={RadiologiDetailScreen} />
     </Stack.Navigator>
   );
 }
