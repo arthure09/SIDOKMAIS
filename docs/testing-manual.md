@@ -1,20 +1,23 @@
 # SIDOKMAIS — Notes Testing Manual
 
 Dipakai buat testing manual di luar Jest (curl/Postman/Insomnia langsung ke
-API, atau nanti dari HP via Expo Go). Diisi bertahap sesuai modul yang
-sudah dibangun — jangan dihapus, tinggal update status tiap ada modul baru.
+API, atau dari HP via Expo Go). Disusun per modul aplikasi — update status
+checklist (`- [ ]` → `- [x]`) tiap kali sebuah modul diverifikasi ulang,
+jangan dihapus baris lamanya.
 
 ## Sebelum mulai
-- [ ] `docker compose up -d db` (atau start Postgres lokal kamu)
+- [ ] `docker compose up -d db` (atau start Postgres lokal kalau tidak pakai Docker)
 - [ ] `npx prisma migrate deploy` (atau `migrate dev` kalau ada schema baru)
 - [ ] `npm run prisma:seed` — **catat username yang di-print di console**,
-      password sama untuk semua akun: `Sidokmais#2026`
+      password sama untuk semua akun **DOKTER**: `Sidokmais#2026`. Akun
+      **ADMIN** password-nya beda (`admin123`) — lihat catatan di
+      Modul: Audit Log, bagian "Temuan sampingan".
 - [ ] `npm run dev` — server default di `http://localhost:3000`
 - [ ] `GET /health` → pastikan `{ "status": "ok" }` dulu sebelum lanjut
 
 ---
 
-## Modul: Auth & RBAC (Hari 7 — siap dites sekarang)
+## Modul: Auth & RBAC
 
 ### 1. Login sukses
 - [ ] `POST /api/auth/login` dengan username DOKTER hasil seed + password
@@ -52,18 +55,20 @@ isi kalau sudah ada endpoint semacam itu (mis. endpoint khusus ADMIN):
 
 ---
 
-## Modul: List Pasien (Hari 8-9) — isi setelah dibangun
+## Modul: Pasien
 - [ ] Dokter cuma lihat pasien yang di-assign ke dia, bukan semua pasien
 - [ ] Search/filter jalan sesuai spek
 - [ ] Detail view pasien lengkap
 - [ ] ADMIN — cek scope-nya (lihat semua pasien, atau tetap dibatasi?)
 
-## Modul: Data Operasi (Hari 10-11)
+---
 
+## Modul: Operasi
+
+### Backend — endpoint `/api/operasi`
 Endpoint: `GET/POST/PATCH/DELETE /api/operasi`. RBAC per-method — GET boleh
 DOKTER+ADMIN, POST/PATCH/DELETE ADMIN only. Dites manual pakai curl + token
-JWT signed langsung (2 akun DOKTER berbeda + 1 ADMIN) terhadap data seed asli,
-tanggal 23 Jul 2026.
+JWT signed langsung (2 akun DOKTER berbeda + 1 ADMIN) terhadap data seed.
 
 - [x] DOKTER cuma lihat operasi miliknya sendiri — dokter A (1 operasi) &
       dokter B (2 operasi) masing-masing cuma dapat listnya sendiri, tidak
@@ -93,18 +98,98 @@ tanggal 23 Jul 2026.
       `req.user.dokterId` dari JWT, tidak pernah dari input request
       (dicek manual lewat `grep dokterId` di `operasi.routes.js`).
 
-**Belum dites (opsional/bonus, lihat `docs/latihan/hari-10-challenge.md` Level 7):**
+**Belum dites (opsional/bonus, detail di `docs/latihan/hari-10-challenge.md` Level 7):**
 - [ ] Validasi `ruanganId` harus tipe `OK` — belum diimplementasikan, by design (keputusan produk yang sengaja ditunda)
-- [ ] Cek bentrok jadwal (ruangan + waktu overlap) — belum diimplementasikan, dicatat sebagai utang teknis untuk Hari 17 (validation layer chatbot)
+- [ ] Cek bentrok jadwal (ruangan + waktu overlap) — belum diimplementasikan, dicatat sebagai utang teknis (belum dijadwalkan; kandidat kuat kalau/waktu validation layer chatbot digarap)
 - [ ] Validasi transisi status (mis. `COMPLETED` tidak boleh balik ke `SCHEDULED`) — skip untuk MVP, cuma divalidasi value-nya termasuk salah satu dari 4 enum
 
-## Modul: Notifikasi (Hari 12-13)
+### Frontend — Jadwal Operasi & Detail Jadwal (UI-only)
+- [ ] Toggle Operasi/Konsul — tab Konsul nampilin state "segera hadir", BUKAN
+      data palsu
+- [ ] Kartu jadwal berstatus CANCELLED di list bersifat non-tappable
+      (`disabled`) — tidak ada navigasi ke screen detail terpisah
+      (`DetailPembatalanOperasiScreen` dihapus total — dokter read-only
+      untuk Operasi, lihat CLAUDE.md aturan RBAC #1)
+- [ ] **Pastikan tombol "Ubah Jadwal"/"Mulai Operasi" di Detail Jadwal SUDAH
+      TIDAK ADA** — ini verifikasi langsung dari perbaikan 2 item di atas
 
+---
+
+## Modul: Lab (Hasil Lab)
+
+Endpoint: `GET /api/lab` (list ringkasan per pasien, wajib query `pasienId`,
+filter opsional `dariTanggal`/`sampaiTanggal`) dan `GET /api/lab/:id`
+(detail + `hasilLabItem`). Scoping akses pakai `dokterPunyaAksesPasien()`
+(`backend/src/utils/aksesPasien.js`), basis `DokterPasienAssignment` — bukan
+`kunjungan.dokterId`/`dokterPemintaId`. Frontend: alur "Cari Hasil Lab"
+(`PilihPasienHasilLabScreen` → `HasilLabListScreen` → `HasilLabDetailScreen`
+→ `LihatPdfLabScreen`).
+
+### 1. Backend — `GET /api/lab` & `GET /api/lab/:id`
+- [ ] DOKTER dengan assignment ke pasien → 200, list/detail muncul
+- [ ] DOKTER TANPA assignment ke pasien → 403 ("Anda tidak memiliki akses ke
+      data pasien ini" / "...data pemeriksaan lab ini")
+- [ ] Basis akses beneran `DokterPasienAssignment`, bukan kunjungan/dokter
+      peminta — coba 2 akun DOKTER: order lab pasien diminta (`dokterPemintaId`)
+      oleh dokter A, tapi pasiennya di-assign juga ke dokter B → dokter B
+      tetap bisa lihat order itu
+- [ ] `GET /api/lab` tanpa query `pasienId` → 400
+- [ ] `GET /api/lab` cuma balikin status `COMPLETED` — order `PENDING`/
+      `CANCELLED` tidak muncul di list (behavior sejak commit `e13efbe`)
+- [ ] Filter `dariTanggal`/`sampaiTanggal` jalan benar setelah fix timezone —
+      batas hari jatuh tepat tengah malam WIB (bukan UTC), row di tepi
+      jendela tanggal tidak salah tersaring/terbuang
+- [ ] `hasilLabItem` di response detail bernilai `null` (bukan array kosong)
+      kalau order belum ada parameter hasilnya
+
+### 2. Frontend — alur "Cari Hasil Lab"
+- [x] `npx tsc --noEmit` bersih
+- [x] Smoke test Expo Go / HP fisik — **PASS**, dikonfirmasi di device
+      sungguhan (bukan cuma verifikasi kode)
+- [ ] Navigasi lengkap di device: `PilihPasienHasilLabScreen` →
+      `HasilLabListScreen` → `HasilLabDetailScreen` → `LihatPdfLabScreen`
+- [ ] Filter tanggal (modal draft/apply + tombol "Terapkan") jalan benar di
+      device, hasilnya konsisten sama backend
+- [ ] `DateTimePicker` tidak lagi bikin crash/hang (watchdog kill di iOS,
+      dialog menumpuk di Android) — regression check untuk fix
+      `fallbackDate`/`useCallback` di commit `d1c6116`
+- [ ] `FloatingTabBar` slide-hide begitu `LihatPdfLabScreen` fokus, balik
+      lagi (slide-up) begitu keluar dari screen itu
+
+### 3. Regresi — kasus tepi dari review kode sebelumnya
+Kasus tepi dari review kode (detail: `docs/analisa/review-kode-day-22-4-agustus-2026.md`,
+bagian 6 & 8), belum ada bukti pengetesan manual untuk baris-baris ini:
+- [ ] Buka picker "Dari" atau "Sampai" lalu **diamkan tanpa memilih tanggal**
+      beberapa saat (kondisi persis yang bikin crash sebelum fix — `value`
+      jatuh ke `fallbackDate` yang sekarang stabil, bukan `new Date()` baru
+      tiap render) → tidak crash/hang di iOS, tidak ada dialog Android yang
+      menumpuk
+- [ ] Pilih tanggal tepat di **batas awal hari** (00:00 WIB) dan **batas akhir
+      hari** (23:59 WIB) buat `dariTanggal`/`sampaiTanggal` → row dengan jam
+      di tepi jendela tidak salah tersaring/terbuang (regression check fix
+      timezone WIB_OFFSET_MS)
+- [ ] Tekan tombol "X" reset di filter bar (`dateFilter`) → filter langsung
+      ke-reset, TIDAK ikut membuka modal filter (regression check bug
+      Pressable bersarang, baris ~168 saat ini)
+- [ ] Tombol "Reset" di dalam modal filter → cuma bersihkan draft tanggal
+      (belum apply), filter yang sudah aktif TIDAK ikut berubah dan TIDAK
+      memicu fetch ulang selagi modal masih terbuka (regression check
+      `resetDraftFilter` vs `resetFilter`)
+- [ ] Ganti filter tanggal dengan cepat berturut-turut (submit beberapa kali
+      sebelum response pertama kembali) → list akhir yang tampil konsisten
+      sama filter terakhir, bukan hasil dari request yang lebih lama
+      (regression check stale-response guard `isCancelled()` di `load()`)
+
+---
+
+## Modul: Notifikasi
+
+### Backend — endpoint `/api/notifikasi`
 Endpoint: `GET/PATCH /api/notifikasi`. RBAC per-route — DOKTER only, ADMIN
 sengaja tidak diberi akses (notifikasi murni milik dokter). Dites manual pakai
 curl + token JWT dari login asli (1 akun DOKTER dari seed + 1 ADMIN) terhadap
-data seed asli, tanggal 28 Jul 2026 (catch-up `docs/prompts/hari-12-13-notifikasi.md`,
-Prioritas 1 & 2).
+data seed. Rencana fitur & pembagian prioritas: `docs/prompts/hari-12-13-notifikasi.md`
+(Prioritas 1-3).
 
 - [x] `GET /api/notifikasi` cuma nampilin punya dokter yang login — dicek
       manual terhadap DB, `dokterId` di tiap row cocok sama dokter yang login,
@@ -138,93 +223,32 @@ verifikasi backend di atas semuanya via curl langsung ke API, ditambah
 `npx tsc --noEmit` bersih di frontend, tapi belum ada smoke test di device
 beneran.
 
-## Modul: Audit Log — verifikasi menyeluruh (Hari 23, 5 Ags 2026)
+### Frontend — List Notifikasi
+Catatan: layar `DetailLaporanLabScreen` (dulu diakses dari List Notifikasi
+lewat kategori demo "Hasil Lab") sudah dihapus total dari codebase, digantikan
+modul Lab yang tersambung backend asli (lihat Modul: Lab di atas). Chip filter
+"Hasil Lab" dan kartu demo statisnya ikut dihapus dari `NotifikasiScreen`.
+Notifikasi sekarang murni dari `/api/notifikasi` dengan 2 kategori: Pasien
+Baru & Jadwal.
 
-Eksekusi `docs/prompts/hari-23-audit-log-verifikasi.md`. Beda dari verifikasi
-Hari 10/12-13 di atas (yang cuma baca kode + cek row muncul): kali ini setiap
-write endpoint di-curl langsung ke backend lokal terhadap DB dev (Tailscale),
-lalu **isi** baris `AuditLog`-nya dibaca langsung dari DB lewat Prisma (bukan
-cuma cek "ada row atau tidak"). Data uji (1 `Operasi`, 1 `Notifikasi` hasil
-trigger) dihapus lagi setelah verifikasi; 4 baris `AuditLog` yang terbentuk
-dari request asli via API SENGAJA tidak dihapus (append-only).
+- [ ] Filter kategori (Semua/Pasien Baru/Jadwal) di List Notifikasi jalan —
+      chip "Sistem" versi lama juga sudah di-drop karena gak ada `tipe` enum
+      yang merepresentasikannya
+- [ ] List notifikasi asli (Pasien Baru/Jadwal) muncul sesuai data dokter yang
+      login, loading/error/empty state jalan (belum dites HP fisik, baru
+      verifikasi kode + curl backend)
+- [ ] Tap notifikasi unread → `isRead` jadi true (optimistic update), tetap
+      true setelah reload screen
 
-### 1. Cek statis — semua write handler vs `logAudit()`
-Grep `prisma.<model>.create/update/delete` di seluruh `backend/src/routes/*.routes.js`:
-- [x] `POST /api/operasi` → `logAudit()` terpasang
-- [x] `PATCH /api/operasi/:id` → `logAudit()` terpasang
-- [x] `DELETE /api/operasi/:id` → `logAudit()` terpasang
-- [x] `PATCH /api/notifikasi/:id/read` → `logAudit()` terpasang
-- [x] `pasien.routes.js`, `kunjungan.routes.js`, `lab.routes.js`,
-      `auth.routes.js` — nol write handler (`create`/`update`/`delete`),
-      konsisten sama status modul-modul itu yang read-only dari sisi dokter
-- [ ] **GAP ditemukan:** `prisma.notifikasi.create` di dalam
-      `PATCH /api/operasi/:id` (trigger `PERUBAHAN_JADWAL`,
-      `operasi.routes.js` baris ~329) TIDAK dipanggil `logAudit()`. Ini
-      write action beneran (bikin row `Notifikasi` baru), jadi secara
-      harfiah melanggar aturan CLAUDE.md #4. **Belum diperbaiki** — task ini
-      scope-nya verifikasi, bukan perbaikan, jadi dilaporkan dulu ke Arthuro
-      buat diputuskan: apakah trigger notifikasi otomatis perlu baris audit
-      sendiri, atau cukup ikut ter-cover baris UPDATE `Operasi`-nya (yang
-      sudah menangkap seluruh perubahan before/after). Dikonfirmasi hidup
-      lewat curl, bukan cuma baca kode: notifikasi baru benar-benar
-      terbentuk di DB, 0 baris `AuditLog` untuk `entityType: "Notifikasi"`
-      dengan `entityId` notifikasi itu.
+---
 
-### 2. Verifikasi isi baris `AuditLog` (curl → backend lokal → DB dev)
-Login `admin`/`admin123` (ADMIN) dan `putra.tasdik`/`Sidokmais#2026` (DOKTER,
-`dokterId` terhubung ke `Kunjungan` uji). Semua PASS:
-- [x] `POST /api/operasi` → 1 baris `action="CREATE"`, `entityType="Operasi"`,
-      `entityId` cocok, `beforeData=null`, `afterData` berisi seluruh field
-      record baru, `actorId`/`actorRole` cocok akun ADMIN yang login
-- [x] `PATCH /api/operasi/:id` (ubah `tanggalOperasi`) → 1 baris
-      `action="UPDATE"`, `beforeData` & `afterData` SAMA-SAMA berisi seluruh
-      field (bukan cuma diff), `tanggalOperasi` beda antara before/after
-      sesuai perubahan yang dikirim
-- [x] `PATCH /api/notifikasi/:id/read` (pakai notifikasi hasil trigger di
-      atas) → 1 baris `action="UPDATE"`, `entityType="Notifikasi"`,
-      `beforeData.isRead=false`, `afterData.isRead=true`, `actorId`/
-      `actorRole` cocok akun DOKTER yang login (bukan ADMIN yang PATCH
-      operasinya)
-- [x] `DELETE /api/operasi/:id` → 1 baris `action="DELETE"`, `beforeData`
-      berisi record lengkap sebelum dihapus, `afterData=null`; record
-      `Operasi`-nya dikonfirmasi benar sudah hilang dari DB
-- [x] Semua `actorId` di atas dicocokkan manual ke `req.user.id` masing-masing
-      akun (bukan diasumsikan) — tidak ada yang salah tertukar
+## Modul: Dashboard Home (Statistik + Pasien Prioritas)
 
-### 3. Fault-tolerance `utils/auditLog.js`
-- [x] Baca kode: `try/catch` + `console.error`, TIDAK ada `throw` ulang ke
-      caller — kegagalan tulis `AuditLog` dipastikan tidak menggagalkan
-      response utama. Tidak disimulasikan gagal beneran (butuh matikan
-      koneksi DB di tengah request, dianggap tidak sepadan buat verifikasi
-      hari ini) — kode & pola ini juga sudah dipakai konsisten di trigger
-      `PERUBAHAN_JADWAL` (`operasi.routes.js`, try/catch + `console.error`
-      terpisah).
-
-### 4. `GET /api/me` — bukan write action
-- [x] Dikonfirmasi eksplisit: endpoint ini (`server.js`, "endpoint uji coba
-      RBAC") cuma `res.json(req.user)`, tidak ada `prisma.*.create/update/
-      delete` maupun `logAudit()` di dalamnya — memang seharusnya begitu,
-      bukan celah
-
-### Temuan sampingan (di luar scope inti, dicatat biar tidak hilang)
-- **Password seed ADMIN beda dari dokumentasi.** `docs/testing-manual.md`
-  (bagian "Sebelum mulai") dan `console.log` di `seed.js` sendiri
-  ("Akun login dummy (password sama untuk semua: Sidokmais#2026)")
-  menyatakan password sama untuk semua akun — TIDAK BENAR. `seed.js` bikin
-  `passwordHashAdmin` terpisah dari `hash("admin123", 10)`, cuma akun DOKTER
-  yang pakai `Sidokmais#2026`. Login `admin`/`Sidokmais#2026` GAGAL 401 saat
-  dicoba di verifikasi ini; `admin`/`admin123` baru berhasil. Belum
-  diperbaiki (di luar scope task ini), dilaporkan biar tidak ada yang
-  kejebak sama seperti sesi ini.
-
-## Modul: Dashboard Home (Statistik + Pasien Prioritas) — verifikasi live, 6 Ags 2026
-
-Eksekusi `docs/prompts/verifikasi-bagian-b-statistik-home.md`. `GET
-/api/dashboard/statistik` (`backend/src/routes/dashboard.routes.js`, commit
-`ad0e86c`+`ae8c77a`+`05da44c`) di-curl langsung ke backend lokal (`npm run
-dev`) terhadap DB dev (Tailscale `100.109.84.118`), tiap angka dicocokkan
-manual ke query Prisma independen — pola sama Hari 10/12-13/23. Login 2 akun
-DOKTER hasil seed (`putra.tasdik`, `agus.nugraha`) + `admin`/`admin123`.
+`GET /api/dashboard/statistik` (`backend/src/routes/dummy/dashboard.routes.js`,
+commit `ad0e86c`+`ae8c77a`+`05da44c`) di-curl langsung ke backend lokal
+terhadap DB dev, tiap angka dicocokkan manual ke query Prisma independen.
+Login 2 akun DOKTER hasil seed (`putra.tasdik`, `agus.nugraha`) +
+`admin`/`admin123`. Detail rencana verifikasi: `docs/prompts/verifikasi-bagian-b-statistik-home.md`.
 
 ### 1. `pasienAktif` vs `COUNT DokterPasienAssignment ACTIVE`
 - [x] `putra.tasdik` — API `2`, query manual `COUNT WHERE dokterId=<id> AND
@@ -236,7 +260,7 @@ Seed data historis (`Operasi`/`Kunjungan` semuanya Jun-Jul 2026, 0 record di
 masa depan) — baseline seharusnya nol semua:
 - [x] `operasiHariIni`/`konsulHariIni` API `0`/`0`, cocok `COUNT` manual
 - [x] `aktivitasMingguan` API 7 hari semua `jumlah:0`, `highlight` cuma di
-      Kamis (hari ini, 6 Ags), cocok `COUNT` manual per rentang hari
+      hari saat tes dijalankan, cocok `COUNT` manual per rentang hari
 - [x] `pasienPrioritas` API `[]`, cocok — 0 `Operasi`/`Kunjungan` `SCHEDULED`
       dengan tanggal >= sekarang di seed
 
@@ -278,120 +302,108 @@ Tidak ada bug ditemukan — semua PASS termasuk kasus tepi timezone yang
 paling rawan salah. Tidak ada perubahan kode (`dashboard.routes.js`/
 `HomeScreen.tsx`) dari verifikasi ini.
 
+---
+
 ## Modul: Home, Profil Dokter, Data Pendapatan (frontend, UI-only)
 - [ ] Greeting Home & nama di Profil Dokter nunjukkin nama dokter yang beneran
       login (dari `authStore`), bukan teks statis "User"
 - [ ] Kartu navigasi di Home (Pasien/Operasi/Notifikasi) mendarat ke tab yang
       benar
-- [ ] Data Pendapatan TIDAK menampilkan watermark "CONTOH DATA DUMMY" (dihapus,
-      keputusan Arthuro 2026-07-24 — dianggap redundan karena seluruh aplikasi
-      masih fase dummy data; field `isDummy` tetap `true` di DB)
+- [ ] Data Pendapatan TIDAK menampilkan watermark "CONTOH DATA DUMMY"
+      (dihapus — dianggap redundan karena seluruh aplikasi masih fase dummy
+      data; field `isDummy` tetap `true` di tabel `Pendapatan` PostgreSQL)
 - [ ] Logout dari Profil Dokter beneran balik ke Login screen dan token
       ke-clear (coba buka ulang app, harus diminta login lagi)
 - [ ] Menu "Data Pendapatan" di Profil Dokter navigasinya benar
 
-## Modul: Notifikasi + Detail Laporan Lab (frontend)
-`NotifikasiScreen` sejak 28 Jul 2026 sudah manggil `/api/notifikasi` asli
-(bukan mock lagi) — checklist di bawah update dari versi UI-only sebelumnya.
-`DetailLaporanLabScreen` TETAP murni dekoratif (entity Laporan Lab belum ada
-modelnya), entry point-nya di List Notifikasi sekarang 1 item statis terpisah
-dari hasil fetch API.
-- [ ] Filter kategori (Semua/Hasil Lab/Pasien Baru/Jadwal) di List Notifikasi
-      jalan — chip "Sistem" versi lama di-drop karena gak ada `tipe` enum yang
-      merepresentasikannya
-- [ ] List notifikasi asli (Pasien Baru/Jadwal) muncul sesuai data dokter yang
-      login, loading/error/empty state jalan (belum dites HP fisik, baru
-      verifikasi kode + curl backend)
-- [ ] Tap notifikasi unread (Pasien Baru/Jadwal) → `isRead` jadi true
-      (optimistic update), tetap true setelah reload screen
-- [ ] Tap item "Hasil Lab" (statis/demo) → buka Detail Laporan Lab, kategori
-      lain gak bisa ditap kalau sudah `isRead: true`
-- [ ] Tombol "Validasi & Tandai Dibaca" di Detail Laporan Lab berubah jadi
-      "Sudah Dibaca" setelah ditekan (lihat item 3, item ini state lokal
-      layar itu sendiri, tidak terkait `/api/notifikasi`)
+---
 
-## Modul: Jadwal Operasi + Detail Jadwal (frontend, UI-only)
-- [ ] Toggle Operasi/Konsul — tab Konsul nampilin state "segera hadir", BUKAN
-      data palsu
-- [ ] Kartu jadwal berstatus CANCELLED di list bersifat non-tappable
-      (`disabled`) — tidak ada navigasi ke screen detail terpisah
-      (`DetailPembatalanOperasiScreen` dihapus total, keputusan Arthuro
-      2026-07-24 — dokter read-only untuk Operasi, lihat CLAUDE.md aturan #1)
-- [ ] **Pastikan tombol "Ubah Jadwal"/"Mulai Operasi" di Detail Jadwal SUDAH
-      TIDAK ADA** — ini verifikasi langsung dari perbaikan item 1 & 2
+## Modul: Audit Log — verifikasi menyeluruh
 
-## Modul: Hasil Lab (Day 18-22)
+Detail rencana verifikasi: `docs/prompts/hari-23-audit-log-verifikasi.md`.
+Beda dari verifikasi tiap modul di atas (yang cuma baca kode + cek row
+muncul): di sini setiap write endpoint di-curl langsung ke backend lokal
+terhadap DB dev, lalu **isi** baris `AuditLog`-nya dibaca langsung dari DB
+lewat Prisma (bukan cuma cek "ada row atau tidak"). Data uji (1 `Operasi`,
+1 `Notifikasi` hasil trigger) dihapus lagi setelah verifikasi; 4 baris
+`AuditLog` yang terbentuk dari request asli via API SENGAJA tidak dihapus
+(append-only).
 
-Endpoint: `GET /api/lab` (list ringkasan per pasien, wajib query `pasienId`,
-filter opsional `dariTanggal`/`sampaiTanggal`) dan `GET /api/lab/:id`
-(detail + `hasilLabItem`). Scoping akses pakai `dokterPunyaAksesPasien()`
-(`backend/src/utils/aksesPasien.js`), basis `DokterPasienAssignment` — bukan
-`kunjungan.dokterId`/`dokterPemintaId`. Frontend: alur "Cari Hasil Lab"
-(`PilihPasienHasilLabScreen` → `HasilLabListScreen` → `HasilLabDetailScreen`
-→ `LihatPdfLabScreen`). Lihat `docs/jurnal-pengerjaan.md` entri Hari 18-22
-untuk detail commit.
+### 1. Cek statis — semua write handler vs `logAudit()`
+Grep `prisma.<model>.create/update/delete` di seluruh
+`backend/src/routes/**/*.routes.js`:
+- [x] `POST /api/operasi` → `logAudit()` terpasang
+- [x] `PATCH /api/operasi/:id` → `logAudit()` terpasang
+- [x] `DELETE /api/operasi/:id` → `logAudit()` terpasang
+- [x] `PATCH /api/notifikasi/:id/read` → `logAudit()` terpasang
+- [x] `pasien.routes.js`, `kunjungan.routes.js`, `lab.routes.js`,
+      `auth.routes.js` — nol write handler (`create`/`update`/`delete`),
+      konsisten sama status modul-modul itu yang read-only dari sisi dokter
+- [ ] **GAP ditemukan:** `prisma.notifikasi.create` di dalam
+      `PATCH /api/operasi/:id` (trigger `PERUBAHAN_JADWAL`,
+      `operasi.routes.js` baris ~329) TIDAK dipanggil `logAudit()`. Ini
+      write action beneran (bikin row `Notifikasi` baru), jadi secara
+      harfiah melanggar aturan CLAUDE.md #4. **Belum diperbaiki** — task ini
+      scope-nya verifikasi, bukan perbaikan. Pertanyaan terbuka: apakah
+      trigger notifikasi otomatis perlu baris audit sendiri, atau cukup ikut
+      ter-cover baris UPDATE `Operasi`-nya (yang sudah menangkap seluruh
+      perubahan before/after). Dikonfirmasi hidup lewat curl, bukan cuma
+      baca kode: notifikasi baru benar-benar terbentuk di DB, 0 baris
+      `AuditLog` untuk `entityType: "Notifikasi"` dengan `entityId`
+      notifikasi itu.
 
-### 1. Backend — `GET /api/lab` & `GET /api/lab/:id`
-- [ ] DOKTER dengan assignment ke pasien → 200, list/detail muncul
-- [ ] DOKTER TANPA assignment ke pasien → 403 ("Anda tidak memiliki akses ke
-      data pasien ini" / "...data pemeriksaan lab ini")
-- [ ] Basis akses beneran `DokterPasienAssignment`, bukan kunjungan/dokter
-      peminta — coba 2 akun DOKTER: order lab pasien diminta (`dokterPemintaId`)
-      oleh dokter A, tapi pasiennya di-assign juga ke dokter B → dokter B
-      tetap bisa lihat order itu
-- [ ] `GET /api/lab` tanpa query `pasienId` → 400
-- [ ] `GET /api/lab` cuma balikin status `COMPLETED` — order `PENDING`/
-      `CANCELLED` tidak muncul di list (behavior sejak commit `e13efbe`)
-- [ ] Filter `dariTanggal`/`sampaiTanggal` jalan benar setelah fix timezone —
-      batas hari jatuh tepat tengah malam WIB (bukan UTC), row di tepi
-      jendela tanggal tidak salah tersaring/terbuang
-- [ ] `hasilLabItem` di response detail bernilai `null` (bukan array kosong)
-      kalau order belum ada parameter hasilnya
+### 2. Verifikasi isi baris `AuditLog` (curl → backend lokal → DB dev)
+Login `admin`/`admin123` (ADMIN) dan `putra.tasdik`/`Sidokmais#2026` (DOKTER,
+`dokterId` terhubung ke `Kunjungan` uji). Semua PASS:
+- [x] `POST /api/operasi` → 1 baris `action="CREATE"`, `entityType="Operasi"`,
+      `entityId` cocok, `beforeData=null`, `afterData` berisi seluruh field
+      record baru, `actorId`/`actorRole` cocok akun ADMIN yang login
+- [x] `PATCH /api/operasi/:id` (ubah `tanggalOperasi`) → 1 baris
+      `action="UPDATE"`, `beforeData` & `afterData` SAMA-SAMA berisi seluruh
+      field (bukan cuma diff), `tanggalOperasi` beda antara before/after
+      sesuai perubahan yang dikirim
+- [x] `PATCH /api/notifikasi/:id/read` (pakai notifikasi hasil trigger di
+      atas) → 1 baris `action="UPDATE"`, `entityType="Notifikasi"`,
+      `beforeData.isRead=false`, `afterData.isRead=true`, `actorId`/
+      `actorRole` cocok akun DOKTER yang login (bukan ADMIN yang PATCH
+      operasinya)
+- [x] `DELETE /api/operasi/:id` → 1 baris `action="DELETE"`, `beforeData`
+      berisi record lengkap sebelum dihapus, `afterData=null`; record
+      `Operasi`-nya dikonfirmasi benar sudah hilang dari DB
+- [x] Semua `actorId` di atas dicocokkan manual ke `req.user.id` masing-masing
+      akun (bukan diasumsikan) — tidak ada yang salah tertukar
 
-### 2. Frontend — alur "Cari Hasil Lab"
-- [x] `npx tsc --noEmit` bersih — diverifikasi ulang saat audit dokumentasi
-      5 Agustus 2026
-- [x] Smoke test Expo Go / HP fisik — **PASS**, dikonfirmasi langsung oleh
-      Arthuro 5 Agustus 2026 (device sungguhan, bukan cuma verifikasi kode)
-- [ ] Navigasi lengkap di device: `PilihPasienHasilLabScreen` →
-      `HasilLabListScreen` → `HasilLabDetailScreen` → `LihatPdfLabScreen`
-- [ ] Filter tanggal (modal draft/apply + tombol "Terapkan") jalan benar di
-      device, hasilnya konsisten sama backend
-- [ ] `DateTimePicker` tidak lagi bikin crash/hang (watchdog kill di iOS,
-      dialog menumpuk di Android) — regression check untuk fix
-      `fallbackDate`/`useCallback` di commit `d1c6116`
-- [ ] `FloatingTabBar` slide-hide begitu `LihatPdfLabScreen` fokus, balik
-      lagi (slide-up) begitu keluar dari screen itu
+### 3. Fault-tolerance `utils/auditLog.js`
+- [x] Baca kode: `try/catch` + `console.error`, TIDAK ada `throw` ulang ke
+      caller — kegagalan tulis `AuditLog` dipastikan tidak menggagalkan
+      response utama. Tidak disimulasikan gagal beneran (butuh matikan
+      koneksi DB di tengah request, dianggap tidak sepadan buat verifikasi
+      ini) — kode & pola ini juga sudah dipakai konsisten di trigger
+      `PERUBAHAN_JADWAL` (`operasi.routes.js`, try/catch + `console.error`
+      terpisah).
 
-### 3. Regresi — review kode Day 22
-Kasus tepi dari `docs/analisa/review-kode-day-22-4-agustus-2026.md` (bagian 6
-& 8), belum ada bukti pengetesan manual untuk baris-baris ini:
-- [ ] Buka picker "Dari" atau "Sampai" lalu **diamkan tanpa memilih tanggal**
-      beberapa saat (kondisi persis yang bikin crash sebelum fix — `value`
-      jatuh ke `fallbackDate` yang sekarang stabil, bukan `new Date()` baru
-      tiap render) → tidak crash/hang di iOS, tidak ada dialog Android yang
-      menumpuk
-- [ ] Pilih tanggal tepat di **batas awal hari** (00:00 WIB) dan **batas akhir
-      hari** (23:59 WIB) buat `dariTanggal`/`sampaiTanggal` → row dengan jam
-      di tepi jendela tidak salah tersaring/terbuang (regression check fix
-      timezone WIB_OFFSET_MS)
-- [ ] Tekan tombol "X" reset di filter bar (`dateFilter`) → filter langsung
-      ke-reset, TIDAK ikut membuka modal filter (regression check bug
-      Pressable bersarang, baris ~168 saat ini)
-- [ ] Tombol "Reset" di dalam modal filter → cuma bersihkan draft tanggal
-      (belum apply), filter yang sudah aktif TIDAK ikut berubah dan TIDAK
-      memicu fetch ulang selagi modal masih terbuka (regression check
-      `resetDraftFilter` vs `resetFilter`)
-- [ ] Ganti filter tanggal dengan cepat berturut-turut (submit beberapa kali
-      sebelum response pertama kembali) → list akhir yang tampil konsisten
-      sama filter terakhir, bukan hasil dari request yang lebih lama
-      (regression check stale-response guard `isCancelled()` di `load()`)
+### 4. `GET /api/me` — bukan write action
+- [x] Dikonfirmasi eksplisit: endpoint ini (`server.js`, "endpoint uji coba
+      RBAC") cuma `res.json(req.user)`, tidak ada `prisma.*.create/update/
+      delete` maupun `logAudit()` di dalamnya — memang seharusnya begitu,
+      bukan celah
+
+### Temuan sampingan (di luar scope inti, dicatat biar tidak hilang)
+- **Password seed ADMIN beda dari dokumentasi.** Bagian "Sebelum mulai" di
+  dokumen ini dan `console.log` di `seed.js` sendiri ("Akun login dummy
+  (password sama untuk semua: Sidokmais#2026)") menyatakan password sama
+  untuk semua akun — TIDAK BENAR untuk ADMIN. `seed.js` bikin
+  `passwordHashAdmin` terpisah dari `hash("admin123", 10)`, cuma akun DOKTER
+  yang pakai `Sidokmais#2026`. Login `admin`/`Sidokmais#2026` GAGAL 401;
+  `admin`/`admin123` berhasil. Belum diperbaiki di kode — dicatat di sini
+  supaya siapa pun yang testing manual tidak kejebak hal yang sama.
 
 ---
 
-## Chatbot (Minggu 3) — in-scope vs out-of-scope
+## Chatbot — in-scope vs out-of-scope (buffer/future feature)
 Sesuai CLAUDE.md: target 20-30 command, campuran in-scope dan out-of-scope
-yang **disengaja**. Update tabel di bawah pas mulai Hari 21.
+yang **disengaja**. Chatbot belum diimplementasikan (status buffer/
+nice-to-have) — update tabel di bawah begitu implementasinya dimulai.
 
 Contoh in-scope (harus jalan):
 - "Berikan ringkasan hari ini"

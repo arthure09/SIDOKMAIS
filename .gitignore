@@ -35,5 +35,16 @@ docs/prompts/
 docs/latihan/
 docs/analisa/
 
+# Dokumen internal (laporan, jurnal, catatan pribadi) — dipertahankan lokal,
+# tidak ikut repo publik. Hapus barisnya kalau salah satu mau ikut masuk repo.
+docs/jurnal-pengerjaan.md
+docs/laporan-harian/
+docs/laporan-mingguan.md
+docs/catatan-belajar-frontend-12-agustus-2026.md
+docs/pertanyaan-supervisor-modul-lab.md
+docs/project-knowledge-koreksi.md
+docs/dummy.pdf
+docs/rencana-revisi-modul-dokter.md
+
 simrs-exploration/.env
 simrs-exploration/node_modules/
