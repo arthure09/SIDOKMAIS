@@ -1,10 +1,6 @@
-// Scoping akses modul Konsultasi (Tahap 2).
-//
-// Yang dijaga di sini cuma satu hal, tapi hal itu inti keamanannya:
-// `dokterTujuanId` SELALU dari JWT, tidak pernah dari query (CLAUDE.md Aturan
-// #2). Layer DB di-mock — yang diperiksa adalah where clause yang DIKIRIM ke
-// Prisma, bukan hasil query-nya. Bentuk query-nya sendiri diuji lewat smoke
-// test manual ke DB asli.
+// Inti yang dijaga: `dokterTujuanId` SELALU dari JWT, tidak pernah dari query
+// (CLAUDE.md Aturan #2). Layer DB di-mock — yang diperiksa adalah where
+// clause yang dikirim ke Prisma, bukan hasil query-nya.
 
 const request = require("supertest");
 const bcrypt = require("bcrypt");

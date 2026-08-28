@@ -1,16 +1,15 @@
 const express = require("express");
-const prisma = require("../lib/prisma");
-const { dokterPunyaAksesPasien } = require("../utils/aksesPasien");
-const { parsePagination, parseDokterIdFilter, parseRentangTanggal } = require("../utils/queryParams");
-const { jenisKunjungan, parseJenisKunjungan } = require("../utils/jenisKunjungan");
-const { KUNJUNGAN, terapkanStatusEfektif, whereStatusEfektif } = require("../utils/statusJadwal");
+const prisma = require("../../lib/prisma");
+const { dokterPunyaAksesPasien } = require("../../utils/aksesPasien");
+const { parsePagination, parseDokterIdFilter, parseRentangTanggal } = require("../../utils/queryParams");
+const { jenisKunjungan, parseJenisKunjungan } = require("../../utils/jenisKunjungan");
+const { KUNJUNGAN, terapkanStatusEfektif, whereStatusEfektif } = require("../../utils/statusJadwal");
 
 const router = express.Router();
 
-// Modul Konsul: read-only untuk kedua role (Kunjungan mensimulasikan sync
-// dari SIMRS, sama seperti Operasi — lihat CLAUDE.md Aturan #1). Belum ada
-// endpoint write di sini karena belum ada kebutuhan admin buat input manual;
-// data selalu datang dari seed/simulasi sync.
+// Modul Kunjungan: read-only untuk kedua role (mensimulasikan sync dari
+// SIMRS, sama seperti Operasi). Belum ada endpoint write karena belum ada
+// kebutuhan admin input manual; data selalu datang dari seed/simulasi sync.
 const STATUS_KUNJUNGAN = ["SCHEDULED", "ONGOING", "COMPLETED", "CANCELLED"];
 
 function parseListQuery(query, role) {

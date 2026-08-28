@@ -1,6 +1,5 @@
 // Satu sumber kebenaran daftar kategori lab. `PemeriksaanLab.kategori` bertipe
-// String (bukan enum) karena daftar resmi RS Dharmais belum dikonfirmasi
-// supervisor — dipakai seed sekarang, nanti dipakai validasi endpoint juga.
+// String, bukan enum, karena daftar resminya belum final.
 const LAB_KATEGORI = [
   "Hematologi",
   "Kimia Klinik",

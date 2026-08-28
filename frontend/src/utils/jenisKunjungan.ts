@@ -1,8 +1,7 @@
 import type { JenisKunjungan } from '../api/types';
 
-// Label tampilan buat kategori kunjungan (Tahap 1 rencana revisi). Backend
-// mengirim kategori, bukan jenis ruangan mentah — lihat
-// backend/src/utils/jenisKunjungan.js.
+// Label tampilan untuk kategori kunjungan — backend mengirim kategori,
+// bukan jenis ruangan mentah.
 export const JENIS_KUNJUNGAN_LABEL: Record<JenisKunjungan, string> = {
   RAWAT_JALAN: 'Rawat Jalan',
   IGD: 'IGD',

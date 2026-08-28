@@ -12,15 +12,12 @@ import type { HomeStackParamList } from './types';
 const Stack = createNativeStackNavigator<HomeStackParamList>();
 
 /**
- * Stack milik HomeTab: Home plus semua screen yang dibuka dari tile Menu.
- * Sebelumnya screen-screen itu numpang stack tab lain (ProfilTab/PasienTab),
- * jadi "kembali" mendarat di ProfilDokter/PasienList — layar yang tidak pernah
- * sengaja dibuka user — dan gestur swipe iOS terpaksa dimatikan karena pop
- * native-nya tidak bisa dibelokkan dari JS. Di sini urutannya benar dari sananya.
+ * Stack milik HomeTab: Home plus semua screen yang dibuka dari tile Menu. Screen ini harus tinggal di
+ * stack sendiri (bukan numpang stack tab lain) supaya "kembali" — termasuk gestur swipe iOS, yang pop
+ * native-nya tidak bisa dibelokkan dari JS — selalu mendarat balik di Home.
  *
- * Tiga screen Hasil Lab di bawah sengaja didaftarkan juga di
- * `PasienStackNavigator`: alurnya bisa masuk dari dua arah (Menu Home → pilih
- * pasien, atau PasienDetail → hasil lab pasien itu), dan tiap arah harus
+ * Tiga screen Hasil Lab di bawah sengaja didaftarkan juga di `PasienStackNavigator`: alurnya bisa masuk
+ * dari dua arah (Menu Home → pilih pasien, atau PasienDetail → hasil lab pasien itu), dan tiap arah harus
  * kembali ke tempat asalnya.
  */
 export function HomeStackNavigator() {

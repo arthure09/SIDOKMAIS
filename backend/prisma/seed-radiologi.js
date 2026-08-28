@@ -3,11 +3,11 @@
 // sudah ter-seed lewat seed.js TIDAK diubah. Re-runnable: tiap run menghapus
 // isi tabelnya sendiri lalu generate ulang.
 //
-// Narasinya sengaja ditulis mendekati bentuk aslinya di SIMRS (diverifikasi
-// 24 Ags 2026): paragraf temuan yang panjang, `kesan` sering kosong karena
-// kesimpulan ditulis di dalam narasi, dan dokter pembaca kerap tidak tercatat.
-// Kalau dummy-nya selalu rapi dan lengkap, layar yang dibuat di atasnya tidak
-// akan pernah teruji menghadapi data asli yang bolong.
+// Narasinya sengaja ditulis mendekati bentuk aslinya di SIMRS: paragraf
+// temuan yang panjang, `kesan` sering kosong karena kesimpulan ditulis di
+// dalam narasi, dan dokter pembaca kerap tidak tercatat. Kalau dummy-nya
+// selalu rapi dan lengkap, layar yang dibuat di atasnya tidak akan pernah
+// teruji menghadapi data asli yang bolong.
 require("./guard-db-lokal");
 
 const { PrismaClient } = require("@prisma/client");
@@ -154,7 +154,7 @@ async function main() {
       pasienId: pasien.id,
       dokterPemintaId: pickOne(dokterList).id,
       // Dokter pembaca sengaja sering kosong — di SIMRS cuma 7% terisi.
-      dokterPembacaId: Math.random() < 0.25 ? pickOne(dokterList).id : null,
+      dokterPembacaId: Math.random() < 0.07 ? pickOne(dokterList).id : null,
       modalitas: contoh.modalitas,
       namaPemeriksaan: contoh.nama,
       unit: Math.random() < 0.85 ? unitUntuk(contoh.modalitas) : null,
@@ -164,7 +164,9 @@ async function main() {
       klinis: contoh.klinis,
       hasil: contoh.hasil,
       // Kesan kosong pada sebagian besar baris, meniru SIMRS (15% terisi).
-      kesan: contoh.kesan && Math.random() < 0.4 ? contoh.kesan : null,
+      // 6/8 template punya kesan non-null, jadi ambang di sini 0.2, bukan
+      // 0.15 — rate efektifnya 0.75 * 0.2 ≈ 15%.
+      kesan: contoh.kesan && Math.random() < 0.2 ? contoh.kesan : null,
     });
   }
 

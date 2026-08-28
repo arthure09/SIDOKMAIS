@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { useFocusEffect } from '@react-navigation/native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -28,6 +29,7 @@ import { fetchCatatanKalenderList } from '../api/kalender';
 import { TIPE_META } from './CatatanKalenderScreen';
 import type { AktivitasHarianMingguan, CatatanKalenderItem, PasienPrioritasItem } from '../api/types';
 import { toDateParam } from '../utils/tanggal';
+import type { MainTabParamList } from '../navigation/types';
 
 // Jumlah pengingat yang ditampilkan di Home — sisanya lewat "Lihat semua".
 const PENGINGAT_PREVIEW_COUNT = 3;
@@ -129,10 +131,8 @@ const RINGKASAN_ROWS = [
 
 // 'radiologi' belum ada modulnya sendiri (gak ada entity/endpoint di
 // backend) — dieduk ke alur 'hasillab' yang sudah ada (endpoint /api/lab
-// discope per pasienId) sampai ada modul radiologi beneran.
-// 'hasillab' diaktifkan Hari 19 (docs/prompts/prompts-day-21-18-19.md),
-// arahnya ke layar pilih pasien dulu. 'kalender' (Bagian A, docs/prompts/
-// bagian-a-kalender-pribadi-dokter.md) satu-satunya aksi tulis yang aman
+// discope per pasienId, arahnya ke layar pilih pasien dulu) sampai ada
+// modul radiologi beneran. 'kalender' satu-satunya aksi tulis yang aman
 // buat dokter di app ini — datanya milik dokter sendiri, bukan data klinis
 // sync SIMRS.
 const NAVIGABLE_CARD_IDS = new Set(['pendapatan', 'hasillab', 'radiologi', 'kalender']);
@@ -158,15 +158,15 @@ const NAVIGASI_TINTS: Record<string, string> = {
 //   1. Angka berubah jadi "–" tiap kali balik ke Home. Penyebabnya
 //      useFocusEffect memanggil ulang /api/dashboard/statistik di SETIAP fokus,
 //      dan `ringkasanLoading` mengosongkan angkanya selama menunggu.
-//   2. Menunggunya bukan sekejap: di mode SIMRS endpoint itu 15 detik (30 detik
-//      sebelum query-nya dibenahi), karena tiap statistik menyusun ulang
-//      himpunan pasien-dokter dari tiga tabel DPJP.
+//   2. Menunggunya bukan sekejap: di mode SIMRS endpoint itu bisa ~15 detik,
+//      karena tiap statistik menyusun ulang himpunan pasien-dokter dari tiga
+//      tabel DPJP.
 //
 // Jadi angka lama ditahan di layar dan pemanggilan ulang dibatasi. Kalender
 // TIDAK ikut dibatasi — endpoint-nya murah dan pengingat yang baru dibuat harus
 // langsung kelihatan waktu dokter kembali dari CatatanKalenderScreen.
 //
-// ponytail: satu objek modul + satu batas waktu, tanpa TTL per-field dan tanpa
+// Catatan: satu objek modul + satu batas waktu, tanpa TTL per-field dan tanpa
 // persistensi. Hilang saat app ditutup, dan itu memang yang diinginkan — angka
 // hari ini tidak perlu bertahan sampai besok.
 const SEGAR_MS = 2 * 60 * 1000;
@@ -333,11 +333,10 @@ export function HomeScreen({ navigation }: Props) {
     setRefreshing(false);
   }, [loadRingkasan]);
 
-  // Semua tujuan tile Menu sekarang satu stack dengan Home (lihat
-  // HomeStackNavigator), jadi push biasa — tidak ada lagi lompat tab,
-  // `initial: false`, atau param `fromHome`. Konsekuensinya "kembali" dari
-  // screen-screen ini mendarat di Home lewat jalur apa pun, termasuk gestur
-  // swipe iOS yang jalan di native dan dulu terpaksa dimatikan.
+  // Semua tujuan tile Menu ada di satu stack dengan Home (lihat
+  // HomeStackNavigator) — push biasa, tanpa lompat tab, `initial: false`,
+  // atau param `fromHome`. Karena itu "kembali" dari screen-screen ini selalu
+  // mendarat di Home, termasuk lewat gestur swipe iOS.
   function handleCardPress(id: string) {
     switch (id) {
       case 'pendapatan':
@@ -351,6 +350,31 @@ export function HomeScreen({ navigation }: Props) {
         break;
       case 'kalender':
         navigation.navigate('CatatanKalender');
+        break;
+    }
+  }
+
+  // Tiap tile ringkasan lompat ke tab lain (Pasien/Operasi), jadi butuh
+  // navigation prop tab navigator induk — HomeStack tidak tahu apa-apa soal
+  // route di stack lain. `getParent` bisa null kalau dipanggil sebelum tab
+  // navigator selesai mount; dalam praktiknya tidak pernah kejadian karena
+  // tile ini cuma bisa ditekan setelah Home (anak dari tab navigator itu)
+  // sudah tampil, tapi dijaga saja daripada crash.
+  function handleRingkasanPress(key: (typeof RINGKASAN_ROWS)[number]['key']) {
+    const parent = navigation.getParent<BottomTabNavigationProp<MainTabParamList>>();
+    if (!parent) return;
+    switch (key) {
+      case 'pasienHariIni':
+        parent.navigate('PasienTab', { screen: 'PasienList' });
+        break;
+      case 'operasiHariIni':
+        parent.navigate('OperasiTab', { screen: 'JadwalOperasiKonsul', params: { tab: 'OPERASI' } });
+        break;
+      case 'kunjunganHariIni':
+        // Tab "Poliklinik" = kunjungan hari ini (lihat loadPoli di
+        // JadwalOperasiKonsulScreen) — itu yang direpresentasikan angka
+        // "Kunjungan" di kartu ini, bukan tab Surat Konsul.
+        parent.navigate('OperasiTab', { screen: 'JadwalOperasiKonsul', params: { tab: 'POLI' } });
         break;
     }
   }
@@ -419,7 +443,13 @@ export function HomeScreen({ navigation }: Props) {
           </View>
           <View style={styles.statTileRow}>
             {RINGKASAN_ROWS.map((row) => (
-              <View key={row.key} style={styles.statTile}>
+              <Pressable
+                key={row.key}
+                onPress={() => handleRingkasanPress(row.key)}
+                accessibilityRole="button"
+                accessibilityLabel={`Buka daftar ${row.label}`}
+                style={({ pressed }) => [styles.statTile, pressed && styles.statTilePressed]}
+              >
                 <View style={[styles.statTileIconCircle, { backgroundColor: `${row.tint}1A` }]}>
                   <MaterialIcons name={row.icon as never} size={18} color={row.tint} />
                 </View>
@@ -427,17 +457,16 @@ export function HomeScreen({ navigation }: Props) {
                   {ringkasanLoading ? '–' : ringkasan[row.key]}
                 </Text>
                 <Text style={styles.statTileLabel}>{row.label}</Text>
-              </View>
+              </Pressable>
             ))}
           </View>
 
           <View style={styles.menuHeaderRow}>
             <View style={styles.menuHeaderText}>
-              {/* Judulnya "Menu" (keputusan Arthuro). Yang diganti cuma subjudulnya:
-                  yang lama "Fitur tambahan di luar navigasi utama" secara harfiah
-                  menyuruh dokter mengabaikan blok ini lewat kata "tambahan" dan
-                  "di luar". Yang baru mengorientasikan tanpa merendahkan, dan tanpa
-                  mengulang label tile di bawahnya. */}
+              {/* Subjudul sengaja bukan "Fitur tambahan di luar navigasi utama" —
+                  kata "tambahan" dan "di luar" secara harfiah menyuruh dokter
+                  mengabaikan blok ini. Subjudul yang dipakai mengorientasikan
+                  tanpa merendahkan, dan tanpa mengulang label tile di bawahnya. */}
               <Text style={styles.summaryTitle}>Menu</Text>
               <Text style={styles.sectionSubtitle}>Pilihan menu untuk Anda</Text>
             </View>
@@ -750,16 +779,16 @@ const styles = StyleSheet.create({
 
   quickActionsSection: { gap: 16 },
 
-  // Blok ini sebelumnya surfaceVariant (#cae8ef) di atas background (#effbff) —
-  // kontrasnya cuma 1.22:1, praktis tidak ada tepi yang kelihatan, jadi seluruh
-  // seksi larut ke halaman dan kalah sama stat tile di atasnya (yang punya angka
-  // besar berwarna). Dijadikan bidang teal solid supaya jadi satu-satunya blok
-  // pekat di layar yang selain ini pucat dari atas sampai bawah.
+  // Bidang teal solid, bukan surfaceVariant (#cae8ef) pucat di atas background
+  // (#effbff) — kontras keduanya cuma 1.22:1, jadi seksi akan larut ke halaman
+  // dan kalah sama stat tile di atasnya (yang punya angka besar berwarna). Ini
+  // sengaja jadi satu-satunya blok pekat di layar yang selain ini pucat dari
+  // atas sampai bawah.
   //
-  // Pakai `primary` (#006a65), BUKAN `deepTealDark` (#0d3d3b) yang sempat dicoba:
-  // #0d3d3b nyaris hitam dan terbaca sebagai benda asing yang ditempel ke halaman.
-  // #006a65 warna brand-nya sendiri — tetap menonjol jelas dari background, tapi
-  // masih satu keluarga hue (177° vs 195°) jadi menyatu, bukan menabrak.
+  // Pakai `primary` (#006a65), bukan `deepTealDark` (#0d3d3b): yang terakhir
+  // nyaris hitam dan terbaca sebagai benda asing yang ditempel ke halaman.
+  // `primary` warna brand-nya sendiri — tetap menonjol jelas dari background,
+  // tapi masih satu keluarga hue (177° vs 195°) jadi menyatu, bukan menabrak.
   // Teks putih di atasnya 6.46:1, lolos AA untuk teks normal.
   gridSection: {
     backgroundColor: colors.primary,
@@ -877,6 +906,7 @@ const styles = StyleSheet.create({
     gap: 6,
     alignItems: 'flex-start',
   },
+  statTilePressed: { opacity: 0.9, transform: [{ scale: 0.98 }] },
   statTileIconCircle: {
     width: 36,
     height: 36,
@@ -884,8 +914,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  // Ikon, angka, dan label rata di satu garis kiri (dulu marginLeft-nya
-  // beda-beda: 0 / 9 / 4, kelihatan kayak tangga).
+  // Ikon, angka, dan label sengaja dijaga rata di satu garis kiri — marginLeft
+  // yang berbeda antar elemen bikin tampilannya seperti tangga.
   statTileValue: { fontSize: 26, fontWeight: '800' },
   statTileLabel: {
     fontSize: 11,

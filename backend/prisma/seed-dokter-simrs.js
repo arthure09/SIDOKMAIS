@@ -111,7 +111,7 @@ async function main() {
 
     // upsert lewat `nip`: menjalankan ulang skrip ini memperbarui, bukan
     // menggandakan. `spesialisasi` dibiarkan null — SMF di SIMRS berupa kode
-    // dan tabel referensinya belum dipetakan (§4 no.20).
+    // dan tabel referensinya belum dipetakan.
     const dokter = await prisma.dokter.upsert({
       where: { nip },
       update: { nama, statusAktif: true },

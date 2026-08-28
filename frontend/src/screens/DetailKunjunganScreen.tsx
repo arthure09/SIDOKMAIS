@@ -15,14 +15,13 @@ import { useTabBarClearance } from '../navigation/tabBarMetrics';
 import { useHeaderScrollShadow } from '../hooks/useHeaderScrollShadow';
 import type { OperasiStackParamList } from '../navigation/types';
 
-// Layar detail kunjungan poliklinik. Sebelumnya kartu di tab Poliklinik tidak
-// bisa ditap karena layar ini belum ada (lihat komentar lama di
-// JadwalOperasiKonsulScreen). Read-only, sama seperti seluruh modul Kunjungan.
+// Layar detail kunjungan poliklinik, read-only sama seperti seluruh modul
+// Kunjungan.
 //
-// Tampilannya mengikuti DetailJadwalOperasiScreen baris demi baris — header
-// dengan pil status, kartu identitas pasien, lalu kartu info berbaris ikon.
-// Dua layar ini dibuka dari dua tab yang bersebelahan di layar yang sama, jadi
-// bentuk yang berbeda terbaca sebagai dua aplikasi, bukan dua isi.
+// Tampilannya sengaja meniru DetailJadwalOperasiScreen — header dengan pil
+// status, kartu identitas pasien, lalu kartu info berbaris ikon — karena
+// kedua layar dibuka dari dua tab bersebelahan di layar yang sama, jadi
+// bentuk yang berbeda akan terbaca sebagai dua aplikasi, bukan dua isi.
 
 type Props = NativeStackScreenProps<OperasiStackParamList, 'DetailKunjungan'>;
 

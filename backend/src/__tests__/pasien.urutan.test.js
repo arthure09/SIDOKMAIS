@@ -1,13 +1,9 @@
-// Urutan daftar pasien berdasarkan kunjungan terakhir (?urutkan=terbaru|terlama).
-//
-// Yang dijaga: tanggal kunjungan terakhir TIDAK ada di baris assignment — dia
-// hasil query kedua yang di-join di JS. Jadi urutannya juga dikerjakan di JS,
-// setelah pemetaan, dan halamannya baru dipotong di situ. Kalau suatu saat
-// `skip`/`take` dikembalikan ke query Prisma tanpa menghapus pemotongan JS,
-// hasilnya jadi "50 nama pertama abjad, diurutkan tanggal" — terlihat benar di
-// layar, padahal salah.
-//
-// Layer DB di-mock: pola sama dengan kunjungan.where.test.js.
+// Tanggal kunjungan terakhir TIDAK ada di baris assignment — dia hasil query
+// kedua yang di-join di JS. Jadi urutan (?urutkan=terbaru|terlama) juga
+// dikerjakan di JS setelah pemetaan, dan pemotongan halaman baru terjadi
+// sesudah itu. Kalau `skip`/`take` dikembalikan ke query Prisma tanpa
+// menghapus pemotongan JS, hasilnya jadi "N nama pertama abjad, diurutkan
+// tanggal" — terlihat benar di layar, padahal salah. Layer DB di-mock.
 
 const request = require("supertest");
 const bcrypt = require("bcrypt");

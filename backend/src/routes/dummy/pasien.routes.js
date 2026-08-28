@@ -1,8 +1,8 @@
 const express = require("express");
-const prisma = require("../lib/prisma");
-const { parsePagination, parseDokterIdFilter } = require("../utils/queryParams");
-const { jenisKunjungan, parseJenisKunjungan } = require("../utils/jenisKunjungan");
-const { KUNJUNGAN, statusEfektif } = require("../utils/statusJadwal");
+const prisma = require("../../lib/prisma");
+const { parsePagination, parseDokterIdFilter } = require("../../utils/queryParams");
+const { jenisKunjungan, parseJenisKunjungan } = require("../../utils/jenisKunjungan");
+const { KUNJUNGAN, statusEfektif } = require("../../utils/statusJadwal");
 
 const router = express.Router();
 

@@ -26,7 +26,7 @@ const {
 const router = express.Router();
 
 // Modul Pasien versi SIMRS. Bentuk response-nya dijaga identik dengan
-// routes/pasien.routes.js (versi dummy) — frontend tidak boleh tahu bedanya.
+// routes/dummy/pasien.routes.js — frontend tidak boleh tahu bedanya.
 //
 // Perbedaan yang tidak bisa dihindari, semuanya karena SIMRS memang tidak
 // menyimpannya:
@@ -147,7 +147,7 @@ function bangunFilter({ search, status, ruanganJenis: jenis, aksesDokterId }) {
 
   if (jenis) {
     // Semantiknya "kunjungan TERAKHIR pasien berjenis ini", bukan "pasien
-    // pernah punya kunjungan jenis ini" (keputusan Arthuro, 21 Ags 2026).
+    // pernah punya kunjungan jenis ini".
     //
     // Bentuk penulisannya: subquery skalar ORDER BY ... LIMIT 1, BUKAN
     // `k.MASUK = (SELECT MAX(...))`. Keduanya benar, tapi bentuk MAX diukur
@@ -223,15 +223,12 @@ const SQL_DIAGNOSA = `
 
 // Status ACTIVE/COMPLETED untuk satu halaman NORM.
 //
-// Dulu ini kolom `EXISTS (...) AS AKTIF` di query halaman, dan di situlah biaya
-// terbesar layar daftar pasien bersembunyi. Kelihatannya cuma dihitung untuk 20
-// baris yang keluar, padahal MySQL mengevaluasinya SEBELUM LIMIT — jadi sekali
-// untuk tiap pasien dokter itu. Diukur pada dokter dengan 14 ribu pasien:
-// query halaman dengan kolom ini 11,2 detik, tanpa kolom ini 1,3 detik.
-//
-// Dipindah jadi satu query terpisah atas 20 NORM yang sudah pasti terpilih,
-// pola yang sama dengan getKunjunganTerdekat di bawah. Biayanya ratusan
-// milidetik.
+// Query halaman TIDAK membawa `EXISTS(...) AS AKTIF`: MySQL mengevaluasinya
+// SEBELUM LIMIT, jadi sekali untuk tiap pasien dokter, bukan cuma baris yang
+// tampil. Diukur pada dokter dengan 14 ribu pasien: query halaman dengan
+// kolom ini 11,2 detik, tanpa kolom ini 1,3 detik — jadi dipindah jadi satu
+// query terpisah atas 20 NORM yang sudah pasti terpilih (pola yang sama
+// dengan getKunjunganTerdekat di bawah), biayanya ratusan milidetik.
 async function getStatusAktif(normList) {
   if (normList.length === 0) return new Set();
 
@@ -246,14 +243,11 @@ async function getStatusAktif(normList) {
 
 // Kunjungan terakhir & berikutnya + diagnosa, untuk satu halaman NORM.
 //
-// Versi pertama menarik SELURUH kunjungan pasien-pasien di halaman ini lalu
-// memilih yang teratas di JS. Terbaca rapi, tapi di data asli itu 12 detik:
-// pasien onkologi bisa punya ratusan kunjungan lintas tahun, dan subquery
-// diagnosa ikut jalan untuk setiap barisnya.
-//
-// Sekarang DB yang memilih: MAX/MIN + GROUP BY mengembalikan tepat satu baris
-// per pasien, baru detailnya (ruangan + diagnosa) diambil untuk baris terpilih
-// saja. Subquery diagnosa jadi jalan maksimal sebanyak ukuran halaman.
+// DB yang memilih lewat MAX/MIN + GROUP BY, tepat satu baris per pasien,
+// baru detailnya (ruangan + diagnosa) diambil untuk baris terpilih saja —
+// menarik seluruh kunjungan lalu memilih di JS makan 12 detik di data asli
+// (pasien onkologi bisa punya ratusan kunjungan lintas tahun, dan subquery
+// diagnosa ikut jalan untuk setiap barisnya).
 //
 // MySQL-nya 5.7 — tidak ada window function, jadi pola MAX+GROUP BY lalu join
 // balik ini memang cara yang tersedia, bukan pilihan gaya.
@@ -303,7 +297,7 @@ async function getKunjunganTerdekat(normList) {
     );
 
     // Satu pasien bisa punya >1 kunjungan pada detik yang sama (ruangan beda);
-    // yang pertama sudah cukup, sama seperti perilaku versi sebelumnya.
+    // yang pertama sudah cukup.
     for (const k of detail) if (!terakhirMap.has(k.NORM)) terakhirMap.set(k.NORM, k);
   }
 
@@ -322,8 +316,8 @@ router.get("/", async (req, res) => {
     return res.status(400).json({ message: "Query params tidak valid", errors });
   }
 
-  // DOKTER selalu dikunci ke dirinya sendiri (Aturan #2) — id SIMRS-nya
-  // diterjemahkan dari klaim JWT, bukan diterima dari request.
+  // DOKTER selalu dikunci ke dirinya sendiri — id SIMRS-nya diterjemahkan dari
+  // klaim JWT, bukan diterima dari request.
   const dokterUuid = role === "DOKTER" ? ownDokterId : values.dokterId;
   const aksesDokterId = dokterUuid ? await simrsDokterId(dokterUuid) : null;
 
@@ -338,13 +332,11 @@ router.get("/", async (req, res) => {
   // dan MySQL menolaknya — ini alasannya tidak diparameterkan.
   const offset = (page - 1) * limit;
 
-  // URUTANNYA PENTING — halaman dulu, sendirian, baru sisanya.
-  //
-  // Versi sebelumnya menjalankan COUNT dan query halaman bersamaan lewat
-  // Promise.all. Terlihat seperti penghematan, ternyata kebalikannya: keduanya
-  // memakai derived table akses DPJP yang sama, jadi MySQL membangun union 14
-  // ribu NORM itu DUA KALI sekaligus, dan keduanya saling berebut. Diukur pada
-  // dokter 117: bentuk paralel 34,6 detik, bentuk berurutan di bawah 4,8 detik.
+  // URUTANNYA PENTING — halaman dulu, sendirian, baru sisanya: COUNT dan query
+  // halaman memakai derived table akses DPJP yang sama, jadi menjalankan
+  // keduanya lewat Promise.all membuat MySQL membangun union 14 ribu NORM itu
+  // DUA KALI sekaligus, dan keduanya saling berebut. Diukur pada dokter 117:
+  // bentuk paralel 34,6 detik, bentuk berurutan di bawah 4,8 detik.
   const baris = await q(
     `SELECT pas.NORM, pas.NAMA
        FROM master.pasien pas ${join}
@@ -416,13 +408,11 @@ router.get("/:id", async (req, res) => {
     }
   }
 
-  // Ambil barisnya dulu (lookup PK, murah), akses dicek terpisah.
-  //
-  // Dulu klausa akses ditempel ke WHERE query ini supaya "satu definisi boleh
-  // lihat". Niatnya benar tapi harganya 1,4 detik: klausa itu membangun
+  // Ambil barisnya dulu (lookup PK, murah), akses dicek terpisah — menempelkan
+  // klausa akses ke WHERE query ini berharga 1,4 detik karena membangun
   // himpunan seluruh pasien dokter demi menyaring SATU baris yang sudah
-  // ditunjuk primary key. Definisinya tetap satu — sekarang tinggal di
-  // dokterPunyaAksesPasien(), dipakai juga oleh detail Kunjungan dan Lab.
+  // ditunjuk primary key. Definisi akses tetap satu: dokterPunyaAksesPasien(),
+  // dipakai juga oleh detail Kunjungan dan Lab.
   const pasienBaris = await q(
     `SELECT pas.NORM, pas.NAMA, pas.JENIS_KELAMIN, pas.TANGGAL_LAHIR, pas.TEMPAT_LAHIR,
             pas.ALAMAT, pas.GOLONGAN_DARAH, pas.TANGGAL,
@@ -491,8 +481,8 @@ router.get("/:id", async (req, res) => {
         diagnosa: diagnosaBersih(k.DIAGNOSA),
         // Diturunkan dari tanggal, sama seperti versi dummy. SIMRS punya
         // kolom STATUS sendiri di kunjungan, tapi arti kodenya belum
-        // dikonfirmasi DBA (pertanyaan §4 no.5 di simrs-schema-mapping.md),
-        // jadi statusnya dihitung dari tanggal — bukan ditebak dari kode.
+        // dikonfirmasi DBA, jadi statusnya dihitung dari tanggal — bukan
+        // ditebak dari kode.
         statusKunjungan: statusEfektif(masuk, null, KUNJUNGAN),
         isPasienBaru: Number(k.BARU) === 1,
         jenisKunjungan: kategoriKunjungan(k.JENIS_KUNJUNGAN),

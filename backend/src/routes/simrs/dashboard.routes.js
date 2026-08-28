@@ -14,26 +14,17 @@ const router = express.Router();
 
 // Dashboard versi SIMRS — sumber "Aktivitas Hari Ini", "Statistik Pasien
 // Mingguan", dan "Pasien Prioritas" di HomeScreen. Bentuk response identik
-// dengan routes/dashboard.routes.js.
+// dengan routes/dummy/dashboard.routes.js.
 //
-// LINGKUPNYA "SAYA TERLIBAT", BUKAN "PASIEN SAYA" (diperbaiki 24 Ags 2026).
-// Sebelumnya semua angka di sini memakai himpunan akses DPJP se-riwayat
-// (`klausaAksesNorm`), sama seperti ?lingkup=pasien di modul Jadwal. Akibatnya
-// dashboard menghitung SELURUH kunjungan/operasi milik setiap pasien yang
-// pernah dokter itu tangani — termasuk yang hari ini ditangani dokter lain.
-// Untuk dokter senior dengan 14 ribu pasien unik, angkanya jadi laporan rumah
-// sakit, bukan agenda pribadi. Dashboard ini menjawab satu pertanyaan saja:
-// "apa kegiatan SAYA hari ini", jadi penyaringnya keterlibatan langsung —
-// klausa yang sama persis dipakai `?lingkup=saya` di kunjungan/operasi.
+// Lingkupnya "saya terlibat", bukan "pasien saya": penyaringnya keterlibatan
+// langsung (klausa yang sama dipakai `?lingkup=saya` di kunjungan/operasi),
+// bukan himpunan akses DPJP se-riwayat pasien — dokter senior bisa terkait
+// belasan ribu pasien unik se-riwayat, dan itu angka rumah sakit, bukan
+// agenda pribadi hari ini.
 //
-// Efek sampingnya: himpunan NORM se-riwayat itu tidak dibangun lagi di sini,
-// dan itu bagian termahal dari seluruh dashboard.
-//
-// PERINGATAN YANG PERLU DIINGAT SAAT MEMBACA ANGKANYA: replika SIMRS berhenti
-// tersinkronisasi 18 Ags 2026 14:35 WIB. Selama itu belum diperbaiki,
-// "hari ini" dan sebagian besar minggu berjalan akan bernilai 0 — bukan karena
-// query salah, tapi karena datanya memang tidak sampai ke sini. Grafik mingguan
-// akan terisi lagi sendiri begitu replikasi jalan.
+// Kalau replika SIMRS berhenti tersinkronisasi, "hari ini" dan minggu
+// berjalan bisa bernilai 0 — bukan karena query salah, datanya belum sampai.
+// Grafik terisi lagi begitu replikasi jalan.
 
 const HARI_LABEL = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"];
 const JUMLAH_PASIEN_PRIORITAS = 3;

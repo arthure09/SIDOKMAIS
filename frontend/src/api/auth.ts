@@ -1,9 +1,7 @@
 import { apiFetch } from './client';
 import type { LoginResponse } from './types';
 
-// Identitas terbaru dari server. Dipakai ProfilDokterScreen supaya sesi lama
-// yang tersimpan di SecureStore (login sebelum `nip` ikut dikirim) ikut
-// terisi tanpa memaksa user login ulang.
+// Identitas terbaru dari server — mengisi ulang sesi lama di SecureStore yang belum punya `nip`, tanpa memaksa login ulang.
 export function fetchMe(token: string) {
   return apiFetch<LoginResponse['pengguna']>('/api/auth/me', { token });
 }

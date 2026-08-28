@@ -35,9 +35,8 @@ export const colors = {
  * Aksen ikon tile Menu di HomeScreen, dipakai di atas tray `primary` (#006a65).
  *
  * Keempatnya sengaja disusun sebagai ramp ANALOG 160°-209° — masih tetangga hue
- * `primary` (177°), jadi berwarna tanpa menabrak palet. Ini pelajaran dari
- * percobaan sebelumnya yang memakai lime #c8ce22: hue-nya 62°, meleset 115° dari
- * tray, dan langsung terasa tabrakan.
+ * `primary` (177°), jadi berwarna tanpa menabrak palet. Warna jauh dari rentang
+ * ini (mis. lime, hue 62°) meleset >100° dari tray dan terasa tabrakan.
  *
  * Kontras terhadap tray: mint 4.10:1, teal 3.64:1, cyan 3.58:1, sky 3.63:1 —
  * semuanya lewat ambang 3:1 WCAG untuk komponen non-teks, dan rentangnya rapat

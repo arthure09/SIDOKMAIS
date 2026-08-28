@@ -3,9 +3,6 @@
  * `baseline` = poll pertama: isinya cuma dijadikan penanda, tidak dinotifikasi
  * (kalau tidak, tiap buka app semua notifikasi lama muncul lagi).
  * `sudahDilihat` dimutasi di sini — pemanggilnya cuma perlu satu Set.
- *
- * Sengaja dipisah dari notifikasiHp.ts: fungsi ini murni logika, tanpa modul
- * native, jadi self-check-nya bisa dijalankan langsung dengan `node`.
  */
 export function serapNotifikasi<T extends { id: string }>(
   data: T[],

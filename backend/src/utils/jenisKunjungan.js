@@ -1,13 +1,10 @@
-// Kategori kunjungan (Tahap 1 docs/rencana-revisi-modul-dokter.md).
+// Kategori kunjungan TIDAK disimpan sebagai kolom sendiri di Kunjungan:
+// nilainya sudah ada di Ruangan.jenis, dan `ruanganId` wajib di tiap Kunjungan.
+// Kolom terpisah cuma bikin dua sumber kebenaran yang bisa saling bertentangan
+// (kunjungan bertipe RAWAT_INAP yang ruangannya poli).
 //
-// TIDAK disimpan sebagai kolom sendiri di Kunjungan: nilainya sudah ada di
-// Ruangan.jenis, dan `ruanganId` wajib di tiap Kunjungan. Kolom terpisah cuma
-// bikin dua sumber kebenaran yang bisa saling bertentangan (kunjungan bertipe
-// RAWAT_INAP yang ruangannya poli). Rencana juga menyebut field `ruangan`
-// String — itu duplikat relasi Ruangan yang sudah ada, jadi dilewati.
-//
-// Kosakata publik (API + UI) pakai istilah rencana; `POLI` adalah detail
-// taksonomi ruangan yang tidak perlu bocor ke query string.
+// Kosakata publik (API + UI) sengaja beda dari taksonomi Ruangan; `POLI`
+// adalah detail internal yang tidak perlu bocor ke query string.
 const KE_RUANGAN_JENIS = { RAWAT_JALAN: "POLI", IGD: "IGD", RAWAT_INAP: "RAWAT_INAP" };
 
 const DARI_RUANGAN_JENIS = Object.fromEntries(

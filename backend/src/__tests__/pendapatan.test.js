@@ -1,6 +1,4 @@
-// Modul Jasa Medis (Tahap 4 docs/rencana-revisi-modul-dokter.md).
-//
-// Dua hal yang dijaga di sini:
+// Yang dijaga di modul Jasa Medis:
 //   1. `dokterId` DOKTER selalu dari JWT, tidak pernah dari query (Aturan #2) —
 //      ini modul uang, jadi query yang salah scope berarti dokter melihat
 //      penghasilan orang lain.

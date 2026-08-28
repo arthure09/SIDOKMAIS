@@ -1,13 +1,10 @@
-// Pembentukan `where` di GET /api/kunjungan.
+// Klausa filter dan klausa scoping akses tidak boleh saling menimpa saat
+// digabung. Keduanya bisa menghasilkan kunci `OR` yang sama — kalau
+// di-spread ke satu objek biasa, yang belakangan menghapus yang duluan tanpa
+// error, dan dokter yang memfilter "Selesai" diam-diam menerima semua
+// status. Karena itu klausa digabung lewat AND, bukan spread.
 //
-// Yang dijaga: klausa filter dan klausa scoping akses tidak boleh saling
-// menimpa. Sebelum dipindah ke AND, keduanya di-spread ke satu objek —
-// whereStatusEfektif("COMPLETED") menghasilkan kunci `OR`, dan scoping akses
-// dokter juga `OR`, jadi yang belakangan menghapus yang duluan TANPA error.
-// Akibatnya dokter yang memfilter "Selesai" diam-diam menerima semua status.
-//
-// Layer DB di-mock: yang diperiksa where clause yang DIKIRIM ke Prisma, bukan
-// hasil query-nya (pola sama dengan konsultasi.rbac.test.js).
+// Layer DB di-mock: yang diperiksa where clause yang dikirim ke Prisma.
 
 const request = require("supertest");
 const bcrypt = require("bcrypt");

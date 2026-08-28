@@ -37,12 +37,8 @@ export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): 
   const json = await res.json().catch(() => null);
 
   if (!res.ok) {
-    // Token yang kita kirim ditolak server (kedaluwarsa / dicabut) = sesi sudah
-    // mati. Tanpa ini tiap layar cuma menampilkan "Token tidak valid atau
-    // kedaluwarsa" dan user terjebak, karena token basi tetap ada di store.
-    // logout() mengosongkan token, dan RootNavigator otomatis balik ke Login.
-    // Dibatasi ke request yang MEMBAWA token — 401 dari /auth/login itu
-    // "password salah", bukan sesi mati.
+    // 401 pada request berToken = sesi mati (token kedaluwarsa/dicabut), bukan "password salah" (itu 401 dari /auth/login tanpa token).
+    // logout() di sini mengosongkan token supaya RootNavigator otomatis balik ke Login, alih-alih user terjebak di layar error.
     if (res.status === 401 && options.token) {
       useAuthStore.getState().logout();
     }

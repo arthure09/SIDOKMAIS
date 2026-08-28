@@ -1,8 +1,18 @@
-// Self-check rentangLab — pola sama dengan serapNotifikasi.check.ts.
-// Jalankan manual:
-//   node src/utils/rentangLab.check.ts
+// Self-check rentangLab. Jalankan manual: node src/utils/rentangLab.check.ts
 import assert from 'node:assert';
 import { angkaLab, hitungRelRujukan, parseRujukan } from './rentangLab.ts';
+import type { RelRujukan } from './rentangLab.ts';
+
+// Sengaja BUKAN `assert.ok(x)` lalu memakai `x.posisi` di baris berikutnya.
+// Penyempitan tipe lewat assertion function punya syarat khusus di TypeScript
+// dan diam-diam berhenti bekerja begitu tipe `assert` gagal dimuat — yang
+// muncul bukan satu error, melainkan belasan "possibly null" di baris-baris
+// yang sebenarnya tidak salah. `if (...) throw` menyempit lewat aliran kontrol
+// biasa, jadi berlaku tanpa perlu tahu apa pun tentang tipe `assert`.
+function wajibAda(nilai: RelRujukan | null, pesan: string): RelRujukan {
+  if (nilai === null) throw new Error(`${pesan} — seharusnya menghasilkan rel, bukan null`);
+  return nilai;
+}
 
 // --- angka ---
 assert.equal(angkaLab('11.4'), 11.4);
@@ -26,21 +36,18 @@ assert.equal(parseRujukan(null), null);
 assert.equal(parseRujukan('17.3 - 13.2'), null);
 
 // --- rel ---
-const tengah = hitungRelRujukan('15', '10 - 20');
-assert.ok(tengah);
+const tengah = wajibAda(hitungRelRujukan('15', '10 - 20'), 'nilai di tengah rujukan');
 assert.equal(tengah.diLuar, false);
 assert.ok(Math.abs(tengah.posisi - 0.5) < 1e-9, 'nilai di tengah rujukan -> tepat 0,5');
 assert.ok(tengah.awal > 0 && tengah.akhir < 1, 'ada napas di kedua ujung rel');
 
 // Di bawah rujukan: penanda tetap di dalam rel, segmen rujukan bergeser ke kanan.
-const rendah = hitungRelRujukan('8', '13.2 - 17.3');
-assert.ok(rendah);
+const rendah = wajibAda(hitungRelRujukan('8', '13.2 - 17.3'), 'nilai di bawah rujukan');
 assert.equal(rendah.diLuar, true);
 assert.ok(rendah.posisi >= 0 && rendah.posisi < rendah.awal);
 
 // Nilai jauh di atas batas terbuka: penanda dijepit, tidak keluar rel.
-const jauh = hitungRelRujukan('9999', '< 5');
-assert.ok(jauh);
+const jauh = wajibAda(hitungRelRujukan('9999', '< 5'), 'nilai jauh di atas batas terbuka');
 assert.equal(jauh.awal, 0);
 assert.equal(jauh.diLuar, true);
 assert.ok(jauh.posisi <= 1);
@@ -49,8 +56,8 @@ assert.ok(jauh.posisi <= 1);
 assert.equal(hitungRelRujukan('35', '0 - 35')?.diLuar, false);
 
 // Rentang nol lebar tidak membuat pembagian nol.
-const nol = hitungRelRujukan('5', '5 - 5');
-assert.ok(nol && Number.isFinite(nol.posisi));
+const nol = wajibAda(hitungRelRujukan('5', '5 - 5'), 'rentang nol lebar');
+assert.ok(Number.isFinite(nol.posisi));
 
 // Hasil kualitatif tidak punya rel.
 assert.equal(hitungRelRujukan('Negatif', 'Negatif'), null);

@@ -15,16 +15,13 @@ Fase saat ini: dummy data, backend independen — belum terintegrasi ke SIMRS pr
 - **Frontend:** React Native + Expo, React Navigation, TypeScript, Zustand
   - **UI:** komponen disusun manual dari primitif React Native (`View`,
     `Pressable`, `Text`) + `StyleSheet`, mengacu ke desain Figma/Stitch.
-    `react-native-paper` masih terpasang sebagai dependency dan
-    `PaperProvider` masih membungkus app di `frontend/App.tsx`, tapi **tidak
-    ada satu pun komponen Paper yang dipakai di `frontend/src/`**.
     *Penyimpangan dari rencana awal* (rencana: "React Native Paper — tampilan
     profesional cepat tanpa desain custom"); dalam praktiknya desain custom
-    dari Figma yang dipakai. Provider tidak dilepas karena tidak mendesak —
-    **bukan** karena berisiko: audit kode Day 22 (4 Ags 2026) mengonfirmasi
-    `PaperProvider` nol consumer (tidak ada komponen yang mengambil apa pun
-    darinya), jadi melepasnya sebenarnya rendah risiko. Alasan sebenarnya
-    murni prioritas waktu, bukan takut ada yang rusak.
+    dari Figma yang dipakai. **`react-native-paper` sudah dilepas seluruhnya** —
+    diverifikasi 25 Ags 2026: nol kecocokan di `frontend/package.json` maupun
+    `frontend/App.tsx`. Catatan lama di dokumen ini ("masih terpasang",
+    "`PaperProvider` masih membungkus app", "nol consumer tapi belum dilepas")
+    sudah tidak berlaku dan jangan dipakai sebagai rujukan.
   - **HTTP client:** `fetch` native, dibungkus helper `apiFetch<T>()` di
     `frontend/src/api/client.ts`. **Bukan axios** — axios tidak ada di
     `frontend/package.json` dan tidak pernah dipakai.
@@ -120,9 +117,28 @@ SIMRS tidak menyimpannya.
 Bentuknya jalur baca kedua, **bukan migrasi** — Postgres tetap rumah untuk
 Notifikasi/AuditLog/Pengguna/Konsultasi lokal. File terkait:
 `src/lib/simrs.js` (pool + guard read-only), `src/utils/simrsBentuk.js`
-(konversi WIB + kode referensi), `src/utils/simrsAkses.js` (scoping),
-`src/routes/simrs/*.js`. Route dummy tidak diubah sama sekali; `server.js`
-memilih salah satu saat boot.
+(konversi WIB + kode referensi), `src/utils/simrsAkses.js` (scoping).
+Route dummy tidak diubah sama sekali; `server.js` memilih salah satu saat boot.
+
+**Layout `src/routes/` (dirapikan 25 Ags 2026 — pemindahan file murni, nol
+perubahan logika, 135 tes tetap hijau):**
+
+| Folder | Isi | Terpengaruh `SUMBER_DATA`? |
+|---|---|---|
+| `routes/dummy/` | 8 modul, PostgreSQL + Prisma | ya — dipakai saat `dummy` |
+| `routes/simrs/` | 8 modul, MySQL replika (SQL mentah) | ya — dipakai saat `simrs` |
+| `routes/bersama/` | `auth`, `notifikasi`, `kalender` | **tidak** — selalu PostgreSQL |
+
+`dummy/` dan `simrs/` sengaja memakai **nama file yang persis sama** (mis.
+`pasien.routes.js` ada di dua-duanya), supaya tiap modul punya pasangan yang
+bisa langsung dibandingkan berdampingan. `bersama/` isinya modul yang memang
+tidak punya versi SIMRS. Sebelum ini, route dummy tergeletak di akar
+`src/routes/` sehingga tidak simetris dengan `simrs/`.
+
+Konsekuensi buat siapa pun yang menambah modul: menambah satu modul bermode
+berarti menambah **dua** file dengan nama sama di `dummy/` dan `simrs/`, lalu
+satu baris ternary di `server.js`. Modul yang tidak ada di SIMRS masuk
+`bersama/` dan tidak perlu ternary sama sekali.
 
 Hal yang wajib diingat:
 1. **Prisma tidak dipakai untuk SIMRS.** Connector MySQL Prisma cuma melihat
@@ -195,13 +211,33 @@ Verifikasi query tanpa membaca data pasien: `simrs-exploration/verify-queries.js
 lengkap + daftar pertanyaan terbuka ke DBA: `simrs-exploration/docs/simrs-schema-mapping.md`.
 
 **Status izin:** izin memakai replika sebagai datasource aplikasi SUDAH
-DIBERIKAN (Arthuro, 24 Ags 2026). `backend/.env` dan `.env.example` memakai
-`SUMBER_DATA="simrs"`.
+DIBERIKAN (Arthuro, 24 Ags 2026).
+
+**Dua file env, dipilih per lokasi (dipisah 25 Ags 2026).** Replika SIMRS ada
+di alamat LAN internal (`SIMRS_HOST`), jadi mode `simrs` hanya bisa jalan di
+jaringan RS — di luar RS backend wajib mode `dummy`. Karena itu env-nya dipecah:
+
+| File | Kapan | Butuh WiFi RS? |
+|---|---|---|
+| `backend/.env.dummy` | di luar RS | tidak |
+| `backend/.env.simrs` | di dalam RS | ya |
+| `backend/.env` | salinan aktif salah satunya — **jangan diedit langsung** | — |
+
+Perintahnya `npm run dev:dummy` / `npm run dev:simrs` (menyalin file env yang
+sesuai ke `.env`, lalu `nodemon`). `.env.dummy` sengaja **tidak memuat
+`SIMRS_HOST/USER/PASSWORD` sama sekali** — di mode dummy tidak ada satu pun
+query ke SIMRS, jadi kredensial replika tidak perlu ikut di laptop yang dibawa
+keluar RS.
+
+Ketiganya di-gitignore. Polanya sekarang `**/.env.*` dengan pengecualian
+`!**/.env.example`, bukan daftar nama satu per satu: `**/.env` cuma cocok persis
+dengan `.env`, jadi turunan seperti `.env.dummy` akan lolos dan ter-commit kalau
+tidak disapu secara umum.
 
 Default di KODE (`server.js`) sengaja tetap `dummy` dan tidak diubah: itu bukan
 soal izin, tapi pengaman kalau env gagal termuat — env kosong yang otomatis
 membuka data pasien asli adalah kegagalan diam-diam. Menyalakan mode SIMRS
-harus selalu berupa tindakan sadar (satu baris di `.env`), bukan kebetulan.
+harus selalu berupa tindakan sadar (memilih file env), bukan kebetulan.
 
 ## Testing
 Jest + Supertest untuk API. Manual checklist untuk chatbot nanti (command

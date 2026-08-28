@@ -3,17 +3,20 @@ require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const morgan = require("morgan");
-const authRoutes = require("./routes/auth.routes");
-const pasienRoutes = require("./routes/pasien.routes");
-const operasiRoutes = require("./routes/operasi.routes");
-const kunjunganRoutes = require("./routes/kunjungan.routes");
-const konsultasiRoutes = require("./routes/konsultasi.routes");
-const notifikasiRoutes = require("./routes/notifikasi.routes");
-const labRoutes = require("./routes/lab.routes");
-const radiologiRoutes = require("./routes/radiologi.routes");
-const dashboardRoutes = require("./routes/dashboard.routes");
-const kalenderRoutes = require("./routes/kalender.routes");
-const pendapatanRoutes = require("./routes/pendapatan.routes");
+// routes/bersama/ — tidak terpengaruh SUMBER_DATA, selalu ke PostgreSQL.
+const authRoutes = require("./routes/bersama/auth.routes");
+const notifikasiRoutes = require("./routes/bersama/notifikasi.routes");
+const kalenderRoutes = require("./routes/bersama/kalender.routes");
+
+// routes/dummy/ — pasangan PostgreSQL untuk tiap modul di routes/simrs/.
+const pasienRoutes = require("./routes/dummy/pasien.routes");
+const operasiRoutes = require("./routes/dummy/operasi.routes");
+const kunjunganRoutes = require("./routes/dummy/kunjungan.routes");
+const konsultasiRoutes = require("./routes/dummy/konsultasi.routes");
+const labRoutes = require("./routes/dummy/lab.routes");
+const radiologiRoutes = require("./routes/dummy/radiologi.routes");
+const dashboardRoutes = require("./routes/dummy/dashboard.routes");
+const pendapatanRoutes = require("./routes/dummy/pendapatan.routes");
 const authenticate = require("./middleware/auth.middleware");
 const authorize = require("./middleware/rbac.middleware");
 

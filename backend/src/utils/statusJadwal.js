@@ -8,12 +8,10 @@ const { rentangHariWIB } = require("./wib");
 // masih tampil "Terjadwal" padahal harinya sudah lewat dua hari.
 //
 // PENTING — kolom di DB TIDAK diubah. Modul ini cuma menghitung ulang nilai
-// yang dikirim di respons GET. Ini menjaga aturan #1 CLAUDE.md (Operasi &
-// Konsultasi read-only buat dokter, datanya simulasi sync dari SIMRS lewat
-// Admin): aplikasi tidak pernah menulis status klinis sendiri, dan status asli
-// dari SIMRS tetap utuh di DB. Endpoint tulis (POST/PATCH) sengaja tidak
-// memakai modul ini — responsnya harus mengonfirmasi apa yang benar-benar
-// disimpan.
+// yang dikirim di respons GET: aplikasi tidak pernah menulis status klinis
+// sendiri, dan status asli dari SIMRS tetap utuh di DB. Endpoint tulis
+// (POST/PATCH) sengaja tidak memakai modul ini — responsnya harus
+// mengonfirmasi apa yang benar-benar disimpan.
 //
 // Batas "sudah lewat" memakai HARI kalender WIB, bukan jam persis. Operasi yang
 // dijadwalkan 06:52 tidak boleh berubah jadi "Selesai" pada 06:53 — durasinya

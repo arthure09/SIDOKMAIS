@@ -19,20 +19,17 @@ const router = express.Router();
 
 // Modul Konsultasi versi SIMRS — read-only, sama seperti versi dummy.
 //
-// Sumbernya medis.tb_konsul + medis.tb_konsul_jawab. Model Konsultasi di
-// SIDOKMAIS jelas dirancang dari lembar konsul yang sama: `diagnosis_kerja`,
-// `konsul_yang_diminta`, `penemuan`, `anjuran`, dan pasangan pengirim/tujuan
-// semuanya punya padanan langsung.
+// Sumbernya medis.tb_konsul + medis.tb_konsul_jawab — kolomnya
+// (diagnosis_kerja, konsul_yang_diminta, penemuan, anjuran, pengirim/tujuan)
+// punya padanan langsung ke model Konsultasi.
 //
-// Hak aksesnya tetap `dokter_tujuan`, BUKAN DokterPasienAssignment — persis
-// keputusan terkunci yang sudah dicatat di routes/konsultasi.routes.js: dokter
-// melihat konsul yang DITUJUKAN kepadanya.
+// Hak aksesnya tetap `dokter_tujuan`, bukan DokterPasienAssignment: dokter
+// melihat konsul yang DITUJUKAN kepadanya (sama dengan versi dummy).
 //
-// CATATAN PERILAKU: medis.tb_konsul.tujuan bernilai "1: Dokter, 2: SMF".
-// Konsul yang dialamatkan ke SMF (bukan ke dokter tertentu) tidak akan muncul
-// untuk siapa pun di sini, karena `dokter_tujuan`-nya kosong. Versi dummy tidak
-// punya konsep ini sama sekali, jadi tidak ada perilaku lama yang dilanggar —
-// tapi ini pertanyaan nyata buat DBA sebelum dipakai dokter beneran.
+// medis.tb_konsul.tujuan bernilai "1: Dokter, 2: SMF" — konsul yang
+// dialamatkan ke SMF (bukan ke dokter tertentu) tidak akan muncul untuk siapa
+// pun di sini karena `dokter_tujuan`-nya kosong. Pertanyaan terbuka buat DBA
+// sebelum dipakai dokter beneran.
 
 const STATUS_KONSULTASI = ["MENUNGGU_JAWABAN", "SUDAH_DIJAWAB"];
 const PRIORITAS_KONSULTASI = ["BIASA", "CITO"];
@@ -74,14 +71,10 @@ function parseListQuery(query, role) {
   };
 }
 
-// Rantai ke pasien lewat KUNJUNGAN, bukan lewat `tk.nopen`.
-//
-// `medis.tb_konsul.nopen` ADA kolomnya tapi praktis tidak dipakai: dari 315.153
-// baris, 313.227 (99,4%) kosong, dan cuma 1.926 yang benar-benar cocok ke
-// pendaftaran.pendaftaran. Sebaliknya `tk.kunjungan` cocok di 315.149 baris
-// (99,998%). Versi pertama modul ini menjoin lewat `nopen` dan akibatnya
-// `pasien` selalu null di response — ketahuan waktu tes dengan data asli,
-// bukan dari skema (dua-duanya char(10), sama-sama masuk akal di atas kertas).
+// Rantai ke pasien lewat KUNJUNGAN, bukan `tk.nopen`: `medis.tb_konsul.nopen`
+// kosong di 99,4% baris, sementara `tk.kunjungan` cocok di hampir semua baris
+// (99,998%) — keduanya char(10) dan sama-sama masuk akal di atas kertas, jadi
+// ini tidak kelihatan dari skema.
 //
 // Jadi: konsul -> kunjungan -> pendaftaran -> pasien. Urutan JOIN-nya penting,
 // `pd` bergantung pada `k`.
@@ -178,9 +171,9 @@ router.get("/", async (req, res) => {
     return res.status(400).json({ message: "Query params tidak valid", errors });
   }
 
-  // dokterTujuan DOKTER selalu dari JWT (Aturan #2); `?dokterId=` cuma
-  // dihormati untuk ADMIN, dan parseDokterIdFilter sudah membuangnya kalau
-  // pemanggilnya DOKTER.
+  // dokterTujuan untuk DOKTER selalu dari JWT; `?dokterId=` cuma dihormati
+  // untuk ADMIN, dan parseDokterIdFilter sudah membuangnya kalau pemanggilnya
+  // DOKTER.
   const dokterUuid = role === "DOKTER" ? ownDokterId : values.dokterId;
   const dokterTujuan = dokterUuid ? await simrsDokterId(dokterUuid) : null;
 

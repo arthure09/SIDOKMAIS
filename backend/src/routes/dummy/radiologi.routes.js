@@ -1,7 +1,7 @@
 const express = require("express");
-const prisma = require("../lib/prisma");
-const { dokterPunyaAksesPasien } = require("../utils/aksesPasien");
-const { parsePagination, parseRentangTanggal } = require("../utils/queryParams");
+const prisma = require("../../lib/prisma");
+const { dokterPunyaAksesPasien } = require("../../utils/aksesPasien");
+const { parsePagination, parseRentangTanggal } = require("../../utils/queryParams");
 
 const router = express.Router();
 

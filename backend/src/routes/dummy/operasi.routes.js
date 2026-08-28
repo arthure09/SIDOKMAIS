@@ -1,11 +1,11 @@
 const express = require("express");
-const prisma = require("../lib/prisma");
-const authorize = require("../middleware/rbac.middleware");
-const { logAudit } = require("../utils/auditLog");
-const { dokterPunyaAksesPasien } = require("../utils/aksesPasien");
-const { parsePagination, parseDokterIdFilter, parseRentangTanggal } = require("../utils/queryParams");
-const { OPERASI, KUNJUNGAN, terapkanStatusEfektif, whereStatusEfektif } = require("../utils/statusJadwal");
-const { parseLaporanBody, tanpaLaporan } = require("../utils/laporanOperasi");
+const prisma = require("../../lib/prisma");
+const authorize = require("../../middleware/rbac.middleware");
+const { logAudit } = require("../../utils/auditLog");
+const { dokterPunyaAksesPasien } = require("../../utils/aksesPasien");
+const { parsePagination, parseDokterIdFilter, parseRentangTanggal } = require("../../utils/queryParams");
+const { OPERASI, KUNJUNGAN, terapkanStatusEfektif, whereStatusEfektif } = require("../../utils/statusJadwal");
+const { parseLaporanBody, tanpaLaporan } = require("../../utils/laporanOperasi");
 
 const router = express.Router();
 
@@ -323,13 +323,11 @@ router.patch("/:id", authorize("ADMIN"), async (req, res) => {
     afterData: after,
   });
 
-  // Trigger notifikasi PERUBAHAN_JADWAL (Prioritas 2, catch-up Hari 12-13 —
-  // docs/prompts/hari-12-13-notifikasi.md). Ditujukan ke dokter pemilik
-  // kunjungan, BUKAN ke req.user — PATCH ini bisa dikerjakan ADMIN atas nama
-  // dokter lain, jadi dokterId notifikasi selalu diambil dari relasi
-  // kunjungan, tidak pernah dari identitas yang sedang PATCH. Kegagalan bikin
-  // notifikasi tidak boleh menggagalkan response utama PATCH ini, sama
-  // seperti pola fault-tolerant di utils/auditLog.js.
+  // Notifikasi PERUBAHAN_JADWAL ditujukan ke dokter pemilik kunjungan, BUKAN
+  // ke req.user — PATCH ini bisa dikerjakan ADMIN atas nama dokter lain,
+  // jadi dokterId notifikasi selalu diambil dari relasi kunjungan. Kegagalan
+  // di sini tidak boleh menggagalkan response utama PATCH ini, sama seperti
+  // pola fault-tolerant di utils/auditLog.js.
   const pesanPerubahan = buildPerubahanJadwalPesan(before, after);
   if (pesanPerubahan) {
     try {
@@ -362,9 +360,9 @@ router.delete("/:id", authorize("ADMIN"), async (req, res) => {
     return res.status(404).json({ message: "Operasi tidak ditemukan" });
   }
 
-  // Sejak Tahap 4, Pendapatan tidak lagi menggantung ke Operasi (satu baris
-  // jasa medis per pelayanan, bukan turunan operasi), jadi Operasi sudah tidak
-  // punya anak sama sekali dan penanganan P2003 di sini jadi tidak terpakai.
+  // Pendapatan tidak tergantung ke Operasi (satu baris jasa medis per
+  // pelayanan, bukan turunan operasi), jadi Operasi tidak punya anak dan
+  // tidak perlu penanganan constraint FK di sini.
   await prisma.operasi.delete({ where: { id } });
 
   await logAudit({
@@ -399,6 +397,7 @@ router.get("/:id", async (req, res) => {
         include: {
           pasien: { select: { id: true, nama: true, norm: true } },
           dokter: { select: { id: true, nama: true } },
+          ruangan: { select: { nama: true } },
         },
       },
       ruangan: true,
@@ -425,10 +424,13 @@ router.get("/:id", async (req, res) => {
   // EFEKTIF, bukan yang tersimpan, supaya konsisten dengan status yang tampil
   // di layar (lihat utils/laporanOperasi.js).
   const efektif = terapkanStatusEfektif(operasi, OPERASI);
+  const kunjunganEfektif = terapkanStatusEfektif(operasi.kunjungan, KUNJUNGAN);
 
   res.json({
     ...(efektif.status === "COMPLETED" ? efektif : tanpaLaporan(efektif)),
-    kunjungan: terapkanStatusEfektif(operasi.kunjungan, KUNJUNGAN),
+    // Bentuknya string polos (bukan objek {nama,jenis}) supaya cocok dengan
+    // mode SIMRS — lihat routes/simrs/operasi.routes.js.
+    kunjungan: { ...kunjunganEfektif, ruangan: kunjunganEfektif.ruangan?.nama ?? null },
   });
 });
 

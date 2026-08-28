@@ -6,6 +6,12 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "mode:dummy": "cp .env.dummy .env",
+    "mode:simrs": "cp .env.simrs .env",
+    "dev:dummy": "npm run mode:dummy && npm run dev",
+    "dev:simrs": "npm run mode:simrs && npm run dev",
+    "start:dummy": "npm run mode:dummy && npm start",
+    "start:simrs": "npm run mode:simrs && npm start",
     "test": "jest",
     "prisma:seed": "node prisma/seed.js",
     "prisma:seed:kunjungan-operasi": "node prisma/seed-kunjungan-operasi.js",

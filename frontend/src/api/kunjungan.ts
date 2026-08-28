@@ -8,8 +8,7 @@ import type {
 } from './types';
 
 type ListParams = {
-  // Cakupan layar Jadwal. Hanya berpengaruh di mode SIMRS; route dummy
-  // mengabaikannya. Lihat parseLingkupJadwal di backend/src/utils/queryParams.js.
+  // Cakupan layar Jadwal — hanya berpengaruh di mode SIMRS, route dummy mengabaikannya (lihat parseLingkupJadwal di backend/src/utils/queryParams.js).
   lingkup?: LingkupJadwal;
   status?: StatusKunjungan;
   jenisKunjungan?: JenisKunjungan;
@@ -19,10 +18,9 @@ type ListParams = {
   page?: number;
   limit?: number;
   /**
-   * Izinkan server mundur ke tanggal terakhir yang ada datanya kalau tanggal
-   * yang diminta kosong. HANYA untuk tanggal bawaan (hari ini) — jangan
-   * dikirim saat dokter memilih tanggal sendiri, karena hasilnya akan digeser
-   * diam-diam. Kalau server memakai ini, `tanggalData` di response terisi.
+   * Izinkan server mundur ke tanggal terakhir yang ada datanya kalau tanggal bawaan (hari ini) kosong —
+   * jangan dikirim saat dokter memilih tanggal sendiri, hasilnya akan digeser diam-diam. `tanggalData` di
+   * response terisi kalau server benar-benar memakainya.
    */
   bolehMundur?: boolean;
 };

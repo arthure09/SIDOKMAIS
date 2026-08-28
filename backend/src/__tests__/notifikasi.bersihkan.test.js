@@ -1,12 +1,7 @@
-// Bersihkan daftar + tandai semua dibaca.
-//
-// Yang dijaga di sini adalah satu interaksi yang tidak kelihatan dari kode
-// endpoint-nya sendiri: notifikasi DIBERSIHKAN SECARA LUNAK, dan itu wajib.
-// Pembuat pengingat jadwal (utils/pengingatJadwal.js) memakai keberadaan baris
-// ber-`relatedId` sebagai tanda "sudah pernah dibuat". Kalau suatu saat ada
-// yang mengubahnya jadi `deleteMany`, seluruh test di bawah tetap hijau kecuali
-// yang terakhir — dan di aplikasi, pengingat yang baru dibersihkan akan muncul
-// lagi 60 detik kemudian tanpa pesan error apa pun.
+// Notifikasi harus dibersihkan SECARA LUNAK (update, bukan delete): pembuat
+// pengingat jadwal (utils/pengingatJadwal.js) memakai keberadaan baris
+// ber-`relatedId` sebagai tanda "sudah pernah dibuat". Kalau ini diubah jadi
+// deleteMany, pengingat yang baru dibersihkan akan muncul lagi tanpa error.
 
 const request = require("supertest");
 const bcrypt = require("bcrypt");

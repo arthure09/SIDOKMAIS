@@ -5,9 +5,8 @@
 // mana. Kalau ada field yang SIMRS memang tidak punya, isinya `null` — bukan
 // dihilangkan, bukan ditebak.
 //
-// Kode-kode di bawah berasal dari COLUMN_COMMENT di skema SIMRS itu sendiri
-// (lihat simrs-exploration/docs/simrs-schema-mapping.md), kecuali yang ditandai
-// BELUM DIVERIFIKASI.
+// Kode-kode di bawah berasal dari COLUMN_COMMENT di skema SIMRS itu sendiri,
+// kecuali yang ditandai BELUM DIVERIFIKASI.
 
 const { WIB_OFFSET_MS } = require("./wib");
 const { jenisKunjungan } = require("./jenisKunjungan");
@@ -66,7 +65,7 @@ function jenisKelamin(kode) {
 // Operasi lewat kolomnya sendiri, sama seperti di versi dummy.
 // `master.ruangan.JENIS_KUNJUNGAN` bukan cuma rawat jalan/IGD/rawat inap. Dari
 // 435 ruangan aktif ada 11 kode berbeda, dan sebagian besar BUKAN tempat dokter
-// menemui pasien (diverifikasi 24 Ags 2026 dengan mendaftar isi tiap kode):
+// menemui pasien:
 //
 //   1  poliklinik/rawat jalan     2  IGD              3  rawat inap
 //   14 Poli Cendana & konsultasi online                15 klinik khusus
@@ -74,12 +73,12 @@ function jenisKelamin(kode) {
 //   5  radiologi                  6  kamar bedah      11 farmasi/gudang/counter
 //   13 radioterapi & pencampuran obat
 //
-// DAFTAR PUTIH, bukan daftar hitam. Versi sebelumnya memetakan "semua yang
-// bukan 2 atau 3" jadi POLI, sehingga pengambilan obat di farmasi, cek lab, dan
-// foto radiologi semuanya terhitung sebagai kunjungan dokter. Untuk satu dokter
-// dalam sehari selisihnya 421 vs 194 — dashboard membaca seperti angka rumah
-// sakit. Kode yang tidak dikenal sengaja jatuh ke null: lebih baik satu baris
-// tidak berkategori daripada seluruh unit penunjang mengaku poliklinik.
+// DAFTAR PUTIH, bukan daftar hitam: memetakan "semua yang bukan 2 atau 3" ke
+// POLI membuat pengambilan obat di farmasi, cek lab, dan foto radiologi ikut
+// terhitung sebagai kunjungan dokter — untuk satu dokter dalam sehari
+// selisihnya 421 vs 194. Kode yang tidak dikenal sengaja jatuh ke null: lebih
+// baik satu baris tidak berkategori daripada seluruh unit penunjang mengaku
+// poliklinik.
 const KODE_RUANGAN = { 1: "POLI", 14: "POLI", 15: "POLI", 2: "IGD", 3: "RAWAT_INAP" };
 
 /** Kode ruangan yang dihitung sebagai pertemuan dokter–pasien. */
@@ -95,14 +94,14 @@ function ruanganJenis(kodeJenisKunjungan) {
 // Kategori kunjungan untuk field `jenisKunjungan` di response API.
 //
 // BEDA dari ruanganJenis() di atas, dan campur aduk keduanya adalah bug yang
-// benar-benar terjadi. Ada dua kosakata di aplikasi ini:
+// benar-benar terjadi: mengirim "POLI" (nilai `Ruangan.jenis`) ke field
+// `jenisKunjungan` tidak memicu error di mana pun — frontend cuma tidak
+// mengenali nilainya, jadi label kategori pasien tampil kosong seolah datanya
+// tidak ada. Ada dua kosakata di aplikasi ini:
 //   - `Ruangan.jenis`  -> POLI / IGD / RAWAT_INAP / OK   (internal, dipakai
 //                          untuk field `ruangan.jenis`)
 //   - `jenisKunjungan` -> RAWAT_JALAN / IGD / RAWAT_INAP (publik, dipakai UI
 //                          dan query string)
-// Versi pertama modul SIMRS mengirim "POLI" ke field `jenisKunjungan`. Tidak
-// ada error di mana pun — frontend cuma tidak mengenali nilainya, jadi label
-// kategori pasien tampil kosong seolah datanya tidak ada.
 //
 // Konversinya menumpang helper yang sudah ada supaya tetap satu sumber
 // kebenaran, bukan tabel padanan kedua yang bisa menyimpang.

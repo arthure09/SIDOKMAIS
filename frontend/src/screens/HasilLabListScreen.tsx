@@ -184,9 +184,7 @@ export function HasilLabListScreen({ route, navigation }: Props) {
             const sisaChip = item.pemeriksaan.length - CHIP_TAMPIL;
             return (
               // SIMRS tidak menyimpan PDF hasil lab — yang ada cuma parameter
-              // terstruktur, dan itu yang ditampilkan HasilLabDetail. Layar
-              // "Lihat PDF" berisi berkas contoh statis sudah dihapus (24 Ags
-              // 2026) begitu aplikasi membaca data pasien asli.
+              // terstruktur, dan itu yang ditampilkan HasilLabDetail.
               <Pressable
                 onPress={() =>
                   navigation.navigate('HasilLabDetail', {

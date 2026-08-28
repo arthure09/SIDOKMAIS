@@ -155,10 +155,10 @@ const KONSUL_STATUS_FILTERS: { value: StatusFilter; label: string }[] = [
 // Urutan di sini = urutan tombol di toggle = posisi indikatornya. "Poliklinik"
 // duluan karena itu yang paling sering ditanya dokter ("hari ini saya ada
 // apa"). Label sengaja tidak memakai kata "Konsul" sendirian: di repo ini kata
-// itu pernah berarti dua hal berbeda — Kunjungan poliklinik (lihat komentar
+// itu bisa berarti dua hal berbeda — Kunjungan poliklinik (lihat komentar
 // "Modul Konsul" di backend/src/routes/kunjungan.routes.js) DAN surat konsul
-// antar-dokter (model Konsultasi, masuk 18 Ags). Tab ini yang memisahkan
-// keduanya, jadi namanya harus eksplisit.
+// antar-dokter (model Konsultasi). Tab ini yang memisahkan keduanya, jadi
+// namanya harus eksplisit.
 const TABS = [
   { value: 'POLI', label: 'Poliklinik' },
   { value: 'OPERASI', label: 'Operasi' },
@@ -176,10 +176,9 @@ const LINGKUP_FILTERS: { value: LingkupJadwal; label: string }[] = [
 ];
 
 // Cakupan bawaan tiap tab, ditulis sependek mungkin karena tempatnya di dalam
-// chip filter tanggal — bukan lagi baris keterangan tersendiri. Sebelumnya ini
-// kalimat panjang di barisnya sendiri, tepat di sebelah chip yang mengatur hal
-// yang sama persis: dua elemen, satu pekerjaan. Yang menjelaskan dilebur ke
-// yang mengatur.
+// chip filter tanggal, tepat di sebelah chip yang mengatur hal yang sama
+// persis — dua elemen, satu pekerjaan, jadi yang menjelaskan dilebur ke yang
+// mengatur.
 function labelCakupan(tab: TabValue) {
   if (tab === 'POLI') return 'Hari ini';
   if (tab === 'OPERASI') return 'Belum selesai';
@@ -188,7 +187,7 @@ function labelCakupan(tab: TabValue) {
 
 const TOGGLE_INSET = ms(4);
 
-export function JadwalOperasiKonsulScreen({ navigation }: Props) {
+export function JadwalOperasiKonsulScreen({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
   const tabBarClearance = useTabBarClearance();
   const { onScroll: onDockScroll, scrollEventThrottle, scrolled } = useTabBarDockOnScroll();
@@ -208,6 +207,23 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   const operasiScrollRef = useRef<ScrollView>(null);
   const token = useAuthStore((s) => s.token);
   const [tab, setTab] = useState<TabValue>('POLI');
+
+  // Tile ringkasan di Home ("Pasien"/"Operasi"/"Kunjungan") lompat kemari
+  // lewat param `tab`. Dikonsumsi sekali per fokus lalu param-nya dibersihkan
+  // (`setParams`) — tanpa dibersihkan, switch tab manual berikutnya lewat
+  // FloatingTabBar (yang tidak membawa param apa pun) akan tetap membaca nilai
+  // lama dari navigasi sebelumnya. Bottom tab navigator TIDAK meng-unmount
+  // screen ini waktu OperasiTab ditinggalkan (cuma popToTopOnBlur, itu pun
+  // cuma memengaruhi screen yang di-push di atasnya), jadi state `tab` di sini
+  // tidak reset sendiri — harus dikonsumsi eksplisit lewat efek fokus.
+  useFocusEffect(
+    useCallback(() => {
+      if (route.params?.tab) {
+        setTab(route.params.tab);
+        navigation.setParams({ tab: undefined });
+      }
+    }, [route.params?.tab, navigation]),
+  );
 
   // "Hari ini" disimpan sebagai state, bukan dihitung ulang tiap render.
   // Alasannya: kalau app ditinggal terbuka melewati tengah malam, `new Date()`
@@ -239,11 +255,11 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   );
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
 
-  // Cakupan Jadwal, default "saya". Sebelum ini layar Jadwal selalu memakai
-  // cakupan luas ("semua kunjungan/operasi pasien saya") dan hasilnya di data
-  // asli: 709 kunjungan tampil untuk satu dokter padahal cuma 105 yang
-  // melibatkan dia, dan 100% isi tab Operasi milik dokter lain karena dokter
-  // itu bukan dokter bedah.
+  // Cakupan Jadwal, default "saya". Cakupan luas ("semua kunjungan/operasi
+  // pasien saya") menampilkan 709 kunjungan untuk satu dokter di data asli,
+  // padahal cuma 105 yang melibatkan dia, dan 100% isi tab Operasi ternyata
+  // milik dokter lain karena dokter itu bukan dokter bedah — makanya
+  // default-nya dipersempit ke "saya".
   //
   // Tidak berlaku di tab Konsultasi: konsul sudah discoping server ke dokter
   // tujuan, jadi tidak ada cakupan lain yang masuk akal di sana.
@@ -308,9 +324,9 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   const [poliItems, setPoliItems] = useState<KunjunganListItem[]>([]);
   const [poliLoading, setPoliLoading] = useState(true);
   const [poliError, setPoliError] = useState<string | null>(null);
-  // Terisi kalau server mundur ke tanggal lain karena hari ini kosong —
-  // replika SIMRS berhenti tersinkronisasi 18 Ags 2026. Ditampilkan sebagai
-  // catatan di atas daftar; tanpa itu data lama terbaca sebagai jadwal hari ini.
+  // Terisi kalau server mundur ke tanggal lain karena hari ini kosong (replika
+  // SIMRS bisa berhenti tersinkronisasi). Ditampilkan sebagai catatan di atas
+  // daftar; tanpa itu data lama terbaca sebagai jadwal hari ini.
   const [poliTanggalData, setPoliTanggalData] = useState<string | null>(null);
 
   const loadedKeys = useRef<Set<string>>(new Set());
@@ -381,8 +397,8 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
   loadersRef.current = loaders;
 
   // Satu efek untuk tiga tab: yang aktif dimuat sekali, sisanya baru waktu
-  // dibuka. Sebelumnya operasi dimuat eager dan konsultasi lazy lewat dua efek
-  // terpisah — dengan tab ketiga, pola itu jadi tiga cabang yang beda-beda.
+  // dibuka — memuat tiap tab lewat efek terpisah berarti tiga cabang yang
+  // beda-beda untuk dijaga tetap sinkron.
   //
   // Kunci muatnya ikut menyertakan tanggal untuk tab POLI. Jadi waktu harinya
   // berganti, kuncinya berubah dan jadwal hari ini dimuat ulang dengan
@@ -416,8 +432,8 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
 
   const searchTerm = search.trim().toLowerCase();
 
-  // ATURAN CAKUPAN dua tab ini (keputusan Arthuro, 20 Ags 2026):
-  // apa pun yang BELUM SELESAI selalu ikut tampil, tanggal berapa pun.
+  // ATURAN CAKUPAN dua tab ini: apa pun yang BELUM SELESAI selalu ikut
+  // tampil, tanggal berapa pun.
   //
   // Surat yang belum dijawab dan operasi yang belum berjalan justru itu yang
   // perlu ditindaklanjuti — menyembunyikannya hanya karena tanggalnya bukan
@@ -760,41 +776,69 @@ export function JadwalOperasiKonsulScreen({ navigation }: Props) {
                   onPress={() => handleKonsultasiPress(item)}
                   style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
                 >
-                  <View style={styles.cardTop}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.cardTime}>
+                  <View>
+                    {/* Tanggal + status sebaris di atas, status dikecilkan
+                        (dari statusPill biasa) supaya "Menunggu Jawaban" —
+                        kata terpanjang di semua status tab ini — tidak
+                        mendominasi baris. Tanggal dapat flex supaya menyusut
+                        duluan kalau ruangnya sempit, bukan status yang
+                        kepotong. */}
+                    <View style={styles.konsulTopRow}>
+                      <Text
+                        style={[styles.cardTime, styles.konsulTime]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
                         {formatTanggalSingkat(item.tanggalPermintaan)},{' '}
                         {formatJam(item.tanggalPermintaan)}
                       </Text>
-                      <Text style={styles.cardPatient}>{item.pasien.nama}</Text>
-                      <Text style={styles.cardTindakan}>{item.diagnosisKerja}</Text>
-                    </View>
-                    <View style={styles.cardPills}>
-                      <View style={[styles.statusPill, { backgroundColor: meta.bg }]}>
-                        <MaterialIcons name={meta.icon as never} size={14} color={meta.fg} />
-                        <Text style={[styles.statusPillText, { color: meta.fg }]}>{meta.label}</Text>
-                      </View>
-                      {/* Cuma CITO yang diberi badge. "BIASA" adalah default dan
-                          mencetaknya di setiap kartu justru menenggelamkan yang
-                          benar-benar mendesak. */}
-                      {item.prioritas === 'CITO' && (
-                        <View style={styles.citoPill}>
-                          <MaterialIcons name="priority-high" size={14} color={colors.onErrorContainer} />
-                          <Text style={styles.citoPillText}>CITO</Text>
+                      <View style={styles.konsulBadgeRow}>
+                        <View style={[styles.konsulStatusPill, { backgroundColor: meta.bg }]}>
+                          <MaterialIcons name={meta.icon as never} size={11} color={meta.fg} />
+                          <Text
+                            style={[styles.konsulStatusPillText, { color: meta.fg }]}
+                            numberOfLines={1}
+                          >
+                            {meta.label}
+                          </Text>
                         </View>
-                      )}
+                        {/* Cuma CITO yang diberi badge. "BIASA" adalah default
+                            dan mencetaknya di setiap kartu justru
+                            menenggelamkan yang benar-benar mendesak. */}
+                        {item.prioritas === 'CITO' && (
+                          <View style={styles.konsulCitoPill}>
+                            <MaterialIcons
+                              name="priority-high"
+                              size={11}
+                              color={colors.onErrorContainer}
+                            />
+                            <Text style={styles.konsulCitoPillText}>CITO</Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
+                    <Text style={styles.cardPatient}>{item.pasien.nama}</Text>
+                    <Text style={styles.cardTindakan} numberOfLines={2} ellipsizeMode="tail">
+                      {item.diagnosisKerja}
+                    </Text>
                   </View>
+
                   <View style={styles.cardDivider} />
-                  <View style={styles.cardBottom}>
-                    <View style={styles.cardBottomItem}>
+
+                  {/* Satu baris per info, bukan dua kolom berbagi 50% lebar
+                      kartu seperti tab lain — nama dokter pengirim di sini
+                      lengkap dengan gelar (jauh lebih panjang dari nama ruangan
+                      di tab Poliklinik/Operasi) dan dulu nyaris selalu
+                      terpotong di kolom sesempit itu. */}
+                  <View style={styles.konsulMetaGroup}>
+                    <View style={styles.konsulMetaRow}>
                       <MaterialIcons name="outgoing-mail" size={18} color={colors.primary} />
                       <Text style={styles.cardBottomText} numberOfLines={1} ellipsizeMode="tail">
                         Dari {item.dokterPengirim.nama}
                       </Text>
                     </View>
                     {jenisLabel && (
-                      <View style={styles.cardBottomItem}>
+                      <View style={styles.konsulMetaRow}>
                         <MaterialIcons name="meeting-room" size={18} color={colors.primary} />
                         <Text style={styles.cardBottomText} numberOfLines={1} ellipsizeMode="tail">
                           {jenisLabel}
@@ -1055,4 +1099,40 @@ const styles = StyleSheet.create({
   cardBottom: { flexDirection: 'row', gap: ms(16) },
   cardBottomItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: ms(6), minWidth: 0 },
   cardBottomText: { flexShrink: 1, fontSize: ms(14), color: colors.onSurfaceVariant },
+
+  // Khusus kartu Surat Konsul — lihat komentar di JSX buat alasan kartu ini
+  // tidak memakai cardTop/cardPills/cardBottom seperti Poliklinik & Operasi.
+  konsulTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: ms(8) },
+  // flex:1 dipisah dari style `cardTime` bersama (dipakai juga apa adanya oleh
+  // Poliklinik/Operasi di luar baris ini) supaya cuma baris tanggal+status di
+  // sini yang menyusut duluan waktu ruang sempit.
+  konsulTime: { flex: 1 },
+  konsulBadgeRow: { flexDirection: 'row', flexShrink: 0, alignItems: 'center', gap: ms(6) },
+  // Varian kecil dari statusPill/citoPill — dites di baris sempit sebelah
+  // tanggal, bukan berdiri sendiri lebar penuh, jadi padding & fontnya
+  // diciutkan supaya "Menunggu Jawaban" tidak terlihat sebesar statusPill biasa.
+  konsulStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: ms(3),
+    paddingHorizontal: ms(8),
+    paddingVertical: ms(4),
+    borderRadius: radius.full,
+  },
+  konsulStatusPillText: { fontSize: ms(10), fontWeight: '600' },
+  konsulCitoPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: ms(2),
+    paddingLeft: ms(5),
+    paddingRight: ms(8),
+    paddingVertical: ms(3),
+    borderRadius: radius.full,
+    backgroundColor: colors.errorContainer,
+  },
+  konsulCitoPillText: { fontSize: ms(9), fontWeight: '800', color: colors.onErrorContainer },
+  // Gap lebih rapat dari `card` (ms(16)) — dua baris ini satu kelompok info
+  // (pengirim + jenis kunjungan), bukan dua seksi kartu yang berdiri sendiri.
+  konsulMetaGroup: { gap: ms(10) },
+  konsulMetaRow: { flexDirection: 'row', alignItems: 'center', gap: ms(6) },
 });

@@ -1,6 +1,6 @@
 // Self-check ringkasanAktivitas — frontend belum punya Jest, dan menambahkannya
 // cuma buat satu fungsi murni tidak sepadan. Jalankan manual:
-//   node src/utils/ringkasanAktivitas.check.ts
+// node src/utils/ringkasanAktivitas.check.ts
 // File ini tidak pernah di-import app, jadi tidak ikut masuk bundle.
 import assert from 'node:assert';
 import { ringkasanAktivitas } from './ringkasanAktivitas.ts';

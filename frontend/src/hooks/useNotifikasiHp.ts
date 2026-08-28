@@ -10,12 +10,10 @@ import { siapkanNotifikasiHp, tampilkanNotifikasiHp } from '../utils/notifikasiH
 const INTERVAL_MS = __DEV__ ? 10_000 : 60_000;
 
 /**
- * Polling notifikasi belum terbaca, yang baru dimunculkan ke tray HP.
- * Dipanggil sekali di App.
+ * Polling notifikasi belum terbaca, yang baru dimunculkan ke tray HP. Dipanggil sekali di App.
  *
- * ponytail: polling foreground, bukan push. App yang ditutup/di-background
- * lama tidak dapat notifikasi — untuk itu perlu FCM/APNs (server kirim push,
- * expo-notifications cuma yang menampilkan). Cukup selama fase dummy data.
+ * ponytail: polling foreground, bukan push — app yang ditutup/di-background lama tidak dapat notifikasi
+ * (perlu FCM/APNs untuk itu; expo-notifications cuma yang menampilkan).
  */
 export function useNotifikasiHp() {
   const token = useAuthStore((s) => s.token);
@@ -24,9 +22,8 @@ export function useNotifikasiHp() {
   useEffect(() => {
     if (!token || role !== 'DOKTER') return;
 
-    // ponytail: baseline in-memory — yang sudah ada saat app dibuka dianggap
-    // "sudah dilihat" biar tidak dinotifikasi ulang tiap restart. Kalau perlu
-    // tahan restart, simpan id-nya ke SecureStore lewat authStorage.
+    // ponytail: baseline in-memory — yang sudah ada saat app dibuka dianggap "sudah dilihat" biar tidak
+    // dinotifikasi ulang tiap restart. Kalau perlu tahan restart, simpan id-nya ke SecureStore.
     const sudahDilihat = new Set<string>();
     let baseline = true;
     let batal = false;

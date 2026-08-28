@@ -11,8 +11,7 @@ const { q } = require("../lib/simrs");
 // daripada penugasan permanen, tapi berarti perilaku app ikut berubah — dokter
 // tidak lagi melihat pasien yang sudah tidak dia tangani.
 //
-// Tiga sumber DPJP digabung, sesuai alasan yang sudah tercatat di
-// utils/aksesPasien.js ("pasien onkologi sering ditangani lintas dokter"):
+// Tiga sumber DPJP digabung karena pasien sering ditangani lintas dokter:
 //   - pendaftaran.tujuan_pasien.DOKTER  -> DPJP utama (satu per NOPEN)
 //   - pendaftaran.dpjp_bersama.DOKTER   -> rawat bersama
 //   - pendaftaran.dpjp_pendamping.DOKTER-> dokter pendamping
@@ -80,9 +79,8 @@ function paramAkses(simrsDokterId) {
 // dokter lewat master.dokter.ID (smallint). Penghubungnya NIP: `Dokter.nip`
 // sudah @unique di schema.prisma dan master.dokter.NIP punya index sendiri —
 // jadi tidak perlu kolom baru maupun perubahan bentuk JWT. req.user.dokterId
-// tetap satu-satunya sumber identitas dokter, persis seperti Aturan #2
-// CLAUDE.md; fungsi ini cuma menerjemahkannya, tidak pernah menerima id dari
-// request.
+// tetap satu-satunya sumber identitas dokter; fungsi ini cuma
+// menerjemahkannya, tidak pernah menerima id dari request.
 //
 // Hasilnya di-cache selamanya di memori proses: NIP seorang dokter tidak
 // berubah, dan cache-nya per-proses jadi ikut bersih tiap restart.
@@ -111,20 +109,17 @@ async function simrsDokterId(dokterUuid) {
 // dinormalkan ke angka dulu — master.pasien.NORM int(11), dan membiarkan teks
 // bebas masuk ke pembanding MySQL bikin perbandingan jadi implisit.
 //
-// ARAHNYA PENTING, dan versi pertama fungsi ini salah di situ. Dulu bentuknya
-// `SELECT 1 FROM (SQL_NORM_DOKTER) akses WHERE akses.NORM = ?` — membangun
-// SELURUH himpunan pasien dokter (belasan ribu NORM, memindai ratusan ribu
-// pendaftaran) cuma untuk menjawab "apakah satu NORM ini punya saya".
+// ARAHNYA PENTING: membangun SELURUH himpunan pasien dokter dulu (belasan
+// ribu NORM, memindai ratusan ribu pendaftaran) untuk menjawab "apakah satu
+// NORM ini punya saya" jauh lebih lambat daripada membalik arahnya — mulai
+// dari pendaftaran PASIEN ITU (segelintir baris, `NORM` ber-index) lalu tanya
+// apakah dokternya muncul di salah satunya. Diukur pada dokter dengan 8.726
+// pasien: 1.351 ms -> 35 ms untuk pasien miliknya, 350 ms untuk pasien dokter
+// lain (kasus terburuk).
 //
-// Bentuk di bawah membalik arahnya: mulai dari pendaftaran PASIEN ITU (segelintir
-// baris, `NORM` ber-index) lalu tanya apakah dokternya muncul di salah satunya.
-// Diukur pada dokter dengan 8.726 pasien: 1.351 ms -> 35 ms untuk pasien miliknya,
-// dan 350 ms untuk pasien dokter lain (kasus terburuk, harus memeriksa semua
-// pendaftaran pasien itu sebelum menyimpulkan "tidak").
-//
-// Himpunan yang diperiksa tetap sama persis dengan SQL_NORM_DOKTER — tiga peran
-// DPJP yang sama — jadi jawabannya identik, cuma jalannya yang berbeda. Kalau
-// SQL_NORM_DOKTER berubah, fungsi ini WAJIB ikut diubah.
+// Himpunan yang diperiksa tetap sama persis dengan SQL_NORM_DOKTER — tiga
+// peran DPJP yang sama. Kalau SQL_NORM_DOKTER berubah, fungsi ini WAJIB ikut
+// diubah.
 async function dokterPunyaAksesPasien(simrsDokterIdNum, norm) {
   const normAngka = Number(norm);
   if (!simrsDokterIdNum || !Number.isInteger(normAngka)) return false;

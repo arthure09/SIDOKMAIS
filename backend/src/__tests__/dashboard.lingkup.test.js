@@ -1,14 +1,8 @@
-// Dashboard = "kegiatan SAYA hari ini", bukan "semua data pasien saya".
-//
-// Yang dijaga: penyaringnya keterlibatan langsung (`dokterId` di
-// Kunjungan/Operasi), BUKAN DokterPasienAssignment yang dipakai modul lain
-// untuk menentukan "boleh lihat apa". Perbedaan itu tidak kelihatan dari
-// bentuk response — dua-duanya mengembalikan angka — tapi di data asli
-// selisihnya besar: satu dokter senior yang pasiennya ditangani banyak orang
-// akan melihat kegiatan seluruh rumah sakit sebagai miliknya (diukur 24 Ags
-// 2026 di replika SIMRS: 5.169 kunjungan seminggu vs 852 yang benar).
-//
-// Layer DB di-mock, pola sama dengan pasien.urutan.test.js.
+// Dashboard = "kegiatan SAYA hari ini", jadi filternya harus keterlibatan
+// langsung (`dokterId` di Kunjungan/Operasi), BUKAN DokterPasienAssignment
+// yang dipakai modul lain untuk "boleh lihat apa". Bentuk response sama-sama
+// angka di kedua kasus, tapi salah pakai bikin dokter senior melihat kegiatan
+// seluruh RS sebagai miliknya. Layer DB di-mock.
 
 const request = require("supertest");
 const bcrypt = require("bcrypt");

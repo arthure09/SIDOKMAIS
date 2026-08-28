@@ -31,6 +31,12 @@ const DIAGNOSA_CONTOH = [
   "Kontrol rutin, kondisi stabil",
   "Nyeri pasca tindakan, dalam pemantauan",
   "Konsultasi awal, rencana pemeriksaan lanjutan",
+  "Suspek keganasan, rencana biopsi",
+  "Follow-up pasca radioterapi",
+  "Nyeri tulang, evaluasi metastasis",
+  "Anemia, evaluasi etiologi",
+  "Kontrol pasca pemasangan port kemoterapi",
+  "Batuk kronis, evaluasi lanjut",
 ];
 
 const JENIS_TINDAKAN_NETRAL = [
@@ -45,8 +51,8 @@ const JENIS_TINDAKAN_NETRAL = [
 const JENIS_TINDAKAN_PEREMPUAN = ["Mastektomi"];
 
 // Pakai faker.helpers.* (bukan Math.random()) supaya SELURUH keacakan seed
-// ikut dikontrol oleh faker.seed() di main() — termasuk pemilihan 2 dokter
-// buat akun login, yang sebelumnya tetap acak walau faker sudah di-seed.
+// ikut dikontrol oleh faker.seed() di main(), termasuk pemilihan 2 dokter
+// buat akun login.
 function pickOne(list) {
   return faker.helpers.arrayElement(list);
 }
@@ -87,6 +93,11 @@ async function resetData() {
   await prisma.operasi.deleteMany();
   await prisma.hasilLabItem.deleteMany();
   await prisma.pemeriksaanLab.deleteMany();
+  // Radiologi punya seeder sendiri (seed-radiologi.js) tapi tabelnya tetap
+  // harus dikosongkan di sini juga — kalau tidak, deleteMany Pasien di bawah
+  // gagal FK constraint begitu ada baris PemeriksaanRadiologi tersisa dari
+  // run seed-radiologi.js sebelumnya.
+  await prisma.pemeriksaanRadiologi.deleteMany();
   await prisma.notifikasi.deleteMany();
   await prisma.kunjungan.deleteMany();
   await prisma.pengguna.deleteMany();
@@ -426,10 +437,9 @@ async function seedOperasi(kunjunganList, ruanganList, pasienList, dokterUtama) 
   const jenisKelaminByPasien = new Map(pasienList.map((p) => [p.id, p.jenisKelamin]));
   const kandidat = kunjunganList.filter((k) => ["ONGOING", "COMPLETED"].includes(k.statusKunjungan));
 
-  // Separuh jatah operasi diambil dari kunjungan dokter utama. Sebelumnya
-  // 6 kunjungan dipilih acak dari SELURUH dokter, dan akun login demo sering
-  // tidak kebagian satu pun — akibatnya laporan operasi (Tahap 3) dan jasa
-  // medis tindakan (Tahap 4) tidak pernah kelihatan waktu app dibuka.
+  // Separuh jatah operasi diambil dari kunjungan dokter utama — supaya akun
+  // login demo selalu kebagian laporan operasi dan jasa medis tindakan waktu
+  // app dibuka, bukan cuma dokter acak yang mungkin nol kebagian.
   const kandidatUtama = kandidat.filter((k) => k.dokterId === dokterUtama.id);
   const kandidatLain = kandidat.filter((k) => k.dokterId !== dokterUtama.id);
   const dipilih = [
@@ -518,9 +528,8 @@ const UNIT_PER_RUANGAN = {
 // bervariasi tiap transaksi — di referensi SIREMDIS, puluhan baris cuma memakai
 // dua nilai (Rp 23.400 dan Rp 31.950).
 //
-// PENDING: hanya dua baris pertama yang punya rujukan asli. Nominal poliklinik,
-// IGD, dan seluruh tindakan operasi masih tebakan yang menunggu konfirmasi
-// Mas Fauzi — besarannya sengaja dibuat sederhana supaya jelas ini belum nyata.
+// Hanya dua baris pertama yang punya rujukan asli; nominal poliklinik, IGD,
+// dan seluruh tindakan operasi masih tebakan sederhana, bukan angka nyata.
 const TARIF_JASA = {
   "Konsul Ruang Perawatan": 31_950,
   "Visite Ruang Perawatan": 23_400,
@@ -574,15 +583,32 @@ async function seedPendapatan(kunjunganList, operasiList, konsultasiList, penjam
     if (!["ONGOING", "COMPLETED"].includes(kunjungan.statusKunjungan)) continue;
     const ruangan = ruanganById.get(kunjungan.ruanganId);
     const namaTindakan = TINDAKAN_PER_JENIS_RUANGAN[ruangan?.jenis] ?? "Konsultasi Poliklinik";
+    const penjamin = penjaminUntuk(kunjungan.id);
     baris.push({
       dokterId: kunjungan.dokterId,
       pasienId: kunjungan.pasienId,
-      penjaminId: penjaminUntuk(kunjungan.id).id,
+      penjaminId: penjamin.id,
       namaTindakan,
       tanggalTindakan: kunjungan.tanggalMasuk,
       jasa: TARIF_JASA[namaTindakan],
       unitPelayanan: unitDari(ruangan),
     });
+
+    // `jasa` di SIREMDIS asli kadang negatif (baris potongan/diskon, mis.
+    // "DISKON KONSUL") — jarang, tapi bikin dummy sepenuhnya positif juga
+    // tidak realistis. Baris pendamping, bukan pengganti, jadi total
+    // pelayanan (jumlahPelayanan) tetap utuh.
+    if (faker.datatype.boolean(0.05)) {
+      baris.push({
+        dokterId: kunjungan.dokterId,
+        pasienId: kunjungan.pasienId,
+        penjaminId: penjamin.id,
+        namaTindakan: "DISKON KONSUL",
+        tanggalTindakan: kunjungan.tanggalMasuk,
+        jasa: -Math.round(TARIF_JASA[namaTindakan] * faker.number.float({ min: 0.1, max: 0.3 })),
+        unitPelayanan: unitDari(ruangan),
+      });
+    }
   }
 
   // Tindakan operasi — nominalnya satu tingkat di atas pelayanan rawat.
@@ -957,9 +983,9 @@ function randomDateBetween(from, to) {
   return from < to ? faker.date.between({ from, to }) : new Date(from);
 }
 
-// Tiga fungsi di bawah memaksa distribusi wajib dari prompt-day17 (~20%
-// kunjunganId null, >=3 order dokterPeminta beda dari dokter yang di-assign,
-// minimal 1 PENDING) supaya tidak bergantung murni pada probabilitas acak.
+// Tiga fungsi di bawah memaksa distribusi wajib (~20% kunjunganId null, >=3
+// order dokterPeminta beda dari dokter yang di-assign, minimal 1 PENDING)
+// supaya tidak bergantung murni pada probabilitas acak.
 function ensureMinimumKunjunganNull(specs) {
   const target = Math.max(1, Math.ceil(specs.length * 0.2));
   let nullCount = specs.filter((s) => s.kunjunganId === null).length;
@@ -1148,6 +1174,7 @@ const SKENARIO_KONSULTASI = [
       diagnosisJawaban: "Status fisik ASA II",
       anjuran: "Puasa 8 jam pra-operasi. Antihipertensi tetap diminum pagi hari operasi.",
       setujuUntuk: "Tindakan mastektomi dengan anestesi umum",
+      penilaianKasus: "Rawat bersama",
     },
   },
   {
@@ -1158,6 +1185,7 @@ const SKENARIO_KONSULTASI = [
       diagnosisJawaban: "Anemia defisiensi besi et causa perdarahan kronis",
       anjuran: "Transfusi PRC 2 kolf, evaluasi Hb ulang 6 jam pasca transfusi.",
       setujuUntuk: "Tindakan bedah setelah Hb mencapai 10 g/dL",
+      penilaianKasus: "Rawat bersama",
     },
   },
   {
@@ -1168,6 +1196,7 @@ const SKENARIO_KONSULTASI = [
       diagnosisJawaban: "Neutropenia derajat 3 tanpa infeksi",
       anjuran: "Tunda siklus 1 minggu, berikan G-CSF, ulangi darah lengkap sebelum siklus berikutnya.",
       setujuUntuk: "Penundaan kemoterapi siklus ke-4",
+      penilaianKasus: "Alih rawat",
     },
   },
   {
@@ -1179,6 +1208,7 @@ const SKENARIO_KONSULTASI = [
       diagnosisJawaban: "Efusi pleura maligna",
       anjuran: "Torakosentesis diagnostik disertai pemeriksaan sitologi cairan pleura.",
       setujuUntuk: "Tindakan torakosentesis",
+      penilaianKasus: "Rawat bersama",
     },
   },
   {
@@ -1189,6 +1219,7 @@ const SKENARIO_KONSULTASI = [
       diagnosisJawaban: "Nyeri kanker nosiseptif derajat berat",
       anjuran: "Naikkan ke opioid kuat sesuai step 3 WHO, evaluasi respons dalam 24 jam.",
       setujuUntuk: "Pemberian morfin oral dengan titrasi bertahap",
+      penilaianKasus: "Rawat bersama",
     },
   },
   {
@@ -1199,6 +1230,7 @@ const SKENARIO_KONSULTASI = [
       diagnosisJawaban: "Karies dentis dengan risiko osteoradionekrosis",
       anjuran: "Ekstraksi gigi bermasalah, tunggu penyembuhan 2 minggu sebelum radiasi dimulai.",
       setujuUntuk: "Ekstraksi gigi pra-radioterapi",
+      penilaianKasus: "Alih rawat",
     },
   },
 ];

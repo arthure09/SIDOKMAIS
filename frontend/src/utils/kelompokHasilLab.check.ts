@@ -1,6 +1,4 @@
-// Self-check kelompokHasilLab — pola sama dengan serapNotifikasi.check.ts.
-// Jalankan manual:
-//   node src/utils/kelompokHasilLab.check.ts
+// Self-check kelompokHasilLab. Jalankan manual: node src/utils/kelompokHasilLab.check.ts
 // File ini tidak pernah di-import app, jadi tidak ikut masuk bundle.
 import assert from 'node:assert';
 import { kelompokkanPerTanggal } from './kelompokHasilLab.ts';

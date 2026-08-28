@@ -162,7 +162,7 @@ export function CatatanKalenderScreen({ navigation, route }: Props) {
 
   // Layer read-only (Operasi/Kunjungan) — cuma jadwal SCHEDULED, sekali ambil
   // (bukan re-fetch per bulan) lalu dikelompokkan per tanggal di sisi klien.
-  // ponytail: limit=100 cukup buat 1 dokter di app dummy-data ini; naikkan
+  // Catatan: limit=100 cukup untuk satu dokter di app dummy-data ini; naikkan
   // atau tambah param dari/sampai kalau operasi.routes.js/kunjungan.routes.js
   // sudah dukung filter rentang tanggal.
   const loadJadwal = useCallback(async () => {

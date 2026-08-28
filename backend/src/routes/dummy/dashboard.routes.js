@@ -1,6 +1,6 @@
 const express = require("express");
-const prisma = require("../lib/prisma");
-const { WIB_OFFSET_MS, rentangDariTengahMalamWIB, rentangHariWIB } = require("../utils/wib");
+const prisma = require("../../lib/prisma");
+const { WIB_OFFSET_MS, rentangDariTengahMalamWIB, rentangHariWIB } = require("../../utils/wib");
 
 const router = express.Router();
 
@@ -109,27 +109,19 @@ async function getPasienPrioritas(terlibat) {
 // GET /api/dashboard/statistik — ringkasan "Aktivitas Hari Ini" +
 // "Statistik Pasien Mingguan" di HomeScreen.
 //
-// LINGKUPNYA "SAYA TERLIBAT", BUKAN "PASIEN SAYA" (diperbaiki 24 Ags 2026) —
-// lihat catatan panjang di simrs/dashboard.routes.js. Dashboard menjawab "apa
-// kegiatan SAYA hari ini", jadi penyaringnya `dokterId` langsung di
-// Kunjungan/Operasi, bukan `DokterPasienAssignment` yang mencakup seluruh
-// riwayat pasien. `pasienHariIni` juga bukan lagi jumlah assignment aktif —
-// itu angka se-riwayat yang tidak ada kaitannya dengan hari ini.
+// Lingkupnya "saya terlibat", bukan "pasien saya": penyaringnya `dokterId`
+// langsung di Kunjungan/Operasi, bukan `DokterPasienAssignment` yang
+// mencakup seluruh riwayat pasien.
 //
-// `pasienHariIni`/`operasiHariIni`/`kunjunganHariIni` menggantikan mekanisme lama
-// di frontend (fetch list dengan RINGKASAN_FETCH_LIMIT=100 lalu filter+hitung
-// di client, yang undercounted kalau dokter punya >100 operasi/kunjungan)
-// dengan COUNT langsung di DB.
+// `pasienHariIni`/`operasiHariIni`/`kunjunganHariIni` pakai COUNT langsung di
+// DB, bukan fetch-list-lalu-filter di client (undercounted kalau dokter
+// punya banyak operasi/kunjungan).
 //
-// `aktivitasMingguan` (keputusan Arthuro): gabungan jumlah Kunjungan +
-// Operasi per hari, Senin-Minggu minggu berjalan WIB — sebelumnya
-// statistikMingguan di homeMock.ts murni chart placeholder hardcoded
-// (sengaja, lihat docs/prompts/frontend-screens-figma-batch.md), belum
-// pernah dipetakan ke data asli.
+// `aktivitasMingguan`: gabungan jumlah Kunjungan + Operasi per hari,
+// Senin-Minggu minggu berjalan WIB.
 //
-// `pasienPrioritas` (keputusan Arthuro): 3 pasien dengan jadwal Operasi/
-// Kunjungan SCHEDULED terdekat ke depan — sebelumnya pasienPrioritas di
-// homeMock.ts juga chart placeholder hardcoded (3 nama fiktif).
+// `pasienPrioritas`: 3 pasien dengan jadwal Operasi/Kunjungan SCHEDULED
+// terdekat ke depan.
 router.get("/statistik", async (req, res) => {
   const { role, dokterId } = req.user;
 
@@ -139,14 +131,10 @@ router.get("/statistik", async (req, res) => {
 
   const mingguRange = getRentangMingguIniWIB();
 
-  // Keputusan desain: endpoint ini scoped ke satu Dokter dari JWT ("statistik
-  // SAYA sebagai dokter yang login"). Akun ADMIN tidak terikat ke satu baris
-  // Dokter (dokterId selalu null di JWT-nya), jadi tidak ada "aku" yang bisa
-  // dihitung statistiknya di sini. Pilihan yang diambil: balikin 0 + catatan
-  // eksplisit, BUKAN agregat lintas-semua-dokter — supaya tidak menyesatkan
-  // ADMIN yang mengira angka itu "milik" akunnya. Kalau nanti benar-benar
-  // perlu laporan lintas-dokter, itu endpoint terpisah dengan semantik
-  // sendiri (mis. GET /api/dashboard/statistik-global), bukan overload di sini.
+  // Endpoint ini scoped ke satu Dokter dari JWT. ADMIN tidak terikat ke satu
+  // Dokter (dokterId selalu null), jadi balikin 0 + catatan eksplisit —
+  // bukan agregat lintas-dokter, supaya tidak menyesatkan ADMIN yang mengira
+  // angka itu milik akunnya.
   if (role === "ADMIN") {
     const hariIniIdx = mingguRange.findIndex(({ mulai, akhir }) => {
       const now = Date.now();
@@ -169,9 +157,9 @@ router.get("/statistik", async (req, res) => {
 
   const { mulai, akhir } = getRentangHariIniWIB();
 
-  // Keterlibatan langsung, bukan akses per-pasien. Ini SENGAJA berbeda dari
-  // operasi.routes.js/kunjungan.routes.js yang memakai DokterPasienAssignment:
-  // di sana pertanyaannya "boleh lihat apa", di sini "saya ngapain hari ini".
+  // Keterlibatan langsung, bukan akses per-pasien — beda dari
+  // operasi.routes.js/kunjungan.routes.js yang memakai DokterPasienAssignment
+  // ("boleh lihat apa" vs. "saya ngapain hari ini").
   const terlibat = { dokterId };
 
   const mingguMulai = mingguRange[0].mulai;

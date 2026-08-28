@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Animated, FlatList, Pressable, StyleSheet, View } from 'react-native';
+import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -12,6 +13,7 @@ import { TextInput } from '../components/TextInput';
 import type { PasienListItem } from '../api/types';
 import { useHeaderScrollShadow } from '../hooks/useHeaderScrollShadow';
 import { useHideTabBar } from '../hooks/useHideTabBar';
+import { useCollapseOnScroll } from '../hooks/useCollapseOnScroll';
 import type { HomeStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'PilihPasienHasilLab'>;
@@ -32,7 +34,18 @@ export function PilihPasienHasilLabScreen({ route, navigation }: Props) {
   const keRadiologi = tujuan === 'radiologi';
   const insets = useSafeAreaInsets();
   useHideTabBar();
-  const { onScroll, scrollEventThrottle, scrolled } = useHeaderScrollShadow();
+  const { onScroll: onShadowScroll, scrollEventThrottle, scrolled } = useHeaderScrollShadow();
+  // Cuma satu baris (search bar, tanpa filter di bawahnya), jadi dipetakan ke
+  // `bottom` yang sembunyi di langkah pertama — `top` tidak dirender sama
+  // sekali, jadi langkah keduanya tidak pernah kelihatan.
+  const { onScroll: onCollapseScroll, bottom: searchRow } = useCollapseOnScroll();
+  const onScroll = useCallback(
+    (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+      onShadowScroll(e);
+      onCollapseScroll(e);
+    },
+    [onShadowScroll, onCollapseScroll],
+  );
   const token = useAuthStore((s) => s.token);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -75,21 +88,25 @@ export function PilihPasienHasilLabScreen({ route, navigation }: Props) {
         <View style={styles.backButton} />
       </View>
 
-      <View style={styles.searchWrapper}>
-        <MaterialIcons name="search" size={20} color={colors.primary} />
-        <TextInput
-          value={searchInput}
-          onChangeText={setSearchInput}
-          placeholder="Cari Nama atau No. RM..."
-          placeholderTextColor={colors.outline}
-          style={styles.searchInput}
-        />
-        {searchInput.length > 0 && (
-          <Pressable onPress={() => setSearchInput('')} hitSlop={8}>
-            <MaterialIcons name="close" size={18} color={colors.onSurfaceVariant} />
-          </Pressable>
-        )}
-      </View>
+      <Animated.View style={searchRow.style} onLayout={searchRow.onLayout}>
+        <Animated.View style={[styles.searchSlot, searchRow.innerStyle]}>
+          <View style={styles.searchWrapper}>
+            <MaterialIcons name="search" size={20} color={colors.primary} />
+            <TextInput
+              value={searchInput}
+              onChangeText={setSearchInput}
+              placeholder="Cari Nama atau No. RM..."
+              placeholderTextColor={colors.outline}
+              style={styles.searchInput}
+            />
+            {searchInput.length > 0 && (
+              <Pressable onPress={() => setSearchInput('')} hitSlop={8}>
+                <MaterialIcons name="close" size={18} color={colors.onSurfaceVariant} />
+              </Pressable>
+            )}
+          </View>
+        </Animated.View>
+      </Animated.View>
 
       {loading ? (
         <View style={styles.center}>
@@ -157,12 +174,16 @@ const styles = StyleSheet.create({
   backButton: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { flex: 1, fontSize: 18, fontWeight: '600', color: colors.onBackground, textAlign: 'center' },
 
+  // Jarak atas padding di kotak yang menyusut (searchSlot), bukan margin di
+  // search bar-nya: margin tidak ikut terhitung di tinggi yang diukur
+  // useCollapseOnScroll, jadi kalau pakai margin barisnya menyisakan celah
+  // kosong waktu sudah tersembunyi.
+  searchSlot: { paddingTop: spacing.base },
   searchWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     marginHorizontal: spacing.marginMobile,
-    marginTop: spacing.base,
     backgroundColor: colors.surfaceVariant,
     borderRadius: radius.full,
     paddingHorizontal: 16,

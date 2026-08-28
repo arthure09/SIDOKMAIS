@@ -1,8 +1,8 @@
 const express = require("express");
-const prisma = require("../lib/prisma");
-const { logAudit } = require("../utils/auditLog");
-const { parsePagination, parseDokterIdFilter } = require("../utils/queryParams");
-const { sinkronkanPengingatOperasi } = require("../utils/pengingatJadwal");
+const prisma = require("../../lib/prisma");
+const { logAudit } = require("../../utils/auditLog");
+const { parsePagination, parseDokterIdFilter } = require("../../utils/queryParams");
+const { sinkronkanPengingatOperasi } = require("../../utils/pengingatJadwal");
 
 const router = express.Router();
 
@@ -90,11 +90,8 @@ router.get("/", async (req, res) => {
   });
 });
 
-// Tandai SEMUA notifikasi dokter ini jadi terbaca sekaligus.
-//
-// Ditaruh sebelum `/:id/read` bukan karena urutan route-nya bentrok (pola
-// keduanya beda jumlah segmen), tapi supaya dua endpoint yang mengubah status
-// baca duduk berdampingan waktu dibaca orang.
+// Ditaruh sebelum `/:id/read` supaya dua endpoint yang mengubah status baca
+// duduk berdampingan (bukan karena urutan route-nya bentrok).
 router.patch("/read-all", async (req, res) => {
   const { dokterId: ownDokterId } = req.user;
 
@@ -122,12 +119,9 @@ router.patch("/read-all", async (req, res) => {
   res.json({ jumlah: count });
 });
 
-// Bersihkan daftar notifikasi dokter ini.
-//
-// SOFT DELETE, dan itu bukan selera: pembuat pengingat jadwal memakai
-// keberadaan baris ber-`relatedId` sebagai tanda "pengingat untuk operasi ini
-// sudah pernah dibuat". Kalau barisnya dihapus keras, pembacaan daftar
-// berikutnya (paling lama 60 detik lagi) akan membuatnya kembali dan tombol
+// Soft delete: pembuat pengingat jadwal memakai keberadaan baris ber-`relatedId`
+// sebagai tanda "pengingat untuk operasi ini sudah pernah dibuat". Hard delete
+// akan membuat pembacaan daftar berikutnya membuatnya kembali dan tombol
 // Bersihkan terlihat rusak.
 router.delete("/", async (req, res) => {
   const { dokterId: ownDokterId } = req.user;
@@ -157,10 +151,9 @@ router.delete("/", async (req, res) => {
   res.json({ jumlah: count });
 });
 
-// Tandai satu notifikasi jadi terbaca. Notifikasi yang eksis tapi bukan
-// milik dokter yang login sengaja dibalikin 404 (bukan 403) — samain dengan
-// "tidak ada" supaya endpoint ini tidak bocorin informasi bahwa suatu ID
-// notifikasi valid tapi kepunyaan dokter lain.
+// Notifikasi yang eksis tapi bukan milik dokter yang login sengaja dibalikin
+// 404 (bukan 403) supaya endpoint ini tidak bocorin bahwa suatu ID valid tapi
+// kepunyaan dokter lain.
 router.patch("/:id/read", async (req, res) => {
   const { dokterId: ownDokterId } = req.user;
   const { id } = req.params;
@@ -179,12 +172,9 @@ router.patch("/:id/read", async (req, res) => {
     data: { isRead: true },
   });
 
-  // Keputusan audit log (catch-up Hari 12-13, docs/prompts/hari-12-13-notifikasi.md):
-  // mark-as-read TETAP dicatat ke AuditLog, mengikuti aturan #4 CLAUDE.md
-  // ("semua write action") apa adanya alih-alih di-exclude sebagai "terlalu
-  // low-stakes". Biayanya murah (1 row per aksi) dan menjaga endpoint ini
-  // konsisten dengan pola write lain di aplikasi — termasuk untuk dipakai
-  // ulang oleh chatbot nanti yang wajib audit tiap write (CLAUDE.md aturan #5).
+  // Mark-as-read tetap dicatat ke AuditLog walau terlihat low-stakes, biar
+  // konsisten dengan pola write lain di aplikasi (termasuk untuk dipakai
+  // ulang oleh chatbot nanti yang wajib audit tiap write).
   await logAudit({
     actorId: req.user.id,
     actorRole: req.user.role,

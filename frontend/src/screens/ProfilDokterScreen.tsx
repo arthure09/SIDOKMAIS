@@ -111,11 +111,9 @@ export function ProfilDokterScreen({}: Props) {
         }
       >
         {/* Kartu identitas dinas, bukan kartu profil sosial: yang dibawa NIP —
-            hal yang memang tercetak di tanda pengenal RS, dan yang membedakan
-            halaman ini dari halaman profil aplikasi mana pun. Nomor SIP sengaja
-            tidak ditampilkan (keputusan Arthuro, 2026-08-14).
-            Permukaan gelapnya sama dengan panel Jasa Medis, jadi dua layar
-            "tentang kamu" terbaca sepasang. */}
+            hal yang memang tercetak di tanda pengenal RS. Nomor SIP sengaja
+            tidak ditampilkan. Permukaan gelapnya sama dengan panel Jasa Medis,
+            jadi dua layar "tentang kamu" terbaca sepasang. */}
         <View style={styles.kartu}>
           <View style={styles.kartuAtas}>
             <View style={styles.inisialKotak}>

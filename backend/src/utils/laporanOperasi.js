@@ -1,13 +1,13 @@
-// Field laporan operasi — Tahap 3 docs/rencana-revisi-modul-dokter.md.
+// Field laporan operasi.
 //
 // Satu tabel dipakai untuk dua hal sekaligus: validasi body PATCH dan
 // penyaringan respons GET detail. Menambah field laporan baru cukup di sini,
 // tidak perlu menyentuh route-nya.
 //
-// Aturan tampil (keputusan terkunci): laporan lengkap HANYA dikirim untuk
-// operasi yang status efektifnya COMPLETED. Terjadwal/berlangsung/dibatalkan
-// cuma dapat info jadwal — laporan yang belum ada tidak boleh kelihatan
-// setengah jadi, dan operasi batal tidak punya laporan sama sekali.
+// Aturan tampil: laporan lengkap HANYA dikirim untuk operasi yang status
+// efektifnya COMPLETED. Terjadwal/berlangsung/dibatalkan cuma dapat info
+// jadwal — laporan yang belum ada tidak boleh kelihatan setengah jadi, dan
+// operasi batal tidak punya laporan sama sekali.
 
 const SIFAT_OPERASI = ["ELEKTIF", "CITO"];
 const JENIS_PEMBEDAHAN = ["BERSIH", "BERSIH_TERKONTAMINASI", "KONTAMINASI", "KOTOR"];

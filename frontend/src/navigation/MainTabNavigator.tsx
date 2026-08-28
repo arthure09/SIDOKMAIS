@@ -12,22 +12,13 @@ const Tab = createBottomTabNavigator<MainTabParamList>();
 export function MainTabNavigator() {
   return (
     <Tab.Navigator
-      // Default bottom-tabs adalah 'none' (potong instan tanpa transisi) —
-      // tile Akses Cepat di Home lompat ke tab lain (mis. ProfilTab), jadi
-      // tanpa ini kelihatan patah. 'fade' cross-dissolve 150ms bawaan library,
-      // gak nambah animasi custom baru.
-      //
-      // popToTopOnBlur: begitu sebuah tab ditinggalkan, stack di dalamnya
-      // di-pop balik ke root. Tanpa ini stack tab tujuan nyangkut di screen
-      // terakhir (mis. ProfilTab ketinggalan di DataPendapatan setelah dibuka
-      // dari tile Menu Home), jadi (a) screen itu tetap ke-mount di belakang
-      // layar dan (b) waktu tab-nya dibuka lagi lewat tab bar user mendarat di
-      // screen sisa sesi sebelumnya, bukan di root tab.
-      //
-      // freezeOnBlur: screen tab yang tidak aktif di-suspend dari re-render
-      // (react-native-screens 4.16, syaratnya >=3.16). Ini yang menghentikan
-      // screen non-aktif "jalan terus" di belakang — mis. debounce search 400ms
-      // di PilihPasienHasilLabScreen atau interval/animasi screen lain.
+      // animation 'fade': default bottom-tabs 'none' potong instan tanpa transisi, kelihatan patah waktu
+      // tile Akses Cepat di Home lompat ke tab lain.
+      // popToTopOnBlur: tanpa ini, tab yang ditinggalkan di tengah stack (mis. dibuka dari tile Menu Home)
+      // nyangkut di screen terakhir — tetap ke-mount di belakang, dan waktu tab dibuka lagi user mendarat
+      // di screen sisa sesi sebelumnya, bukan root tab.
+      // freezeOnBlur: suspend re-render screen tab non-aktif (react-native-screens >=3.16), menghentikan
+      // proses berjalan di belakang seperti debounce search atau animasi screen lain.
       screenOptions={{
         headerShown: false,
         animation: 'fade',

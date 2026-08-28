@@ -149,7 +149,7 @@ function initials(nama: string) {
 // permintaan daftar pasien makan 1,5-2 detik, dan menatap spinner selama itu
 // setiap kali kembali dari detail adalah keluhan yang paling terasa.
 //
-// ponytail: cache sederhana tanpa TTL dan tanpa batas ukuran, hidup selama
+// Catatan: cache sederhana tanpa TTL dan tanpa batas ukuran, hidup selama
 // proses app. Aman di sini karena kuncinya cuma kombinasi filter (belasan
 // kemungkinan, masing-masing 50 baris). Kalau nanti jadi infinite scroll atau
 // filternya bercabang banyak, ganti ke LRU atau langsung pakai React Query.
@@ -368,13 +368,10 @@ export function PasienListScreen({ navigation }: Props) {
                       <Text style={styles.cardRm}>RM: {item.norm}</Text>
                     </View>
                   </View>
-                  {/* Dua badge bertumpuk rata kanan (keputusan Arthuro,
-                      20 Ags 2026). Sebelumnya badge kategori menempel di
-                      footer dekat tanggal kunjungan, dengan alasan kategori
-                      itu milik kunjungan dan bukan sifat tetap pasien —
-                      alasan yang tetap benar, tapi dokter membacanya sebagai
-                      satu kesatuan "keadaan pasien ini sekarang", jadi
-                      keduanya disatukan di sudut yang sama. */}
+                  {/* Dua badge dikumpulkan rata kanan, bukan dipisah ke footer
+                      dekat tanggal kunjungan — meski kategori itu sifat
+                      kunjungan bukan sifat tetap pasien, dokter membacanya
+                      sebagai satu kesatuan "keadaan pasien ini sekarang". */}
                   <View style={styles.cardPills}>
                     <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
                       <Text style={[styles.statusBadgeText, { color: badge.fg }]}>

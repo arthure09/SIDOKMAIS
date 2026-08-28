@@ -1,14 +1,8 @@
-// Guard JWT_SECRET (perbaikan temuan security review, 19 Ags 2026).
-//
-// Yang dijaga: server GAGAL START kalau kunci penandatangan token lemah —
-// kosong, terlalu pendek, atau masih placeholder yang ada di repo. Sebelum ini
-// docker-compose punya nilai bawaan yang ikut ter-commit, jadi stack yang lupa
-// mengisinya tetap menyala dan menerbitkan token yang bisa dipalsukan siapa pun
-// yang bisa membaca repo. Seluruh isolasi antar-dokter diturunkan dari klaim
-// JWT, jadi kunci yang bisa ditebak meruntuhkan semua pengecekan akses.
-//
-// Dites lewat require ulang modul: pengecekannya memang di level modul, supaya
-// jatuh saat boot dan bukan saat login pertama.
+// Server harus GAGAL START kalau JWT_SECRET lemah (kosong, terlalu pendek,
+// atau placeholder default) — seluruh isolasi antar-dokter diturunkan dari
+// klaim JWT, jadi kunci yang bisa ditebak meruntuhkan semua pengecekan akses.
+// Dites lewat require ulang modul supaya pengecekan jatuh saat boot, bukan
+// saat login pertama.
 
 const SECRET_ASLI = process.env.JWT_SECRET;
 

@@ -3,7 +3,7 @@ import type { AktivitasHarianMingguan } from '../api/types';
 /**
  * Kalimat ringkasan di bawah chart "Statistik Pasien Mingguan".
  *
- * Sengaja rule-based, bukan lewat LLM (keputusan Arthuro, 2026-08-12): seluruh
+ * Sengaja rule-based, bukan lewat LLM: seluruh
  * isinya aritmetika biasa atas array yang sama dengan yang menggambar bar-nya,
  * jadi angkanya dijamin konsisten dengan chart, instan, dan tidak bisa
  * "mengarang" seperti model generatif.

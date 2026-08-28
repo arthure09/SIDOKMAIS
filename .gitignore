@@ -2,12 +2,13 @@
 **/node_modules/
 
 # Environment
+# Pola ini sengaja menyapu SEMUA varian .env, bukan daftar nama satu per satu:
+# `**/.env` cuma cocok persis ".env", jadi turunan seperti .env.dummy,
+# .env.simrs, dan .env.bak-windows lolos kalau tidak disapu di sini —
+# padahal ketiganya sama-sama memuat JWT_SECRET & kredensial DB/SIMRS.
 **/.env
-**/.env.local
-# Cadangan .env (mis. .env.bak-windows) ikut memuat JWT_SECRET & kredensial DB —
-# pola `**/.env` di atas TIDAK menangkapnya karena cuma cocok persis ".env".
-**/.env.bak*
-**/.env.*.bak
+**/.env.*
+# Satu-satunya varian yang BOLEH masuk repo: contoh berisi placeholder kosong.
 !**/.env.example
 
 # Build output

@@ -11,28 +11,25 @@ const { tanggalWIB, keWaktuSimrs, teks } = require("../../utils/simrsBentuk");
 const router = express.Router();
 
 // Modul Hasil Lab versi SIMRS — read-only, bentuk response identik dengan
-// routes/lab.routes.js. Sama seperti versi dummy, `pasienId` WAJIB: tidak ada
-// jalur "semua lab dokter ini", dan itu juga yang menjaga setiap query di sini
-// tetap terbatas ke satu pasien.
+// routes/dummy/lab.routes.js. Sama seperti versi dummy, `pasienId` WAJIB:
+// tidak ada jalur "semua lab dokter ini", dan itu juga yang menjaga setiap
+// query di sini tetap terbatas ke satu pasien.
 //
-// Sumbernya skema `layanan`, BUKAN `lis`. Skema `lis*` memang ada dan jauh
-// lebih besar (lis.hasil_log 23,5 juta baris), tapi isinya jembatan mentah dari
-// alat analyzer — LIS_KODE_TEST, LIS_NAMA_INSTRUMENT, VENDOR_LIS. Yang dipakai
-// SIMRS sendiri, dan yang punya kaitan ke kunjungan/dokter, ada di `layanan`.
-// simrs-schema-mapping.md §PemeriksaanLab sempat menebak `lis` — tebakan itu
-// keliru.
+// Sumbernya skema `layanan`, bukan `lis`. Skema `lis*` ada dan jauh lebih
+// besar (lis.hasil_log 23,5 juta baris), tapi isinya jembatan mentah dari
+// alat analyzer (LIS_KODE_TEST, LIS_NAMA_INSTRUMENT, VENDOR_LIS), tanpa
+// kaitan ke kunjungan/dokter — yang dipakai SIMRS sendiri ada di `layanan`.
 //
-// Rantainya (diverifikasi 24 Ags 2026, EXPLAIN + hitungan, tanpa membaca baris
-// pasien):
+// Rantainya:
 //   layanan.order_lab        NOMOR, KUNJUNGAN, TANGGAL, DOKTER_ASAL, TUJUAN
 //     -> layanan.order_detil_lab  ORDER_ID = NOMOR, satu baris per tindakan
 //       -> layanan.hasil_lab      TINDAKAN_MEDIS = order_detil_lab.REF
 //
 // Satu "PemeriksaanLab" di sini = satu (ORDER_ID, TINDAKAN), bukan satu REF.
 // REF adalah nomor tindakan-medis dan bisa dipakai bersama oleh beberapa
-// TINDAKAN dalam order yang sama, jadi memisahkan hasil per pemeriksaan butuh
-// `parameter_tindakan_lab.TINDAKAN` sebagai penyaring kedua. Tanpa itu, hasil
-// dua pemeriksaan berbeda tercampur jadi satu daftar parameter.
+// TINDAKAN dalam order yang sama, jadi memisahkan hasil per pemeriksaan
+// butuh `parameter_tindakan_lab.TINDAKAN` sebagai penyaring kedua — tanpa
+// itu, hasil dua pemeriksaan berbeda tercampur jadi satu daftar parameter.
 
 // Kode flag dari LIS. Nilai yang benar-benar muncul cuma lima: '', L, H, VL, VH
 // (dihitung dari sebulan data). Tidak ada padanan untuk ABNORMAL di enum
@@ -367,7 +364,7 @@ router.get("/:id", async (req, res) => {
           id: String(b.DOKTER_ASAL),
           nama: teks(b.DOKTER_NAMA),
           // SMF di master.pegawai masih berupa kode dan tabel referensinya
-          // belum dipetakan (§4 no.20) — null, bukan angka mentah.
+          // belum dipetakan — null, bukan angka mentah.
           spesialisasi: null,
         }
       : null,

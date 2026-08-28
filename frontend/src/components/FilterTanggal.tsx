@@ -6,15 +6,10 @@ import { colors, radius, spacing } from '../theme/colors';
 import { ms } from '../theme/responsive';
 import { Text } from './Text';
 
-// Filter rentang tanggal (chip + modal dua date picker), dipakai HasilLabList
-// dan JadwalOperasiKonsul. Diangkat ke sini waktu layar kedua membutuhkannya —
-// menyalinnya berarti menggandakan juga perbaikan-perbaikan yang mahal di
-// bawah (fallbackDate, pickerFullBleed, pola draft/terapkan), dan salinan
-// seperti itu selalu berhenti diperbaiki di satu sisi saja.
-//
-// Komponen ini memegang SELURUH state sementara (modal terbuka, draft, picker
-// mana yang tampil). Pemanggil cuma memegang nilai yang sudah diterapkan,
-// karena itu yang memicu fetch ulang.
+// Filter rentang tanggal (chip + modal dua date picker) dipakai lebih dari satu screen — dibagi ke sini
+// supaya perbaikan (fallbackDate, pickerFullBleed, pola draft/terapkan) tidak perlu digandakan.
+// Komponen ini memegang seluruh state sementara (modal, draft, picker aktif); pemanggil cuma menerima
+// nilai yang sudah diterapkan, karena itu yang memicu fetch ulang.
 
 function formatShortDate(date: Date) {
   return date.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -32,12 +27,7 @@ type Props = {
   judul: string;
   dari: Date | null;
   sampai: Date | null;
-  /**
-   * Tulisan di chip saat belum ada rentang dipilih. Bukan sekadar hiasan:
-   * layar yang punya cakupan bawaan sendiri (mis. "hari ini") memakai ini
-   * untuk menyatakan cakupan itu, sehingga chip-nya jadi SATU-SATUNYA tempat
-   * cakupan tanggal diumumkan — tidak perlu baris keterangan terpisah.
-   */
+  /** Tulisan di chip saat belum ada rentang dipilih — bukan sekadar hiasan, layar dengan cakupan bawaan (mis. "hari ini") memakainya sebagai satu-satunya tempat cakupan itu diumumkan. */
   labelKosong?: string;
   /** Dipanggil hanya saat "Terapkan" ditekan atau chip di-reset. */
   onChange: (dari: Date | null, sampai: Date | null) => void;
@@ -49,9 +39,8 @@ export function FilterTanggal({ judul, dari, sampai, onChange, labelKosong = 'Se
   const [draftSampai, setDraftSampai] = useState<Date | null>(null);
   const [showDariPicker, setShowDariPicker] = useState(false);
   const [showSampaiPicker, setShowSampaiPicker] = useState(false);
-  // Instance stabil buat fallback value picker — bukan `new Date()` inline, yang
-  // bikin timestamp baru tiap render dan memicu re-layout native tanpa henti
-  // (crash iOS) / dialog Android menumpuk selama tanggal belum dipilih.
+  // Instance stabil buat fallback value picker — bukan `new Date()` inline, yang bikin timestamp baru
+  // tiap render dan memicu re-layout native tanpa henti (crash iOS) / dialog Android menumpuk.
   const [fallbackDate] = useState(() => new Date());
 
   const filterAktif = dari !== null || sampai !== null;
@@ -75,9 +64,8 @@ export function FilterTanggal({ judul, dari, sampai, onChange, labelKosong = 'Se
     closeModal();
   }
 
-  // Tombol Reset di dalam modal hanya membersihkan draft, jangan sentuh filter
-  // yang sudah diterapkan — memanggil onChange dari sini akan memicu fetch
-  // ulang selagi modal masih terbuka, menembus pola draft/terapkan.
+  // Reset hanya membersihkan draft, jangan sentuh filter yang sudah diterapkan — memanggil onChange di sini
+  // akan memicu fetch ulang selagi modal masih terbuka, menembus pola draft/terapkan.
   function resetDraft() {
     setDraftDari(null);
     setDraftSampai(null);
@@ -252,9 +240,8 @@ const styles = StyleSheet.create({
   },
   filterFieldLabel: { fontSize: ms(13), fontWeight: '600', color: colors.onSurfaceVariant },
   filterFieldValue: { fontSize: ms(14), color: colors.onSurface, fontWeight: '600' },
-  // Batalkan padding horizontal filterCard khusus buat area picker, supaya inline
-  // UIDatePicker iOS (~330pt) dapat ruang cukup — filterCard sendiri cuma sisakan
-  // ~287pt di layar 375pt, selisihnya bikin layout pass gagal terus-menerus.
+  // Batalkan padding horizontal filterCard khusus buat area picker — inline UIDatePicker iOS (~330pt) butuh
+  // ruang lebih dari yang tersisa di filterCard (~287pt di layar 375pt), selisihnya bikin layout pass gagal.
   pickerFullBleed: { marginHorizontal: -spacing.cardPadding },
   filterError: { fontSize: ms(12), color: colors.error },
   filterActions: {

@@ -27,18 +27,17 @@ import type { HomeStackParamList } from '../navigation/types';
 
 type Props = NativeStackScreenProps<HomeStackParamList, 'DataPendapatan'>;
 
-/** Pengelompokan utama laporan jasa medis (Tahap 4). */
 type Kelompok = 'JKN' | 'NON_JKN';
 
 const kelompokDari = (trx: BarisJasaMedis): Kelompok => (trx.penjamin.isJkn ? 'JKN' : 'NON_JKN');
 const tanggalKey = (trx: BarisJasaMedis) => trx.tanggalTindakan.slice(0, 10);
 const jumlah = (list: BarisJasaMedis[]) => list.reduce((n, t) => n + t.jasa, 0);
 
-// Daftar dimuat 10 baris sekali jalan.
-// ponytail: semua baris yang sudah dimuat tetap hidup di satu ScrollView, jadi
-// yang dihemat waktu render awal, bukan memori setelah user menekan "tampilkan
-// lagi" berkali-kali. Cukup buat ratusan baris. Kalau nanti satu bulan bisa
-// ribuan, pindahkan ledger-nya ke SectionList dan panel jadi ListHeaderComponent.
+// Daftar dimuat 10 baris sekali jalan. Catatan: semua baris yang sudah dimuat
+// tetap hidup di satu ScrollView, jadi yang dihemat waktu render awal, bukan
+// memori setelah user menekan "tampilkan lagi" berkali-kali. Cukup buat
+// ratusan baris; kalau nanti satu bulan bisa ribuan, pindahkan ledger-nya ke
+// SectionList dan panel jadi ListHeaderComponent.
 const BATCH = 10;
 
 // Dua warna saja, urut sama dengan `perKelompok`: JKN lalu Non-JKN. Ramp
@@ -66,11 +65,11 @@ function labelBulanTahun(key: string) {
  * Periode yang sedang dilihat, mis. "1–19 Agustus 2026" — bentuk yang sama
  * dengan "01-08-2026 s/d 17-08-2026" di SIREMDIS, cuma lebih ringkas.
  *
- * Menggantikan indikator pertumbuhan (+X% dari bulan lalu) yang dihapus atas
- * keputusan Arthuro, 14 Ags 2026: menempelkan panah hijau/merah di angka jasa
- * medis mendorong dokter membaca angkanya sebagai skor, dan insentif pembayaran
- * adalah jalur klasik menuju overtreatment. Baris ini menjawab "ini angka
- * periode apa", bukan "saya sebagus apa".
+ * Sengaja tanpa indikator pertumbuhan (+X% dari bulan lalu): menempelkan
+ * panah hijau/merah di angka jasa medis mendorong dokter membaca angkanya
+ * sebagai skor, dan insentif pembayaran adalah jalur klasik menuju
+ * overtreatment. Baris ini menjawab "ini angka periode apa", bukan "saya
+ * sebagus apa".
  */
 function labelPeriode(periode: PeriodePendapatan | null) {
   if (!periode) return null;
@@ -126,17 +125,11 @@ export function DataPendapatanScreen({ navigation }: Props) {
   const { headerBackgroundColor, headerShadowOpacity, headerElevation } = useAnimatedHeaderFade(scrolled);
 
   // Header menempel di atas konten (absolute) dan TIDAK ikut bergeser waktu
-  // discroll — judul "Jasa Medis" + tombol kembali selalu terlihat.
-  //
-  // Versi sebelumnya menggeser header keluar layar pakai Animated.diffClamp.
-  // Teknis animasinya benar, tapi hasilnya salah untuk layar ini: begitu
-  // discroll sedikit, seluruh penanda konteks hilang dan yang tersisa cuma
-  // deretan angka rupiah tanpa judul maupun jalan kembali. Menyembunyikan satu
-  // baris setinggi 56px tidak sepadan dengan kehilangan itu.
-  //
-  // ponytail: header dipatok mati, bukan dibikin bisa dikonfigurasi. Kalau
-  // suatu saat layar ini punya header tinggi yang memang layak disembunyikan,
-  // pola diffClamp-nya masih ada di git history.
+  // discroll — judul "Jasa Medis" + tombol kembali selalu terlihat. Header
+  // yang ikut hilang saat discroll membuat penanda konteks hilang dan yang
+  // tersisa cuma deretan angka rupiah tanpa judul maupun jalan kembali;
+  // menyembunyikan satu baris setinggi 56px tidak sepadan dengan itu, jadi
+  // header sengaja dipatok mati, bukan dibikin bisa dikonfigurasi.
   const [headerHeight, setHeaderHeight] = useState(insets.top + HEADER_ROW);
 
   const token = useAuthStore((s) => s.token);
@@ -226,9 +219,9 @@ export function DataPendapatanScreen({ navigation }: Props) {
   const teksPeriode = labelPeriode(periodeAktif);
 
   // Satu-satunya pemecahan angka di layar ini: JKN vs Non-JKN. Rincian per
-  // penjamin (Pribadi sekian persen, Asuransi Swasta sekian) dihapus atas
-  // keputusan Arthuro 19 Ags 2026 — yang perlu dibaca dokter cuma dua kelompok
-  // itu, dan bar multi-segmen membuat keduanya harus dijumlah dulu di kepala.
+  // penjamin (Pribadi, Asuransi Swasta, dst.) sengaja tidak ditampilkan —
+  // yang perlu dibaca dokter cuma dua kelompok itu, dan bar multi-segmen
+  // membuat keduanya harus dijumlah dulu di kepala.
   const perKelompok: { value: Kelompok; label: string; total: number }[] = [
     { value: 'JKN', label: 'JKN', total: resp?.ringkasan.totalJkn ?? 0 },
     { value: 'NON_JKN', label: 'Non-JKN', total: resp?.ringkasan.totalNonJkn ?? 0 },

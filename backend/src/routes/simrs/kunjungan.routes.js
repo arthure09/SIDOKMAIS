@@ -31,7 +31,7 @@ const {
 const router = express.Router();
 
 // Modul Kunjungan versi SIMRS — sumber tab "Poliklinik" di layar Jadwal.
-// Read-only, bentuk response identik dengan routes/kunjungan.routes.js.
+// Read-only, bentuk response identik dengan routes/dummy/kunjungan.routes.js.
 //
 // Tabelnya `pendaftaran.kunjungan`: 11,1 JUTA baris. Semua query di sini wajib
 // terbatas — entah oleh rentang tanggal (yang memang selalu dikirim layar
@@ -87,8 +87,8 @@ function parseListQuery(query, role) {
 function kondisiJenisRuangan(jenis) {
   if (jenis === "IGD") return "r.JENIS_KUNJUNGAN = 2";
   if (jenis === "RAWAT_INAP") return "r.JENIS_KUNJUNGAN = 3";
-  // Rawat jalan = poliklinik saja (1, 14, 15). Dulu "apa pun selain 2 dan 3",
-  // yang menyeret farmasi/lab/radiologi ikut masuk — lihat catatan panjang di
+  // Rawat jalan = poliklinik saja (1, 14, 15) — bukan "apa pun selain 2 dan 3",
+  // yang menyeret farmasi/lab/radiologi ikut masuk. Lihat catatan panjang di
   // utils/simrsBentuk.js.
   return "r.JENIS_KUNJUNGAN IN (1, 14, 15)";
 }
@@ -96,10 +96,10 @@ function kondisiJenisRuangan(jenis) {
 // Padanan SQL whereStatusEfektif() untuk Kunjungan.
 //
 // Kode `pendaftaran.kunjungan.STATUS` TIDAK dipakai: smallint(4) tanpa komentar,
-// artinya belum dikonfirmasi DBA (§4 no.5 simrs-schema-mapping.md). Statusnya
-// diturunkan dari waktu, persis seperti utils/statusJadwal.js — ditambah satu
-// bukti langsung yang memang tersedia di SIMRS: `KELUAR` terisi berarti pasien
-// sudah keluar, apa pun tanggalnya.
+// artinya belum dikonfirmasi DBA. Statusnya diturunkan dari waktu, persis
+// seperti utils/statusJadwal.js — ditambah satu bukti langsung yang memang
+// tersedia di SIMRS: `KELUAR` terisi berarti pasien sudah keluar, apa pun
+// tanggalnya.
 //
 // Perbandingan ke KELUAR memakai IS NULL / IS NOT NULL, bukan `=`, supaya tidak
 // mengulang jebakan NULL yang pernah kena di modul Operasi.
@@ -190,8 +190,7 @@ function bangunFilter({ status, ruanganJenis: jenis, dari, sampai, aksesDokterId
   if (aksesDokterId) {
     if (lingkup === "pasien") {
       // Cakupan luas: semua kunjungan pasien yang pernah dia tangani, termasuk
-      // yang ditangani dokter lain. Ini perilaku lama, sekarang harus diminta
-      // eksplisit lewat ?lingkup=pasien.
+      // yang ditangani dokter lain — harus diminta eksplisit lewat ?lingkup=pasien.
       klausa.push(`(tp.DOKTER = ? OR ${klausaAksesNorm("pd.NORM")})`);
       params.push(aksesDokterId, ...paramAkses(aksesDokterId));
     } else {
@@ -248,30 +247,23 @@ const KOLOM = `
   ${DIAGNOSA} AS DIAGNOSA
 `;
 
-// Tanggal terakhir yang benar-benar punya kunjungan untuk dokter ini.
+// Tanggal terakhir yang benar-benar punya kunjungan — dipakai kalau replika
+// SIMRS berhenti tersinkronisasi (seluruh tabel transaksional mentok di
+// waktu yang sama), supaya "kunjungan hari ini" tidak selalu nol untuk
+// seluruh rumah sakit. Tanggalnya dikembalikan ke pemanggil (`tanggalData`
+// di response) supaya UI bisa menyebutkan tanggal sebenarnya, bukan berlabel
+// "hari ini".
 //
-// Alasannya bukan estetika: replika SIMRS berhenti tersinkronisasi 18 Ags 2026
-// 14:35 WIB — seluruh tabel transaksional (kunjungan, pendaftaran, konsul,
-// waiting list operasi) mentok di menit yang sama. Selama itu belum diperbaiki
-// tim SIMRS, "kunjungan hari ini" akan selalu nol untuk SELURUH rumah sakit,
-// bukan cuma satu dokter.
+// TIDAK di-scope ke dokter, dan itu disengaja: yang dicari bukan "kapan
+// dokter ini terakhir praktik" tapi "sampai tanggal berapa replika ini punya
+// data" (berhenti serentak se-rumah-sakit). Menyaring lewat klausa akses DPJP
+// makan 156 detik — MAX() memaksa seluruh himpunan kunjungan dokter (ratusan
+// ribu baris) dievaluasi; tanpa penyaring, MySQL cukup membaca ujung index
+// `MASUK` (0,0 detik).
 //
-// Fungsi ini membuat layar Poliklinik tetap ada isinya waktu itu terjadi.
-// Tanggalnya DIKEMBALIKAN ke pemanggil (`tanggalData` di response) supaya UI
-// bisa menyebutkan tanggal yang sebenarnya — menampilkan data 18 Agustus
-// dengan label "hari ini" justru lebih berbahaya daripada layar kosong.
-// TIDAK di-scope ke dokter, dan itu disengaja. Versi pertama menyaring lewat
-// klausa akses DPJP dan makan 156 detik — MAX() memaksa seluruh himpunan
-// kunjungan dokter (ratusan ribu baris) dievaluasi. Tanpa penyaring, MySQL
-// cukup membaca ujung index `MASUK`: 0,0 detik.
-//
-// Aman karena yang dicari memang bukan "kapan dokter ini terakhir praktik",
-// melainkan "sampai tanggal berapa replika ini punya data" — dan itu
-// se-rumah-sakit, karena replikasinya berhenti serentak.
-//
-// Kalau kebetulan dokter ini tidak punya kunjungan di tanggal itu, hasilnya
-// tetap kosong dan `tanggalData` tetap null. Itu jujur; lebih baik daripada
-// menunggu dua setengah menit untuk jawaban yang sama.
+// Kalau dokter ini kebetulan tidak punya kunjungan di tanggal itu, hasilnya
+// tetap kosong dan `tanggalData` tetap null — jujur, lebih baik daripada
+// menunggu lama untuk jawaban yang sama.
 async function cariTanggalTerisi() {
   const baris = await q("SELECT MAX(MASUK) AS TERBARU FROM pendaftaran.kunjungan");
   return baris[0]?.TERBARU ?? null;
@@ -431,7 +423,7 @@ router.get("/:id", async (req, res) => {
       : null,
     dokter: dasar.dokter
       ? // SMF di master.pegawai berupa kode dan tabel referensinya belum
-        // dipetakan (§4 no.20) — null, bukan angka mentah.
+        // dipetakan — null, bukan angka mentah.
         { ...dasar.dokter, spesialisasi: null }
       : null,
     ruangan: {

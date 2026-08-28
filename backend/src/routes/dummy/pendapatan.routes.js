@@ -1,20 +1,20 @@
 const express = require("express");
-const prisma = require("../lib/prisma");
-const { parseDokterIdFilter } = require("../utils/queryParams");
+const prisma = require("../../lib/prisma");
+const { parseDokterIdFilter } = require("../../utils/queryParams");
 
 const router = express.Router();
 
-// Modul Jasa Medis (Pendapatan) — Tahap 4 docs/rencana-revisi-modul-dokter.md.
-// View-only untuk kedua role: angkanya mensimulasikan remunerasi dari SIMRS,
-// aplikasi ini tidak pernah menghitung atau mengubahnya.
+// Modul Jasa Medis (Pendapatan) — view-only untuk kedua role: angkanya
+// mensimulasikan remunerasi dari SIMRS, aplikasi ini tidak pernah menghitung
+// atau mengubahnya.
 //
 // Periodenya rentang tanggal bebas (`?tanggalAwal=&tanggalAkhir=`), mengikuti
-// SIREMDIS yang memakai "01-08-2026 s/d 17-08-2026" — bukan pilihan bulan.
+// SIREMDIS yang memakai format "01-08-2026 s/d 17-08-2026" — bukan pilihan bulan.
 //
-// Satu endpoint, bukan dua (ringkasan + detail) seperti di dokumen rencana:
-// layarnya butuh dua-duanya sekaligus dan ringkasannya harus dijumlah dari
-// baris yang sama persis dengan yang ditampilkan. Dipisah jadi dua panggilan,
-// dua angka itu bisa berbeda tanpa ada yang sadar.
+// Satu endpoint, bukan dua (ringkasan + detail): layarnya butuh dua-duanya
+// sekaligus dan ringkasannya harus dijumlah dari baris yang sama persis
+// dengan yang ditampilkan — dipisah jadi dua panggilan, dua angka itu bisa
+// berbeda tanpa ada yang sadar.
 //
 // Ringkasan dihitung saat diminta, tidak disimpan — lihat catatan di
 // schema.prisma model Pendapatan.
@@ -95,9 +95,8 @@ router.get("/", async (req, res) => {
     return res.status(400).json({ message: "Query params tidak valid", errors: periode.errors });
   }
 
-  // dokterId DOKTER selalu dari JWT (CLAUDE.md Aturan #2). `?dokterId=` cuma
-  // dihormati untuk ADMIN — parseDokterIdFilter sudah membuangnya kalau
-  // pemanggilnya DOKTER.
+  // dokterId untuk DOKTER selalu dari JWT. `?dokterId=` cuma dihormati untuk
+  // ADMIN — parseDokterIdFilter sudah membuangnya kalau pemanggilnya DOKTER.
   const dokterId = role === "DOKTER" ? ownDokterId : parseDokterIdFilter(req.query, role);
   if (!dokterId) {
     return res.status(400).json({ message: "dokterId wajib diisi untuk role ADMIN" });

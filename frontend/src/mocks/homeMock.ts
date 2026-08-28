@@ -4,10 +4,8 @@ export type NavigasiCard = {
   icon: string;
 };
 
-// 'Pasien Saya'/'Jadwal Operasi'/'Notifikasi' sengaja dihapus dari grid ini
-// (audit docs/analisa/UI-Improvement-Brief-sidokmais.md §1) — 3 tile itu 100% duplikat
-// tujuan dengan bottom nav bar (Pasien/Jadwal/Notifikasi), buang-buang ruang
-// tanpa nambah kecepatan akses. Sisa 3 di bawah ini satu-satunya yang gak
+// 'Pasien Saya'/'Jadwal Operasi'/'Notifikasi' sengaja dihapus dari grid ini — 3 tile itu 100% duplikat
+// tujuan dengan bottom nav bar (Pasien/Jadwal/Notifikasi). Sisa 3 di bawah ini satu-satunya yang gak
 // punya jalur akses lain dari nav bar.
 export const navigasiCards: NavigasiCard[] = [
   { id: 'pendapatan', label: 'Jasa Medis', icon: 'payments' },

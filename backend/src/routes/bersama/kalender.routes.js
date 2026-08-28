@@ -1,8 +1,8 @@
 const express = require("express");
-const prisma = require("../lib/prisma");
-const { logAudit } = require("../utils/auditLog");
-const { rentangHariWIB } = require("../utils/wib");
-const { parseRentangTanggal } = require("../utils/queryParams");
+const prisma = require("../../lib/prisma");
+const { logAudit } = require("../../utils/auditLog");
+const { rentangHariWIB } = require("../../utils/wib");
+const { parseRentangTanggal } = require("../../utils/queryParams");
 
 const router = express.Router();
 

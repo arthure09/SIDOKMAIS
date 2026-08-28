@@ -1,7 +1,6 @@
 // Aplikasi ini diasumsikan satu zona waktu (WIB, UTC+7) — belum ada
 // per-user timezone. Kalau nanti perlu lebih benar, frontend harus kirim
-// offset device eksplisit, bukan asumsi WIB di sini. Dipakai lab/dashboard/
-// kalender routes yang tadinya masing-masing nulis ulang math ini sendiri.
+// offset device eksplisit, bukan asumsi WIB di sini.
 const WIB_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 // "YYYY-MM-DD" (tanggal kalender LOKAL device, WIB) -> instant UTC awal hari

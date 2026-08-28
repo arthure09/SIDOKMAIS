@@ -18,8 +18,7 @@ enum JenisKelamin {
 }
 
 // Kategori kunjungan (Rawat Jalan/IGD/Rawat Inap) diturunkan dari sini —
-// lihat src/utils/jenisKunjungan.js. IGD masuk 18 Ags 2026 (Tahap 1
-// docs/rencana-revisi-modul-dokter.md); OK bukan kategori kunjungan, cuma
+// lihat src/utils/jenisKunjungan.js. OK bukan kategori kunjungan, cuma
 // dipakai Operasi.
 enum RuanganJenis {
   POLI
@@ -134,8 +133,6 @@ model Pasien {
   tempatLahir   String?
   alamat        String?
   golonganDarah String?
-  // PENDING: format final No. RM (relasi dengan `norm`) belum diputuskan bersama
-  // supervisor — lihat catatan "format data klinis (ICD-10, No. RM)" di CLAUDE.md.
   noRekamMedis  String?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
@@ -227,8 +224,6 @@ model Notifikasi {
   dokter Dokter @relation(fields: [dokterId], references: [id], onDelete: Cascade)
 }
 
-// PENDING: struktur real belum tersedia dari RS — kolom di bawah disederhanakan
-// dari referensi format export SIMRS, isi & relasi lanjutan bisa berubah.
 model Operasi {
   id             String        @id @default(uuid())
   kunjunganId    String
@@ -240,7 +235,7 @@ model Operasi {
   catatanPreOp   String?
   catatanPostOp  String?
 
-  // --- Laporan operasi (Tahap 3 docs/rencana-revisi-modul-dokter.md) ---
+  // --- Laporan operasi ---
   // Semua nullable: baru terisi setelah tindakan selesai, dan record lama tetap
   // valid tanpa ini. Endpoint detail hanya mengirimkannya saat status efektif
   // COMPLETED — lihat src/utils/laporanOperasi.js.
@@ -300,16 +295,10 @@ model Penjamin {
   pendapatan Pendapatan[]
 }
 
-// Satu baris jasa medis per pelayanan — Tahap 4 docs/rencana-revisi-modul-dokter.md.
+// Satu baris jasa medis per pelayanan.
 //
-// Bentuknya mengikuti tabel "Detail Tindakan" SIREMDIS (screenshot referensi,
-// 19 Ags 2026): NORM, nama pasien, nama tindakan, tanggal tindakan, jasa, unit
-// pelayanan, penjamin.
-//
-// Catatan riwayat keputusan: versi pertama modul ini sengaja TIDAK punya relasi
-// ke Pasien (keputusan Arthuro 14 Ags 2026 — dokter cukup tahu pelayanan mana,
-// bukan siapa pasiennya). Dibatalkan 19 Ags 2026 setelah bentuk asli SIREMDIS
-// terlihat: dua kolom identitas pasien memang ada di laporan aslinya.
+// Bentuknya mengikuti tabel "Detail Tindakan" SIREMDIS: NORM, nama pasien,
+// nama tindakan, tanggal tindakan, jasa, unit pelayanan, penjamin.
 //
 // `unitPelayanan` = SMF/unit tempat pelayanan terjadi, BUKAN spesialisasi
 // dokternya — di referensi, dokter Sp.THT menagih konsul di unit "Anak".
@@ -318,7 +307,7 @@ model Penjamin {
 // sendiri — itu agregasi atas rentang tanggal yang dipilih user, jadi dihitung
 // saat diminta. Menyimpannya berarti punya dua sumber angka yang bisa berbeda.
 //
-// isDummy wajib true selama fase dummy (CLAUDE.md aturan #3).
+// isDummy wajib true selama fase dummy.
 model Pendapatan {
   id         String @id @default(uuid())
   dokterId   String
@@ -348,11 +337,11 @@ model Pendapatan {
 // Hak akses dokter ditentukan lewat `dokterTujuanId` yang tercatat di record
 // ini — BEDA pola dari modul lab/pasien yang lewat DokterPasienAssignment.
 // Dokter yang login hanya melihat konsul yang DITUJUKAN kepadanya, bukan yang
-// dia ajukan (keputusan terkunci, docs/rencana-revisi-modul-dokter.md Tahap 2).
+// dia ajukan.
 //
-// `dokterPengirimId` tidak ada di tabel field rencana, tapi wajib ada: satu
-// lembar konsul selalu punya dokter peminta, dan tanpa itu layar detail tidak
-// bisa menampilkan konsul ini datang dari siapa.
+// `dokterPengirimId` wajib ada: satu lembar konsul selalu punya dokter
+// peminta, dan tanpa itu layar detail tidak bisa menampilkan konsul ini
+// datang dari siapa.
 model Konsultasi {
   id                String              @id @default(uuid())
   pasienId          String
@@ -382,6 +371,9 @@ model Konsultasi {
   diagnosisJawaban String?
   anjuran          String?
   setujuUntuk      String?
+  // Kategorisasi hasil konsul (mirip `penilaianKasus()` di SIMRS mode:
+  // "Alih rawat" vs "Rawat bersama"). Ikut kosong selama MENUNGGU_JAWABAN.
+  penilaianKasus   String?
   tanggalJawaban   DateTime?
 
   createdAt DateTime @default(now())
@@ -467,7 +459,7 @@ model CatatanKalender {
   @@index([tanggal])
 }
 
-// Audit generik wajib untuk semua write action manual/chatbot (CLAUDE.md aturan #4).
+// Audit generik wajib untuk semua write action manual/chatbot.
 model AuditLog {
   id         String   @id @default(uuid())
   actorId    String?
@@ -485,8 +477,8 @@ model AuditLog {
 // NARASI yang ditulis dokter radiolog. Karena itu tidak ada tabel item di sini
 // — satu pemeriksaan = satu laporan.
 //
-// Bentuknya mengikuti apa yang benar-benar ada di SIMRS (layanan.hasil_rad,
-// diverifikasi 24 Ags 2026), termasuk yang TIDAK ada:
+// Bentuknya mengikuti apa yang benar-benar ada di SIMRS (layanan.hasil_rad),
+// termasuk yang TIDAK ada:
 //   - Tidak ada kolom status. Di SIMRS, "sudah jadi" dibuktikan oleh adanya
 //     baris hasil, bukan oleh kode status (STATUS_KONFIRMASI cuma terisi 6%).
 //   - `kesan` nullable dan memang sering kosong (15% terisi di SIMRS) — dokter

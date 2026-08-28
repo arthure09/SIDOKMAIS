@@ -1,19 +1,17 @@
 const express = require("express");
-const prisma = require("../lib/prisma");
-const { parsePagination, parseDokterIdFilter, parseRentangTanggal } = require("../utils/queryParams");
-const { jenisKunjungan } = require("../utils/jenisKunjungan");
+const prisma = require("../../lib/prisma");
+const { parsePagination, parseDokterIdFilter, parseRentangTanggal } = require("../../utils/queryParams");
+const { jenisKunjungan } = require("../../utils/jenisKunjungan");
 
 const router = express.Router();
 
-// Modul Konsultasi: read-only untuk kedua role (surat konsul mensimulasikan sync
-// dari SIMRS, sama seperti Operasi & Kunjungan — CLAUDE.md Aturan #1).
+// Modul Konsultasi: read-only untuk kedua role (surat konsul mensimulasikan
+// sync dari SIMRS, sama seperti Operasi & Kunjungan).
 //
-// PENTING — hak aksesnya BEDA dari modul lain. Pasien/lab pakai
-// DokterPasienAssignment; di sini pakai `dokterTujuanId` yang tercatat di
-// record itu sendiri. Konsekuensinya disengaja: dokter melihat konsul yang
-// DITUJUKAN kepadanya, bukan yang dia ajukan, dan bukan pula semua konsul
-// pasien yang di-assign kepadanya. Lihat docs/rencana-revisi-modul-dokter.md
-// Tahap 2 (keputusan terkunci).
+// Hak aksesnya beda dari modul lain: Pasien/lab pakai DokterPasienAssignment;
+// di sini pakai `dokterTujuanId` yang tercatat di record itu sendiri —
+// dokter melihat konsul yang DITUJUKAN kepadanya, bukan yang dia ajukan, dan
+// bukan pula semua konsul pasien yang di-assign kepadanya.
 const STATUS_KONSULTASI = ["MENUNGGU_JAWABAN", "SUDAH_DIJAWAB"];
 const PRIORITAS_KONSULTASI = ["BIASA", "CITO"];
 
@@ -76,6 +74,24 @@ function bentukRingkas(k) {
   return { ...sisa, jenisKunjungan: jenisKunjungan(kunjungan?.ruangan) };
 }
 
+// Di mode SIMRS, tanda vital cuma tersimpan sebagai satu blok teks bebas
+// (`ikhtisarKlinis`), bukan field terpisah — dummy tetap kirim 8 field
+// aslinya (lebih kaya untuk demo), tapi field turunan ini dihitung supaya
+// bentuk response tetap punya key yang sama dengan SIMRS. Bagian yang null
+// dilewati, bukan ditulis "null".
+function bentukIkhtisarKlinis(k) {
+  const bagian = [];
+  if (k.kesadaran) bagian.push(`Kesadaran: ${k.kesadaran}`);
+  if (k.tekananDarah) bagian.push(`TD: ${k.tekananDarah} mmHg`);
+  if (k.nadi != null) bagian.push(`Nadi: ${k.nadi}x/menit`);
+  if (k.pernapasan != null) bagian.push(`RR: ${k.pernapasan}x/menit`);
+  if (k.suhu != null) bagian.push(`Suhu: ${k.suhu}°C`);
+  if (k.tinggiBadan != null) bagian.push(`TB: ${k.tinggiBadan} cm`);
+  if (k.beratBadan != null) bagian.push(`BB: ${k.beratBadan} kg`);
+  if (k.nyeri != null) bagian.push(`Skala nyeri: ${k.nyeri}/10`);
+  return bagian.length > 0 ? bagian.join("; ") : null;
+}
+
 router.get("/", async (req, res) => {
   const { role, dokterId: ownDokterId } = req.user;
 
@@ -99,9 +115,9 @@ router.get("/", async (req, res) => {
     ...((dari || sampai) && {
       tanggalPermintaan: { ...(dari && { gte: dari }), ...(sampai && { lte: sampai }) },
     }),
-    // dokterTujuanId DOKTER selalu dari JWT, tidak pernah dari query (CLAUDE.md
-    // Aturan #2). `?dokterId=` cuma dihormati untuk ADMIN — parseDokterIdFilter
-    // sudah membuangnya kalau pemanggilnya DOKTER.
+    // dokterTujuanId untuk DOKTER selalu dari JWT, tidak pernah dari query.
+    // `?dokterId=` cuma dihormati untuk ADMIN — parseDokterIdFilter sudah
+    // membuangnya kalau pemanggilnya DOKTER.
     ...(role === "DOKTER" ? { dokterTujuanId: ownDokterId } : dokterId && { dokterTujuanId: dokterId }),
   };
 
@@ -163,6 +179,7 @@ router.get("/:id", async (req, res) => {
   res.json({
     ...konsultasi,
     jenisKunjungan: jenisKunjungan(konsultasi.kunjungan?.ruangan),
+    ikhtisarKlinis: bentukIkhtisarKlinis(konsultasi),
   });
 });
 

@@ -11,16 +11,16 @@ const { tanggalWIB, keWaktuSimrs, teks } = require("../../utils/simrsBentuk");
 const router = express.Router();
 
 // Modul Radiologi versi SIMRS — read-only, bentuk response identik dengan
-// routes/radiologi.routes.js.
+// routes/dummy/radiologi.routes.js.
 //
 // JALUR KE PASIEN TIDAK LEWAT TABEL ORDER. Ini beda paling penting dari modul
-// Lab, dan sudah diukur (24 Ags 2026, agregat sebulan, tanpa membaca baris
-// pasien): kalau mengikuti pola lab lewat `layanan.order_detil_rad.REF`,
-// 5.393 dari 13.685 hasil bulan Agustus (39%) TIDAK ketemu induknya — hasil
-// yang REF-nya tidak punya baris detil order sama sekali, dan bukan nyasar
-// dari radioterapi atau lab. Induk sebenarnya adalah `layanan.tindakan_medis`
-// (17 juta baris, `ID` char(11) = REF) yang membawa `KUNJUNGAN` langsung.
-// Lewat situ cocoknya 13.687 dari 13.687 = 100%.
+// Lab — sudah diukur (agregat sebulan, tanpa membaca baris pasien): kalau
+// mengikuti pola lab lewat `layanan.order_detil_rad.REF`, 5.393 dari 13.685
+// hasil bulan Agustus (39%) TIDAK ketemu induknya — hasil yang REF-nya tidak
+// punya baris detil order sama sekali, dan bukan nyasar dari radioterapi atau
+// lab. Induk sebenarnya adalah `layanan.tindakan_medis` (17 juta baris, `ID`
+// char(11) = REF) yang membawa `KUNJUNGAN` langsung. Lewat situ cocoknya
+// 13.687 dari 13.687 = 100%.
 //
 // Rantainya:
 //   pendaftaran.pendaftaran (NORM)

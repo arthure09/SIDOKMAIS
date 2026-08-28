@@ -1,7 +1,7 @@
 const express = require("express");
-const prisma = require("../lib/prisma");
-const { dokterPunyaAksesPasien } = require("../utils/aksesPasien");
-const { parsePagination, parseRentangTanggal } = require("../utils/queryParams");
+const prisma = require("../../lib/prisma");
+const { dokterPunyaAksesPasien } = require("../../utils/aksesPasien");
+const { parsePagination, parseRentangTanggal } = require("../../utils/queryParams");
 
 const router = express.Router();
 
@@ -148,9 +148,9 @@ router.get("/:id", async (req, res) => {
 
   res.json({
     ...pemeriksaanFields,
-    // Nullable dgn sengaja (bukan cuma array kosong) — belum dikonfirmasi
-    // Mas Fauzi apakah SIMRS asli simpan hasil lab terstruktur per-parameter
-    // atau cuma dokumen (PDF). Frontend WAJIB anggap ini bisa null.
+    // Nullable dgn sengaja (bukan cuma array kosong) — belum pasti apakah
+    // SIMRS asli menyimpan hasil lab terstruktur per-parameter atau cuma
+    // dokumen (PDF). Frontend wajib anggap ini bisa null.
     hasilLabItem: hasilLabItem.length > 0 ? hasilLabItem : null,
   });
 });

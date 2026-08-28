@@ -1,10 +1,8 @@
-// Laporan operasi (Tahap 3 docs/rencana-revisi-modul-dokter.md).
-//
-// Yang dijaga: laporan lengkap cuma keluar untuk operasi yang status
-// EFEKTIF-nya COMPLETED. Operasi yang belum selesai tidak boleh membocorkan
-// laporan setengah jadi, dan operasi yang tersimpan SCHEDULED tapi tanggalnya
-// sudah lewat HARUS dapat laporannya — status yang dipakai adalah yang tampil
-// di layar, bukan yang tersimpan.
+// Laporan lengkap cuma keluar untuk operasi yang status EFEKTIF-nya
+// COMPLETED — bukan status tersimpan. Operasi yang belum selesai tidak boleh
+// membocorkan laporan setengah jadi, dan operasi yang tersimpan SCHEDULED
+// tapi tanggalnya sudah lewat harus tetap dapat laporannya karena statusnya
+// yang tampil di layar sudah COMPLETED.
 
 const request = require("supertest");
 const bcrypt = require("bcrypt");

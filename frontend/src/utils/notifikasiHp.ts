@@ -1,9 +1,8 @@
 // Notifikasi yang muncul di tray HP (bukan yang di dalam app). Local
 // notification lewat expo-notifications — jalan di Expo Go maupun dev build,
-// jadi tidak perlu perancah apa pun untuk menjaga app tetap boot.
-//
-// Sebelumnya pakai @notifee/react-native, yang native module-nya tidak ada di
-// Expo Go dan baru meledak saat method dipanggil (bukan saat import).
+// jadi tidak perlu perancah tambahan untuk menjaga app tetap boot. Modul
+// native lain (mis. @notifee/react-native) tidak tersedia di Expo Go dan
+// baru meledak saat method dipanggil, bukan saat import.
 import * as Notifications from 'expo-notifications';
 
 const CHANNEL_ID = 'notifikasi-dokter';

@@ -9,7 +9,7 @@ export type RootStackParamList = {
 export type MainTabParamList = {
   HomeTab: NavigatorScreenParams<HomeStackParamList> | undefined;
   PasienTab: NavigatorScreenParams<PasienStackParamList> | undefined;
-  OperasiTab: undefined;
+  OperasiTab: NavigatorScreenParams<OperasiStackParamList> | undefined;
   NotifikasiTab: undefined;
   ProfilTab: undefined;
 };
@@ -21,9 +21,8 @@ export type MainTabParamList = {
  */
 type LabRoutes = {
   HasilLabList: { pasienId: string; nama: string };
-  // Satu layar = satu TANGGAL, bukan satu pemeriksaan. SIMRS memecah order lab
-  // per tindakan (Hematologi, Kimia Darah, Urinalisa jadi 3 baris terpisah
-  // walau diambil dari sampel yang sama di hari yang sama); dokter membacanya
+  // Satu layar = satu TANGGAL, bukan satu pemeriksaan — SIMRS memecah order lab per tindakan (Hematologi,
+  // Kimia Darah, Urinalisa jadi baris terpisah walau dari sampel yang sama), tapi dokter membacanya
   // sebagai satu lembar hasil. Pengelompokan dilakukan di HasilLabListScreen.
   HasilLabDetail: { pemeriksaanLabIds: string[]; tanggal: string };
 };
@@ -39,19 +38,18 @@ type RadiologiRoutes = {
 };
 
 /**
- * Screen yang dibuka dari tile Menu di Home tinggal di stack HomeTab sendiri,
- * bukan menumpang stack tab lain. Dengan begitu "kembali" — tombol header,
- * back Android, dan gestur swipe iOS yang jalan di native tanpa lewat JS —
- * ketiganya pop ke Home apa adanya, tanpa param `fromHome` atau hook khusus.
+ * Screen yang dibuka dari tile Menu di Home tinggal di stack HomeTab sendiri, bukan menumpang stack tab
+ * lain — supaya "kembali" (tombol header, back Android, gestur swipe iOS) selalu pop ke Home apa adanya,
+ * tanpa param `fromHome` atau hook khusus.
  */
 export type HomeStackParamList = {
   Home: undefined;
   DataPendapatan: undefined;
-  // `buatBaru` dikirim tombol "Tambah Pengingat" di Home — form catatan langsung
-  // terbuka begitu screen-nya muncul, bukan mendarat di kalender kosong.
+  // `buatBaru` dikirim tombol "Tambah Pengingat" di Home — form catatan langsung terbuka begitu
+  // screen-nya muncul, bukan mendarat di kalender kosong.
   CatatanKalender: { buatBaru?: boolean } | undefined;
-  // Dipakai dua tile Home (Hasil Lab & Radiologi) — `tujuan` yang menentukan
-  // layar berikutnya. Tanpa ini tile Radiologi mendarat di Hasil Lab.
+  // Dipakai dua tile Home (Hasil Lab & Radiologi) — `tujuan` menentukan layar berikutnya, tanpa ini tile
+  // Radiologi mendarat di Hasil Lab.
   PilihPasienHasilLab: { tujuan?: 'lab' | 'radiologi' } | undefined;
 } & LabRoutes &
   RadiologiRoutes;
@@ -63,11 +61,10 @@ export type PasienStackParamList = {
   RadiologiRoutes;
 
 export type OperasiStackParamList = {
-  JadwalOperasiKonsul: undefined;
+  // `tab` dipakai tile ringkasan di Home biar lompat langsung ke sub-tab yang sesuai (lihat TABS di
+  // JadwalOperasiKonsulScreen) — undefined = default, screen buka di tab Poliklinik lewat tab bar.
+  JadwalOperasiKonsul: { tab?: 'POLI' | 'OPERASI' | 'KONSUL' } | undefined;
   DetailJadwalOperasi: { operasiId: string };
-  // Konsultasi punya model sendiri sejak Tahap 2 — sebelumnya layar ini
-  // membaca Kunjungan, yang ternyata bukan bentuk aslinya (lihat
-  // docs/rencana-revisi-modul-dokter.md).
   DetailKonsul: { konsultasiId: string };
   DetailKunjungan: { kunjunganId: string };
 };

@@ -1,17 +1,14 @@
 const express = require("express");
 const bcrypt = require("bcrypt");
-const prisma = require("../lib/prisma");
-const { signToken } = require("../utils/jwt");
-const authMiddleware = require("../middleware/auth.middleware");
+const prisma = require("../../lib/prisma");
+const { signToken } = require("../../utils/jwt");
+const authMiddleware = require("../../middleware/auth.middleware");
 
 const router = express.Router();
 
-// Satu bentuk untuk /login dan /me — dua literal terpisah sebelumnya, dan itu
-// resep dua response yang diam-diam beda isinya.
-// nip dipakai kartu identitas di ProfilDokterScreen. Aman: yang dikirim selalu
-// identitas akun yang sedang login sendiri, bukan dokter lain. Nomor SIP tidak
-// ikut dikirim — tidak ditampilkan di app (keputusan Arthuro, 2026-08-14), jadi
-// tidak perlu keluar dari server sama sekali. Kolomnya tetap ada di DB.
+// Satu bentuk dipakai untuk /login dan /me, supaya responsnya tidak diam-diam beda isi.
+// nip aman dikirim karena selalu identitas akun yang sedang login sendiri.
+// Nomor SIP sengaja tidak dikirim (kolomnya tetap ada di DB, tidak ditampilkan di app).
 function bentukPengguna(pengguna) {
   return {
     id: pengguna.id,

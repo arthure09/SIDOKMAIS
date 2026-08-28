@@ -1,10 +1,8 @@
-// Self-check modalitasRadiologi — pola sama dengan serapNotifikasi.check.ts.
-// Jalankan manual:
-//   node src/utils/modalitasRadiologi.check.ts
+// Self-check modalitasRadiologi. Jalankan manual: node src/utils/modalitasRadiologi.check.ts
 import assert from 'node:assert';
 import { kodeModalitas } from './modalitasRadiologi.ts';
 
-// Nilai yang benar-benar ada di master.tindakan_klp_radiologi (24 Ags 2026).
+// Nilai yang benar-benar ada di master.tindakan_klp_radiologi.
 assert.equal(kodeModalitas('konvensional'), 'RO');
 assert.equal(kodeModalitas('MRI'), 'MRI');
 assert.equal(kodeModalitas('CT Scan'), 'CT');

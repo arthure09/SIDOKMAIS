@@ -1,12 +1,7 @@
-// Verifikasi end-to-end Task 4 (Hari 7 — RBAC skeleton).
-//
-// CATATAN: sandbox tempat test ini dijalankan tidak punya Postgres/Docker,
-// jadi prisma.pengguna di-mock dengan bentuk data persis seperti hasil seed
+// prisma.pengguna di-mock dengan bentuk data persis seperti hasil seed
 // (prisma/seed.js -> seedPengguna). Middleware yang dites (authenticate,
-// authorize, signToken/verifyToken) adalah kode asli, tidak ada yang
-// disimulasikan — hanya layer DB yang di-mock. Jalankan ulang test ini
-// (atau uji manual dengan curl) melawan DB asli begitu docker-compose bisa
-// jalan di mesin dev, sebagai double-check.
+// authorize, signToken/verifyToken) adalah kode asli — hanya layer DB yang
+// di-mock.
 
 const request = require("supertest");
 const bcrypt = require("bcrypt");

@@ -3,22 +3,17 @@ import { Animated, Easing } from 'react-native';
 import type { LayoutChangeEvent, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
-// Jarak scroll minimum sebelum arah dianggap berubah — tanpa ini getaran jari
-// beberapa piksel bikin barisnya kedip-kedip buka-tutup.
+// Jarak scroll minimum sebelum arah dianggap berubah — tanpa ini getaran jari beberapa piksel bikin barisnya kedip-kedip buka-tutup.
 const MIN_DELTA = 6;
-// Di dekat puncak list semua baris selalu ditampilkan, berapa pun arah
-// scroll-nya: di posisi itu tidak ada ruang yang perlu dihemat, dan kontrol yang
-// hilang waktu list masih di atas kelihatan seperti bug.
+// Di dekat puncak list semua baris selalu ditampilkan — kontrol yang hilang waktu list masih di atas kelihatan seperti bug.
 const SHOW_ABOVE_Y = 24;
 const DURATION = 220;
-// Jeda tambahan setelah animasi selesai sebelum arah dibaca lagi, supaya
-// pantulan terakhir ScrollView tidak langsung memicu animasi berikutnya.
+// Jeda tambahan setelah animasi selesai sebelum arah dibaca lagi, supaya pantulan terakhir ScrollView tidak langsung memicu animasi berikutnya.
 const SETTLE = 80;
 
 /**
- * Satu baris kontrol yang bisa menyusut. Dipakai dua kali oleh
- * `useCollapseOnScroll`; tidak diekspor karena urutan sembunyi/munculnya yang
- * ditentukan hook di bawah, bukan tiap baris sendiri-sendiri.
+ * Satu baris kontrol yang bisa menyusut. Dipakai dua kali oleh `useCollapseOnScroll`; tidak diekspor
+ * karena urutan sembunyi/munculnya ditentukan hook di bawah, bukan tiap baris sendiri-sendiri.
  */
 function useCollapsibleRow() {
   const [height, setHeight] = useState(0);
@@ -27,9 +22,9 @@ function useCollapsibleRow() {
   const collapse = useRef(new Animated.Value(0)).current; // JS driver: height
   const hidden = useRef(false);
 
-  // Tingginya diukur sekali lewat onLayout, bukan angka hardcode, supaya ikut
-  // benar kalau font sistem user diperbesar. Pengukuran berikutnya diabaikan
-  // karena setelah animasi jalan yang terukur tinggi animasinya, bukan aslinya.
+  // Tingginya diukur sekali lewat onLayout, bukan angka hardcode, supaya ikut benar kalau font sistem
+  // user diperbesar. Pengukuran berikutnya diabaikan karena setelah animasi jalan yang terukur adalah
+  // tinggi animasinya, bukan aslinya.
   const onLayout = useCallback((e: LayoutChangeEvent) => {
     const h = e.nativeEvent.layout.height;
     setHeight((prev) => (prev === 0 && h > 0 ? h : prev));
@@ -54,8 +49,8 @@ function useCollapsibleRow() {
     collapse.setValue(0);
   }, [slide, collapse]);
 
-  // Sebelum terukur jangan kasih tinggi apa pun: height 0 di render pertama
-  // bikin barisnya tidak pernah punya kesempatan mengukur dirinya sendiri.
+  // Sebelum terukur jangan kasih tinggi apa pun: height 0 di render pertama bikin barisnya tidak pernah
+  // punya kesempatan mengukur dirinya sendiri.
   const style =
     height === 0
       ? null
@@ -74,49 +69,29 @@ function useCollapsibleRow() {
 }
 
 /**
- * Menyembunyikan dua baris kontrol header (search bar + chip filter) waktu user
- * scroll ke bawah, dan memunculkannya lagi waktu scroll ke atas.
+ * Menyembunyikan dua baris kontrol header (search bar + chip filter) saat scroll ke bawah, memunculkannya
+ * lagi saat scroll ke atas.
  *
- * **Satu baris per langkah, bukan dua sekaligus.** Ada tiga posisi:
+ * **Satu baris per langkah, bukan dua sekaligus.** Tiga posisi: 0 = semua tampil → 1 = filter sembunyi →
+ * 2 = search bar ikut sembunyi. Langkah dipisahkan oleh waktu (`busyUntil`: DURATION + SETTLE), bukan
+ * tarikan jari terpisah — supaya swipe cepat/lempar list (momentum setelah jari lepas) tetap bisa
+ * menembus dua langkah berturut-turut.
  *
- *   0 = semua tampil → 1 = filter sembunyi → 2 = search bar ikut sembunyi
+ * Struktur wajib dua lapis View per baris:
+ *   <Animated.View style={style} onLayout={onLayout}>   // kotak: tinggi menyusut, overflow hidden
+ *     <Animated.View style={innerStyle}>                // isi: geser ke atas via transform
  *
- * Yang memisahkan dua langkah itu waktu (`busyUntil`: DURATION + SETTLE),
- * bukan tarikan jari. Jadi swipe pertama menyembunyikan filter, dan kalau
- * scroll-nya masih lanjut ke bawah search bar menyusul ~300ms kemudian; ke arah
- * sebaliknya search bar duluan yang balik, baru filter.
+ * Kotak luar tidak pernah bergeser, cuma tingginya menyusut dan memotong (`overflow: hidden`) isinya,
+ * supaya isi terlihat menyelinap ke balik baris di atasnya alih-alih menimpanya. Geseran isi jalan di
+ * native driver; tinggi kotak tidak bisa (layout selalu di thread JS), jadi keduanya dipisah ke dua
+ * Animated.Value berbeda yang jalan berbarengan.
  *
- * Versi sebelumnya mensyaratkan jari diangkat lalu menarik lagi buat lanjut ke
- * langkah kedua (`onScrollBeginDrag` "mengisi ulang" jatah langkah). Itu bikin
- * search bar tidak pernah sembunyi waktu user melempar list sekali dengan cepat:
- * momentum setelah jari lepas tidak memicu gestur baru, jadi jatahnya tidak
- * pernah terisi ulang dan posisinya nyangkut di 1. Jeda 300ms sendiri sudah
- * cukup buat memisahkan dua baris secara visual (yang dulu tidak cukup itu
- * jeda 90ms).
+ * Jarak vertikal tiap baris (dan `gap` di header pembungkusnya) wajib padding, bukan margin — margin
+ * tidak ikut terhitung di tinggi yang diukur `onLayout`, jadi barisnya menyisakan celah kosong saat
+ * tersembunyi.
  *
- * Pakainya butuh dua lapis View per baris, dan pembagiannya bukan gaya-gayaan:
- *   <Animated.View style={style} onLayout={onLayout}>   // kotak: tinggi menyusut
- *     <Animated.View style={innerStyle}>                // isi: geser ke atas
- *
- * Kotak luar tidak pernah bergeser, cuma tingginya yang menyusut, dan dia
- * memotong (`overflow: hidden`) isinya. Jadi isinya masuk ke balik tepi atas
- * kotak — terlihat menyelinap ke belakang baris di atasnya. Versi sebelumnya
- * menggeser kotaknya sendiri, sehingga kotak itu ikut naik menimpa baris di
- * atasnya (elemen belakangan digambar di atas) dan malah lewat di depannya.
- *
- * Geseran isi dijalankan native driver supaya mulus; tinggi kotak tidak bisa
- * (layout selalu di thread JS), jadi keduanya dipisah ke dua Animated.Value
- * yang jalan berbarengan — satu nilai tidak boleh dipakai dua driver sekaligus.
- *
- * Jarak vertikal tiap baris wajib padding, bukan margin: margin tidak ikut
- * terhitung di tinggi yang diukur, jadi barisnya menyisakan celah kosong waktu
- * sudah tersembunyi. Sama untuk `gap` di header pembungkusnya — gap tetap
- * berlaku buat anak setinggi nol.
- *
- * ponytail: tinggi kotak tetap dianimasikan di thread JS, jadi list di bawahnya
- * ikut re-layout tiap frame. Cukup buat dua baris kontrol. Kalau nanti terasa
- * berat: jadikan header absolute + `paddingTop` di list, lalu geser header-nya
- * dengan transform saja — nol re-layout, tapi diffnya jauh lebih besar.
+ * ponytail: tinggi kotak dianimasikan di thread JS, jadi list di bawahnya ikut re-layout tiap frame.
+ * Cukup untuk dua baris kontrol; kalau makin berat, pertimbangkan header absolute + transform saja.
  */
 export function useCollapseOnScroll() {
   const top = useCollapsibleRow();
@@ -149,11 +124,9 @@ export function useCollapseOnScroll() {
         return;
       }
 
-      // Sumber bug "nyangkut": selama animasi jalan, tinggi baris ini berubah,
-      // jadi tinggi viewport list ikut berubah dan ScrollView menjepit
-      // contentOffset-nya. Jepitan itu masuk lagi ke sini sebagai scroll balik
-      // arah, memicu animasi lawan, dan seterusnya — list terlihat menolak
-      // digeser. Selama animasi + sesaat sesudahnya, arah tidak dibaca.
+      // Selama animasi jalan, tinggi baris ini berubah sehingga ScrollView menjepit contentOffset — jepitan
+      // itu masuk lagi ke sini sebagai scroll balik arah dan memicu animasi lawan tanpa henti. Jadi arah
+      // tidak dibaca selama animasi + sesaat sesudahnya.
       if (Date.now() < busyUntil.current) return;
       if (Math.abs(delta) < MIN_DELTA) return;
 
@@ -161,9 +134,8 @@ export function useCollapseOnScroll() {
       const next = Math.min(2, Math.max(0, step.current + (down ? 1 : -1))) as 0 | 1 | 2;
       if (next === step.current) return;
 
-      // Pemicu kedua loop yang sama: di dekat dasar list, menyembunyikan baris
-      // ini justru menambah ruang scroll sehingga konten tertarik balik ke
-      // atas. Di sisa jarak sependek itu ruang yang dihemat tidak ada gunanya.
+      // Dekat dasar list, menyembunyikan baris ini justru menambah ruang scroll sehingga konten tertarik
+      // balik ke atas — pemicu loop yang sama. Di sisa jarak sependek itu ruang yang dihemat tidak berguna.
       const nextHeight = next === 2 ? top.height : bottom.height;
       const distanceFromBottom = contentSize.height - layoutMeasurement.height - y;
       if (down && distanceFromBottom < nextHeight * 2) return;
@@ -173,9 +145,8 @@ export function useCollapseOnScroll() {
     [goTo, top.height, bottom.height],
   );
 
-  // Kembalikan semua baris ke posisi tampil, termasuk `lastY`: kalau posisi
-  // terakhir tidak ikut dinolkan, scroll pertama di list yang baru dihitung
-  // sebagai lompatan sejauh selisih dua list dan langsung memicu animasi.
+  // Kembalikan semua baris ke posisi tampil, termasuk `lastY` — kalau tidak ikut dinolkan, scroll pertama
+  // di list yang baru dihitung sebagai lompatan sejauh selisih dua list dan langsung memicu animasi.
   const reset = useCallback(() => {
     lastY.current = 0;
     step.current = 0;
@@ -184,21 +155,15 @@ export function useCollapseOnScroll() {
     bottom.reset();
   }, [top.reset, bottom.reset]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Screen yang ditinggalkan lalu dibuka lagi mulai dari posisi scroll 0, jadi
-  // barisnya harus ikut kembali tampil — kalau tidak, user mendarat di list
-  // yang search bar & filternya hilang tanpa sebab.
+  // Screen yang ditinggalkan lalu dibuka lagi mulai dari posisi scroll 0, jadi barisnya harus ikut kembali
+  // tampil — kalau tidak, user mendarat di list yang search bar & filternya hilang tanpa sebab.
   useFocusEffect(reset);
 
   /**
-   * `reset` WAJIB dipanggil juga setiap kali list yang ditampilkan berganti
-   * (mis. pindah tab), bukan cuma waktu screen-nya difokus ulang. State di sini
-   * satu untuk seluruh screen, sedangkan tiap tab punya ScrollView sendiri yang
-   * mount ulang dari posisi 0. Tanpa reset, keadaan "tersembunyi" dari tab lama
-   * terbawa ke list baru yang berada di puncak — dan karena `goTo(0)` cuma
-   * dipicu oleh event scroll, satu-satunya jalan memunculkannya lagi adalah
-   * men-scroll. Di tab yang isinya kosong (mis. dokter tanpa jadwal operasi)
-   * tidak ada yang bisa di-scroll sama sekali, jadi search bar dan filter
-   * hilang permanen sampai screen-nya ditinggalkan.
+   * `reset` wajib dipanggil juga tiap kali list yang ditampilkan berganti (mis. pindah tab), bukan cuma
+   * saat screen difokus ulang — state di sini satu untuk seluruh screen, sementara tiap tab punya
+   * ScrollView sendiri. Tanpa ini, tab dengan list kosong (tidak ada yang bisa discroll untuk memicu
+   * `goTo(0)`) akan kehilangan search bar/filter secara permanen.
    */
   return { onScroll, top, bottom, reset };
 }

@@ -1,18 +1,14 @@
-// Script verifikasi manual (bukan bagian permanen dari test suite — jest di
-// sandbox ini gagal jalan karena masalah resolusi paket jest-circus, tidak
-// terkait kode RBAC). Jalankan: node src/__tests__/verify-auth.manual.js
+// Script verifikasi manual, bukan bagian dari test suite Jest (nama file
+// sengaja tanpa akhiran .test.js). Jalankan: node src/__tests__/verify-auth.manual.js
 //
-// Prisma di-mock (tidak ada Postgres/Docker di sandbox ini) dengan bentuk
-// data persis seperti hasil prisma/seed.js -> seedPengguna(). Middleware
-// yang diuji (authenticate, authorize, signToken/verifyToken) adalah kode
-// asli dari src/, hanya layer DB yang diganti.
+// Prisma di-mock dengan bentuk data persis seperti hasil prisma/seed.js ->
+// seedPengguna(). Middleware yang diuji (authenticate, authorize,
+// signToken/verifyToken) adalah kode asli dari src/, hanya layer DB diganti.
 
 const path = require("path");
 const bcrypt = require("bcrypt");
 const request = require("supertest");
 
-// Sandbox ini Linux, tapi @prisma/client sudah di-generate untuk darwin
-// (mesin dev asli) -> `new PrismaClient()` gagal load query engine di sini.
 // Untuk menguji middleware auth/rbac tanpa DB nyata, inject fake module ke
 // require.cache SEBELUM lib/prisma.js sempat dieksekusi, supaya
 // `new PrismaClient()` tidak pernah dipanggil di proses ini.

@@ -25,8 +25,8 @@ const router = express.Router();
 // Keduanya LEFT JOIN dan boleh kosong — tidak ada FK yang menjamin barisnya ada.
 //
 // Mana dari ketiganya yang jadi sumber kebenaran di produksi masih pertanyaan
-// terbuka ke DBA (§4 no.1 simrs-schema-mapping.md). Susunan ini dipilih karena
-// paling sedikit menebak, bukan karena sudah dikonfirmasi.
+// terbuka ke DBA. Susunan ini dipilih karena paling sedikit menebak, bukan
+// karena sudah dikonfirmasi.
 
 const OPERASI_STATUSES = ["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"];
 
@@ -163,8 +163,7 @@ function bangunFilter({ status, dari, sampai, aksesDokterId, lingkup }) {
   if (aksesDokterId) {
     if (lingkup === "pasien") {
       // Cakupan luas: semua operasi pasien yang pernah dia tangani, termasuk
-      // yang dioperasi dokter lain. Perilaku lama, sekarang harus diminta
-      // eksplisit lewat ?lingkup=pasien.
+      // yang dioperasi dokter lain — harus diminta eksplisit lewat ?lingkup=pasien.
       klausa.push(`(wl.id_dokter = ? OR ${klausaAksesNorm("wl.norm")})`);
       params.push(aksesDokterId, ...paramAkses(aksesDokterId));
     } else {
@@ -191,23 +190,18 @@ function bangunFilter({ status, dari, sampai, aksesDokterId, lingkup }) {
     params.push(keWaktuSimrs(sampai).slice(0, 10));
   }
 
-  // Tanpa rentang tanggal DAN tanpa filter status, daftar dibatasi ke jendela
-  // "beberapa hari terakhir + seterusnya". Dua bug nyata diperbaiki di sini:
-  //
-  // 1. Layar kosong. JadwalOperasiKonsulScreen mengambil 50 baris pertama lalu
-  //    menyaring di client. Urutannya tanggal MENAIK, jadi 50 baris pertama
-  //    dari 4.826 semuanya operasi 2024 — tersaring habis, layar kosong padahal
-  //    ada 207 jadwal mendatang.
-  //
-  // 2. Chip "Selesai" selalu kosong. Layar itu menyaring status di CLIENT, dari
-  //    50 baris yang sudah terlanjur diambil. Kalau server cuma mengirim
-  //    hari-ini-dan-seterusnya, tidak ada satu pun baris COMPLETED yang sampai
-  //    ke client, jadi chip-nya mustahil berisi. Jendela mundur beberapa hari
-  //    membuat operasi yang baru selesai ikut terkirim.
+  // Tanpa rentang tanggal dan tanpa filter status, daftar dibatasi ke jendela
+  // "beberapa hari terakhir + seterusnya" — ini memperbaiki dua bug nyata:
+  // (1) layar kosong, karena JadwalOperasiKonsulScreen mengambil 50 baris
+  // pertama lalu menyaring di client; urut tanggal menaik berarti 50 baris
+  // pertama bisa semuanya operasi lama, tersaring habis padahal ada jadwal
+  // mendatang; dan (2) chip "Selesai" selalu kosong, karena tidak ada baris
+  // COMPLETED yang sampai ke client kalau server cuma mengirim
+  // hari-ini-dan-seterusnya.
   //
   // Mundurnya HARI_MUNDUR hari, bukan sebulan: cukup untuk "yang baru saja
-  // selesai", tanpa mengubah daftar jadwal jadi arsip. Dokter yang benar-benar
-  // menengok arsip mengirim dari/sampai eksplisit, dan cabang ini tidak aktif.
+  // selesai" tanpa mengubah daftar jadwal jadi arsip. Dokter yang menengok
+  // arsip mengirim dari/sampai eksplisit, dan cabang ini tidak aktif.
   const jendelaBawaan = !dari && !sampai && !status;
   if (jendelaBawaan) {
     const mundur = new Date(rentangHariWIB(new Date()).mulai.getTime() - HARI_MUNDUR * 86400000);
@@ -226,15 +220,14 @@ function bentukRingkas(b) {
     status: statusTersimpan(b),
     // `jenis` selalu OK: baris ini memang jadwal operasi.
     //
-    // `pd.ruang_tujuan` DULU dikira teks bebas. Sebagian besar ternyata KODE
-    // master.ruangan.ID: dari 16.180 baris terisi, 14.365 (89%) cocok, dan
-    // tanpa join yang muncul di layar dokter adalah "105020710", bukan
-    // "Poliklinik Onkologi 5" (ditemukan 24 Ags 2026 lewat pengingat jadwal).
-    // Sisa 11% memang teks nama ruangan ("Poliklinik Onkologi 2", "PICU"),
-    // jadi COALESCE: kode diterjemahkan, teks dibiarkan apa adanya.
+    // `pd.ruang_tujuan` sebagian besar berisi KODE master.ruangan.ID, bukan
+    // teks bebas: dari 16.180 baris terisi, 14.365 (89%) cocok, dan tanpa
+    // join yang muncul di layar dokter adalah "105020710", bukan "Poliklinik
+    // Onkologi 5". Sisa 11% memang teks nama ruangan ("Poliklinik Onkologi 2",
+    // "PICU"), jadi COALESCE: kode diterjemahkan, teks dibiarkan apa adanya.
     //
     // Kolom kode ruang operasi (penjadwalan_operasi.kamar_operasi) tetap tidak
-    // dipakai, tipenya int(11) sementara master.ruangan.ID char(10) (§4 no.3).
+    // dipakai — tipenya int(11) sementara master.ruangan.ID char(10).
     ruangan: { nama: teks(b.ruang_tujuan), jenis: "OK" },
     kunjungan: {
       dokterId: b.id_dokter === null ? null : String(b.id_dokter),

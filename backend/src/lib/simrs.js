@@ -14,10 +14,9 @@ const mysql = require("mysql2/promise");
 //      bawah sengaja hanya mencatat kode error, tidak pernah `err.sql` atau
 //      isi baris.
 //
-// Skema SIMRS TIDAK punya foreign key sama sekali (lihat
-// simrs-exploration/docs/simrs-schema-mapping.md §2.1), jadi semua join di
-// modul ini adalah konvensi, bukan constraint yang dijamin DB. Konsekuensinya:
-// perlakukan hasil LEFT JOIN sebagai boleh-kosong di mana pun.
+// Skema SIMRS tidak punya foreign key sama sekali, jadi semua join di modul
+// ini adalah konvensi, bukan constraint yang dijamin DB — perlakukan hasil
+// LEFT JOIN sebagai boleh-kosong di mana pun.
 //
 // Prisma tidak dipakai untuk koneksi ini: connector MySQL Prisma hanya melihat
 // satu database per client, sementara query di sini menjangkau `master`,

@@ -1,10 +1,8 @@
 export type AssignmentStatus = 'ACTIVE' | 'COMPLETED';
 export type StatusKunjungan = 'SCHEDULED' | 'ONGOING' | 'COMPLETED' | 'CANCELLED';
-// Diturunkan server-side dari Ruangan.jenis, bukan kolom sendiri. Null kalau
-// pasien belum punya kunjungan (atau ruangannya di luar 3 kategori ini).
+// Diturunkan server-side dari Ruangan.jenis, bukan kolom sendiri. Null kalau pasien belum punya kunjungan (atau ruangannya di luar 3 kategori ini).
 export type JenisKunjungan = 'RAWAT_JALAN' | 'IGD' | 'RAWAT_INAP';
-// Urutan daftar pasien berdasarkan tanggal kunjungan terakhir. Tanpa nilai =
-// urut nama A-Z (bawaan server).
+// Urutan daftar pasien berdasarkan tanggal kunjungan terakhir. Tanpa nilai = urut nama A-Z (bawaan server).
 export type UrutanPasien = 'terbaru' | 'terlama';
 
 export type PasienListItem = {
@@ -18,19 +16,13 @@ export type PasienListItem = {
   tanggalKunjunganBerikutnya: string | null;
 };
 
-// Cakupan layar Jadwal (mode SIMRS). "saya" = kunjungan/operasi yang dokter itu
-// terlibat langsung di dalamnya; "pasien" = semua milik pasien yang pernah dia
-// tangani, termasuk yang ditangani dokter lain.
+// Cakupan layar Jadwal (mode SIMRS): "saya" = kunjungan/operasi yang dokter itu terlibat langsung; "pasien" = semua milik pasien yang pernah dia tangani, termasuk oleh dokter lain.
 export type LingkupJadwal = 'saya' | 'pasien';
 
 export type Pagination = {
   page: number;
   limit: number;
-  // Null di mode SIMRS kecuali diminta lewat `?hitungTotal=1`. Menghitung total
-  // di sana berarti COUNT lewat akses DPJP — 1,7 detik, lebih mahal daripada
-  // mengambil datanya sendiri, dan sampai sekarang tidak ada layar yang
-  // membacanya. Kalau nanti butuh nomor halaman, kirim param itu dan tangani
-  // null-nya; jangan asumsikan selalu angka.
+  // Null di mode SIMRS kecuali diminta lewat `?hitungTotal=1` — COUNT lewat akses DPJP mahal (~1,7 detik) dan tidak ada layar yang butuh nomor halaman saat ini. Jangan asumsikan selalu angka.
   total: number | null;
   totalPages: number | null;
 };
@@ -101,8 +93,7 @@ export type OperasiDetail = {
   catatanPreOp: string | null;
   catatanPostOp: string | null;
 
-  // Laporan operasi (Tahap 3). Field-nya dihilangkan sepenuhnya dari respons
-  // kalau operasinya belum selesai — jadi optional, bukan `| null`.
+  // Laporan operasi: field-nya dihilangkan sepenuhnya dari respons kalau operasinya belum selesai — jadi optional, bukan `| null`.
   dokterOperator?: string | null;
   asistenOperator?: string | null;
   perawatInstrumentator?: string | null;
@@ -190,10 +181,8 @@ export type KunjunganDetail = {
 };
 
 /**
- * Konsultasi = surat konsul antar-dokter (Lembar Konsultasi SIMRS), bukan
- * jadwal appointment. Dokter yang login hanya menerima konsul yang DITUJUKAN
- * kepadanya — scoping-nya di server lewat `dokterTujuanId`, jadi tidak ada
- * field "dokter tujuan" yang perlu dikirim dari sini.
+ * Konsultasi = surat konsul antar-dokter (Lembar Konsultasi SIMRS), bukan jadwal appointment. Dokter yang
+ * login hanya menerima konsul yang DITUJUKAN kepadanya — scoping di server lewat `dokterTujuanId`.
  */
 export type PrioritasKonsultasi = 'BIASA' | 'CITO';
 export type StatusKonsultasi = 'MENUNGGU_JAWABAN' | 'SUDAH_DIJAWAB';
@@ -313,8 +302,7 @@ export type HasilLabDetail = {
   catatan: string | null;
   pasien: { id: string; nama: string; norm: string };
   dokterPeminta: { id: string; nama: string; spesialisasi: string | null } | null;
-  // Nullable dgn sengaja — backend belum dikonfirmasi apakah SIMRS asli simpan
-  // hasil lab terstruktur per-parameter atau cuma dokumen (lihat lab.routes.js).
+  // Nullable dgn sengaja — belum dikonfirmasi apakah SIMRS simpan hasil lab terstruktur per-parameter atau cuma dokumen (lihat lab.routes.js).
   hasilLabItem: HasilLabItemApi[] | null;
 };
 
@@ -377,14 +365,11 @@ export type StatistikDashboard = {
   pasienHariIni: number;
   operasiHariIni: number;
   kunjunganHariIni: number;
-  // Gabungan jumlah Kunjungan + Operasi per hari, Senin-Minggu minggu
-  // berjalan WIB — 7 entri, urutan tetap.
+  // Gabungan jumlah Kunjungan + Operasi per hari, Senin-Minggu minggu berjalan WIB — 7 entri, urutan tetap.
   aktivitasMingguan: AktivitasHarianMingguan[];
-  // 0-3 jadwal Operasi/Kunjungan SCHEDULED terdekat ke depan, diurutkan
-  // makin dekat makin dulu.
+  // 0-3 jadwal Operasi/Kunjungan SCHEDULED terdekat ke depan, diurutkan makin dekat makin dulu.
   pasienPrioritas: PasienPrioritasItem[];
-  // Cuma muncul kalau akun yang login ADMIN — lihat dashboard.routes.js untuk
-  // alasan kenapa ADMIN selalu dapat 0 di sini, bukan agregat lintas-dokter.
+  // Cuma muncul kalau akun yang login ADMIN — ADMIN selalu dapat 0 di sini, bukan agregat lintas-dokter (lihat dashboard.routes.js).
   adminCatatan?: string;
 };
 
@@ -404,8 +389,7 @@ export type CatatanKalenderItem = {
 
 export type CatatanKalenderListResponse = {
   data: CatatanKalenderItem[];
-  // Cuma muncul kalau akun yang login ADMIN — kalender pribadi tidak
-  // berlaku buat akun yang tidak terikat ke satu Dokter, lihat kalender.routes.js.
+  // Cuma muncul kalau akun yang login ADMIN — kalender pribadi tidak berlaku buat akun yang tidak terikat ke satu Dokter (lihat kalender.routes.js).
   adminCatatan?: string;
 };
 
@@ -415,9 +399,7 @@ export type LoginResponse = {
     id: string;
     username: string;
     role: 'DOKTER' | 'ADMIN';
-    // nip opsional: sesi lama yang tersimpan di SecureStore (login sebelum
-    // field ini ada) tidak punya field-nya, dan screen-nya harus tetap jalan
-    // tanpa memaksa user login ulang.
+    // nip opsional: sesi lama di SecureStore (dari sebelum field ini ada) tidak punya nilainya, dan screen-nya harus tetap jalan tanpa memaksa login ulang.
     dokter: {
       id: string;
       nama: string;
@@ -427,16 +409,14 @@ export type LoginResponse = {
   };
 };
 
-// --- Jasa Medis / Pendapatan (Tahap 4) ---
+// --- Jasa Medis / Pendapatan ---
 
 /**
- * Satu baris jasa medis, mengikuti kolom tabel "Detail Tindakan" SIREMDIS:
- * NORM, nama pasien, nama tindakan, tanggal tindakan, jasa, unit pelayanan,
- * penjamin.
+ * Satu baris jasa medis, mengikuti kolom tabel "Detail Tindakan" SIREMDIS: NORM, nama pasien, nama
+ * tindakan, tanggal tindakan, jasa, unit pelayanan, penjamin.
  *
- * `unitPelayanan` adalah SMF tempat pelayanannya terjadi, bukan spesialisasi
- * dokter yang menagih — di referensi, dokter Sp.THT menagih konsul di unit
- * "Anak".
+ * `unitPelayanan` adalah SMF tempat pelayanannya terjadi, bukan spesialisasi dokter yang menagih — dokter
+ * Sp.THT bisa menagih konsul di unit "Anak".
  */
 export type BarisJasaMedis = {
   id: string;
@@ -457,8 +437,7 @@ export type PendapatanResponse = {
   /** Semua bulan yang ada isinya, terbaru dulu — dipakai sebagai pintasan. */
   bulanTersedia: string[];
   ringkasan: {
-    // Total jasa medis cuma dipecah dua: JKN dan Non-JKN. Tidak ada rincian
-    // per penjamin — itu sengaja dihapus (keputusan Arthuro, 19 Ags 2026).
+    // Total jasa medis cuma dipecah dua: JKN dan Non-JKN, tidak ada rincian per penjamin.
     totalJkn: number;
     totalNonJkn: number;
     totalRemunerasiBruto: number;

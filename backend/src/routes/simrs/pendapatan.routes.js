@@ -10,42 +10,35 @@ const router = express.Router();
 // aplikasi ini tidak pernah menghitung maupun mengubah angka remunerasi.
 //
 // Sumbernya `db_remunmedis.tb_tampilsiremdis` (6,3 juta baris, PRIMARY di
-// ID_SIREMDIS, ID_DOKTER ber-index). Namanya harfiah: baris yang DITAMPILKAN
-// SIREMDIS ke dokternya.
-//
-// Sebelumnya modul ini membaca `tb_remun_new` dan itu KELIRU — dikoreksi
-// 24 Ags 2026 setelah supervisor menyebut jasa medis terupdate sampai Agustus
-// 2026. Hasil pemeriksaan langsung di replika (agregat, tanpa membaca baris
-// pasien):
+// ID_SIREMDIS, ID_DOKTER ber-index) — namanya harfiah: baris yang DITAMPILKAN
+// SIREMDIS ke dokternya. Bukan `tb_remun_new`: dibandingkan langsung di
+// replika (agregat, tanpa membaca baris pasien),
 //
 //   tabel                    baris        TANGGALTINDAKAN terakhir
 //   tb_remun_new             3,9 juta     15 Feb 2026     <- berhenti
 //   tb_tampilsiremdis        6,3 juta     23 Ags 2026     <- berjalan
 //   tb_tidaktampilsiremdis   0,6 juta     30 Nov 2023     <- mati
 //
-// Yang paling gampang menyesatkan: KEDUANYA punya kolom ID_SIREMDIS dan
-// rentang angkanya bertumpuk, tapi itu BUKAN kunci yang sama. Dicocokkan
-// lewat ID_SIREMDIS untuk satu dokter satu bulan, 803 dari 803 baris "ketemu"
-// — padahal hanya 2 yang ID_DOKTER-nya sama dan 0 yang tanggalnya sama. Dua
-// tabel ini punya auto-increment sendiri-sendiri. Jangan pernah menjoin
-// keduanya lewat ID_SIREMDIS.
+// KEDUANYA punya kolom ID_SIREMDIS dengan rentang angka bertumpuk, tapi itu
+// BUKAN kunci yang sama — dua tabel ini auto-increment sendiri-sendiri.
+// Dicocokkan lewat ID_SIREMDIS untuk satu dokter satu bulan, 803 dari 803
+// baris "ketemu", padahal cuma 2 yang ID_DOKTER-nya sama dan 0 yang
+// tanggalnya sama. Jangan pernah menjoin keduanya lewat ID_SIREMDIS.
 //
 // Angka historisnya juga tidak identik: dicocokkan lewat kunci alami
 // (TINDAKAN_MEDIS + ID_DOKTER), 733 dari 834 baris tb_remun_new muncul di
-// tb_tampilsiremdis — sisanya (~12%) memang tidak ditampilkan SIREMDIS. Jadi
-// pindah sumber TIDAK cuma menambah bulan baru, angka bulan lama ikut turun
-// (dokter contoh, Jan 2026: Rp 235,9 jt -> Rp 206,1 jt). Yang benar adalah
-// yang baru: yang dilihat dokter di SIREMDIS itu yang ditampilkan, bukan
-// seluruh isi tabel perhitungan.
+// tb_tampilsiremdis — sisanya (~12%) memang tidak ditampilkan SIREMDIS.
+// Pindah sumber menurunkan angka bulan lama juga, bukan cuma menambah bulan
+// baru (dokter contoh, Jan 2026: Rp 235,9 jt -> Rp 206,1 jt) — yang benar
+// adalah yang ditampilkan SIREMDIS, bukan seluruh isi tabel perhitungan.
 //
 // `ID_DOKTER` adalah dokter penerima jasa, bukan sekadar operator tindakan —
 // diperiksa: nol baris yang ID_DOKTER_NUKLIR-nya dokter tertentu sementara
-// ID_DOKTER-nya orang lain. Jadi menyaring dengan ID_DOKTER saja sudah
-// lengkap, tidak ada jasa yang tertinggal di kolom peran lain.
+// ID_DOKTER-nya orang lain. Menyaring dengan ID_DOKTER saja sudah lengkap.
 //
 // JASA BISA NEGATIF (baris "DISKON KONSUL"): 156 dari 4.839 baris dokter
-// contoh sepanjang 2026. Itu potongan sungguhan dan harus ikut dijumlah, jadi
-// jangan disaring. Bar proporsi di layar sudah menjaga dirinya sendiri
+// contoh sepanjang 2026. Itu potongan sungguhan dan harus ikut dijumlah,
+// jangan disaring — bar proporsi di layar sudah menjaga dirinya sendiri
 // (`Math.max(total, 0)`).
 //
 // Kolom yang belum dipakai tapi tersedia di sini dan tidak ada di tabel lama:
@@ -80,7 +73,7 @@ function parsePeriode(query) {
   return { errors, ...nilai };
 }
 
-// Disalin apa adanya dari routes/pendapatan.routes.js supaya kedua mode
+// Disalin apa adanya dari routes/dummy/pendapatan.routes.js supaya kedua mode
 // memilih periode bawaan yang sama persis.
 function periodeDefault(bulanTerbaru, sekarang) {
   // keWaktuSimrs() = instant -> jam dinding WIB; 10 karakter pertamanya tanggal
@@ -111,10 +104,11 @@ router.get("/", async (req, res) => {
     return res.status(400).json({ message: "Query params tidak valid", errors: periode.errors });
   }
 
-  // Aturan #2: dokterId DOKTER selalu dari JWT. `?dokterId=` hanya dihormati
-  // untuk ADMIN, dan parseDokterIdFilter sudah membuangnya kalau pemanggilnya
-  // DOKTER. Modul ini tidak memakai scoping DPJP sama sekali — yang ditampilkan
-  // adalah remunerasi dokter itu sendiri, bukan data pasien orang lain.
+  // dokterId untuk DOKTER selalu dari JWT. `?dokterId=` hanya dihormati untuk
+  // ADMIN, dan parseDokterIdFilter sudah membuangnya kalau pemanggilnya
+  // DOKTER. Modul ini tidak memakai scoping DPJP sama sekali — yang
+  // ditampilkan adalah remunerasi dokter itu sendiri, bukan data pasien orang
+  // lain.
   const dokterUuid = role === "DOKTER" ? ownDokterId : parseDokterIdFilter(req.query, role);
   if (!dokterUuid) {
     return res.status(400).json({ message: "dokterId wajib diisi untuk role ADMIN" });
@@ -193,7 +187,7 @@ router.get("/", async (req, res) => {
             gelarBelakang: pegawai.GELAR_BELAKANG,
           })
         : null,
-      // SMF berupa kode dan tabel referensinya belum dipetakan (§4 no.20).
+      // SMF berupa kode dan tabel referensinya belum dipetakan.
       smf: null,
     },
     periode: { tanggalAwal, tanggalAkhir },

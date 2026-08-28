@@ -29,11 +29,7 @@ export function markSemuaNotifikasiRead(token: string) {
   return apiFetch<{ jumlah: number }>('/api/notifikasi/read-all', { token, method: 'PATCH' });
 }
 
-/**
- * Bersihkan daftar notifikasi. Server melakukannya sebagai soft delete —
- * barisnya tetap ada supaya pengingat jadwal yang sudah dibersihkan tidak
- * dibuat ulang. Dari sisi dokter tetap hilang dari daftar.
- */
+/** Bersihkan daftar notifikasi — soft delete di server (barisnya tetap ada supaya reminder yang sudah dibersihkan tidak dibuat ulang), tapi hilang dari daftar dokter. */
 export function bersihkanNotifikasi(token: string) {
   return apiFetch<{ jumlah: number }>('/api/notifikasi', { token, method: 'DELETE' });
 }

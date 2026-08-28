@@ -72,9 +72,8 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
   const hidden = useTabBarStore((s) => s.hidden);
   const [barWidth, setBarWidth] = useState(0);
   const translateX = useRef(new Animated.Value(0)).current;
-  // Screen full-bleed (mis. LihatPdfLabScreen) minta tab bar disembunyikan
-  // total lewat useHideTabBar — di sini digeser turun keluar layar, bukan
-  // instan hilang, supaya transisinya kelihatan sebagai slide-down.
+  // Disembunyikan lewat useHideTabBar digeser turun keluar layar, bukan instan hilang, supaya
+  // transisinya kelihatan sebagai slide-down.
   const translateY = useRef(new Animated.Value(0)).current;
   const itemWidth = barWidth / state.routes.length;
   const indicatorWidth = Math.max(itemWidth - INDICATOR_INSET * 2, 0);
@@ -91,13 +90,11 @@ export function FloatingTabBar({ state, navigation }: BottomTabBarProps) {
 
   useEffect(() => {
     Animated.timing(translateY, {
-      // +24 ekstra biar shadow (shadowRadius 12, shadowOffset -4) ikut nggak
-      // kelihatan sisa nyembul pas tab bar disembunyikan.
+      // +24 ekstra biar shadow (shadowRadius 12, shadowOffset -4) ikut nggak kelihatan sisa nyembul pas
+      // tab bar disembunyikan.
       toValue: hidden ? TAB_BAR_HEIGHT + insets.bottom + 24 : 0,
-      // 200ms, dekat sama durasi 'fade' scene transition bottom-tabs (150ms,
-      // lihat MainTabNavigator) — sebelumnya 240ms bikin bar masih nyelesaiin
-      // slide-down lama setelah scene-nya sendiri sudah settle, kerasa dua
-      // gerakan gak nyambung alih-alih satu transisi.
+      // Dekat dengan durasi 'fade' scene transition bottom-tabs (150ms, lihat MainTabNavigator) — supaya
+      // slide-down tab bar terasa menyatu dengan transisi scene, bukan dua gerakan terpisah.
       duration: 200,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,

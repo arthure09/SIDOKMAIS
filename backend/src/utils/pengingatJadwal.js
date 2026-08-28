@@ -1,20 +1,15 @@
 const prisma = require("../lib/prisma");
 const { operasiMendatang, tanggalWIBdari } = require("./jadwalMendatang");
 
-// Pembuat pengingat jadwal operasi (Notifikasi tipe REMINDER_OPERASI).
+// Pembuat pengingat jadwal operasi (Notifikasi tipe REMINDER_OPERASI). Dokter
+// yang datanya dari SIMRS tidak ikut seed notifikasi Postgres, dan di mode
+// SIMRS jalur tulis operasi ditolak 405 sehingga trigger PATCH tidak pernah
+// jalan di sana — jadi pengingat mereka harus dibuat aktif dari jadwal operasi
+// mendatang, bukan menunggu event.
 //
-// Kenapa perlu: sampai sebelum ini, satu-satunya notifikasi yang benar-benar
-// terbentuk dari kejadian nyata adalah PERUBAHAN_JADWAL (dipicu PATCH operasi).
-// Sisanya berasal dari `prisma/seed.js` — data contoh. Akibatnya dokter yang
-// datanya asli dari SIMRS punya jadwal operasi mendatang tapi nol pengingat:
-// akun-akun itu Dokter baru di PostgreSQL, tidak pernah ikut seed notifikasi.
-// Di mode SIMRS jalur tulis operasi juga ditolak 405, jadi trigger PATCH tidak
-// akan pernah jalan di sana.
-//
-// PATOKAN WAKTU: pengingat dibuat untuk operasi H-0 sampai H-2. Rencana awal
-// magang menyebut "reminder H-1/H-2"; H-0 diikutkan karena operasi hari ini
-// justru yang paling perlu terlihat, dan tanpa itu dokter yang membuka aplikasi
-// di pagi hari operasi tidak melihat apa pun.
+// PATOKAN WAKTU: pengingat dibuat untuk operasi H-0 sampai H-2. H-0 diikutkan
+// karena operasi hari ini justru yang paling perlu terlihat — tanpa itu dokter
+// yang membuka aplikasi di pagi hari operasi tidak melihat apa pun.
 const HARI_PENGINGAT = 2;
 
 // TIDAK MENYIMPAN IDENTITAS PASIEN. Notifikasi disimpan di PostgreSQL lokal,
